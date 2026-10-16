@@ -1,0 +1,83 @@
+{
+  "instance": "00409ef904a8-s47",
+  "report": "evidence/bind_verify/7369/replay-baselines/00409ef904a8-s47/oracle/baseline-oracle/00409ef904a8-s47__UAMUqnD/verifier/report.json",
+  "submission": "evidence/bind_verify/7369/replay-baselines/00409ef904a8-s47/oracle/baseline-oracle/00409ef904a8-s47__UAMUqnD/artifacts/submission/permit/design.yaml",
+  "submission_sha256": "a17a5012ddcbfd92cc91e254fe7cdae75479ae3fde3aab21c115349c28afcb0e",
+  "feasible": true,
+  "standards": [
+    {
+      "standard": "NO2_1h",
+      "v1": "114.82219",
+      "ours": "114.82219",
+      "match": true,
+      "receptors_compared": 184
+    },
+    {
+      "standard": "NO2_annual",
+      "v1": "5.30306",
+      "ours": "5.30306",
+      "match": true,
+      "receptors_compared": 184
+    },
+    {
+      "standard": "PM25_24h",
+      "v1": "3.76069",
+      "ours": "3.76069",
+      "match": true,
+      "receptors_compared": 184
+    },
+    {
+      "standard": "PM25_annual_primary",
+      "v1": "0.40286",
+      "ours": "0.40286",
+      "match": true,
+      "receptors_compared": 184
+    },
+    {
+      "standard": "PM25_annual_secondary",
+      "v1": "0.40286",
+      "ours": "0.40286",
+      "match": true,
+      "receptors_compared": 184
+    },
+    {
+      "standard": "SO2_1h",
+      "v1": "1.50703",
+      "ours": "1.50703",
+      "match": true,
+      "receptors_compared": 184
+    },
+    {
+      "standard": "SO2_3h",
+      "v1": "1.50478",
+      "ours": "1.50478",
+      "match": true,
+      "receptors_compared": 184
+    },
+    {
+      "standard": "SO2_annual",
+      "v1": "0.03468",
+      "ours": "0.03468",
+      "match": true,
+      "receptors_compared": 184
+    }
+  ],
+  "binary_sha256": {
+    "aermod": {
+      "v1": "47c3f61528a4a96d964a124f00cb156c6cac703f36d50d1505573be439c80790",
+      "ours": "47c3f61528a4a96d964a124f00cb156c6cac703f36d50d1505573be439c80790",
+      "match": true
+    },
+    "bpipprm": {
+      "v1": "e61f94649948a2fe7ada697b443d3b027df4cb1bd921dfb889a1ade262ec3eab",
+      "ours": "e61f94649948a2fe7ada697b443d3b027df4cb1bd921dfb889a1ade262ec3eab",
+      "match": true
+    }
+  },
+  "native_seconds": {
+    "bpipprm": 0.10373399400123162,
+    "NO2": 75.28433043200494,
+    "PM25": 31.24150763599755,
+    "SO2": 31.447789620004187
+  }
+}

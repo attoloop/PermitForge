@@ -1,0 +1,20 @@
+convert/v1-src/
+convert/cache/
+.venv/
+__pycache__/
+.pytest_cache/
+.ruff_cache/
+*.npy
+*.npz
+*.zst
+results/rollouts/
+envs/permit/core/native_build/bin/
+*.egg-info/
+build/
+envs/permit/tasks/data/
+envs/permit/tasks/met/
+
+# Local working instructions and development evidence.
+internal/
+AGENTS.md
+scratch/

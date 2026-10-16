@@ -1,0 +1,527 @@
+#!/usr/local/bin/python3.12
+"""Offline permit-scenario generator. --bake is used only while building the image."""
+import concurrent.futures
+import gzip
+import hashlib
+import json
+import math
+import os
+from pathlib import Path
+import random
+import re
+import shutil
+import subprocess
+import sys
+import urllib.request
+import zipfile
+
+import yaml
+
+STATIONS = [{'elev': 7.2, 'id': 'KJAX', 'land_use': 'grassland', 'lat': 30.495, 'lon': -81.694, 'name': 'JACKSONVILLE INTERNATIONAL AIRPORT', 'tz': 5, 'ua': 'USM00072206', 'ua_elev': 10.1, 'ua_id': '72206', 'ua_lat': 30.4839, 'ua_lon': -81.7011, 'usaf': '722060', 'wban': '13889', 'wind_height_m': 10.05}, {'elev': 69.6, 'id': 'KSHV', 'land_use': 'grassland', 'lat': 32.447, 'lon': -93.824, 'name': 'SHREVEPORT REGIONAL AIRPORT', 'tz': 6, 'ua': 'USM00072248', 'ua_elev': 85.1, 'ua_id': '72248', 'ua_lat': 32.4511, 'ua_lon': -93.8414, 'usaf': '722480', 'wban': '13957', 'wind_height_m': 10.05}, {'elev': 12.5, 'id': 'KCRP', 'land_use': 'grassland', 'lat': 27.773, 'lon': -97.513, 'name': 'CORPUS CHRISTI INTERNATIONAL AIRPORT', 'tz': 6, 'ua': 'USM00072251', 'ua_elev': 14.8, 'ua_id': '72251', 'ua_lat': 27.7789, 'ua_lon': -97.5055, 'usaf': '722510', 'wban': '12924', 'wind_height_m': 10.05}, {'elev': 1202.1, 'id': 'KELP', 'land_use': 'arid_grassland', 'lat': 31.812, 'lon': -106.377, 'name': 'EL PASO INTERNATIONAL AIRPORT', 'tz': 7, 'ua': 'USM00072364', 'ua_elev': 1254.0, 'ua_id': '72364', 'ua_lat': 31.8728, 'ua_lon': -106.698, 'usaf': '722700', 'wban': '23044', 'wind_height_m': 10.05}, {'elev': 777.6, 'id': 'KTUS', 'land_use': 'arid_grassland', 'lat': 32.132, 'lon': -110.956, 'name': 'TUCSON INTERNATIONAL AIRPORT', 'tz': 7, 'ua': 'USM00072274', 'ua_elev': 751.4, 'ua_id': '72274', 'ua_lat': 32.2278, 'ua_lon': -110.9558, 'usaf': '722740', 'wban': '23160', 'wind_height_m': 10.05}, {'elev': 1099.3, 'id': 'KAMA', 'land_use': 'arid_grassland', 'lat': 35.22, 'lon': -101.717, 'name': 'AMARILLO RICK HUSBAND INTL AIRPORT', 'tz': 6, 'ua': 'USM00072363', 'ua_elev': 1095.0, 'ua_id': '72363', 'ua_lat': 35.2331, 'ua_lon': -101.7091, 'usaf': '723630', 'wban': '23047', 'wind_height_m': 10.05}, {'elev': 1618.4, 'id': 'KABQ', 'land_use': 'arid_grassland', 'lat': 35.042, 'lon': -106.615, 'name': 'ALBUQUERQUE INTL SUNPORT AIRPORT', 'tz': 7, 'ua': 'USM00072365', 'ua_elev': 1619.0, 'ua_id': '72365', 'ua_lat': 35.0378, 'ua_lon': -106.6219, 'usaf': '723650', 'wban': '23050', 'wind_height_m': 10.05}, {'elev': 89.5, 'id': 'KIAD', 'land_use': 'grassland', 'lat': 38.935, 'lon': -77.447, 'name': 'WASHINGTON DULLES INTERNATIONAL AP', 'tz': 5, 'ua': 'USM00072403', 'ua_elev': 95.0, 'ua_id': '72403', 'ua_lat': 38.95, 'ua_lon': -77.45, 'usaf': '724030', 'wban': '93738', 'wind_height_m': 10.05}, {'elev': 785.6, 'id': 'KDDC', 'land_use': 'arid_grassland', 'lat': 37.771, 'lon': -99.969, 'name': 'DODGE CITY REGIONAL AIRPORT', 'tz': 6, 'ua': 'USM00072451', 'ua_elev': 786.4, 'ua_id': '72451', 'ua_lat': 37.7614, 'ua_lon': -99.9686, 'usaf': '724510', 'wban': '13985', 'wind_height_m': 7.92}, {'elev': 268.1, 'id': 'KTOP', 'land_use': 'grassland', 'lat': 39.072, 'lon': -95.626, 'name': 'PHILIP BILLARD MUNICIPAL AIRPORT', 'tz': 6, 'ua': 'USM00072456', 'ua_elev': 268.1, 'ua_id': '72456', 'ua_lat': 39.0722, 'ua_lon': -95.6305, 'usaf': '724560', 'wban': '13996', 'wind_height_m': 7.92}, {'elev': 85.4, 'id': 'KALB', 'land_use': 'grassland', 'lat': 42.747, 'lon': -73.799, 'name': 'ALBANY INTERNATIONAL AIRPORT', 'tz': 5, 'ua': 'USM00072518', 'ua_elev': 88.0, 'ua_id': '72518', 'ua_lat': 42.75, 'ua_lon': -73.8, 'usaf': '725180', 'wban': '14735', 'wind_height_m': 10.05}, {'elev': 341.0, 'id': 'KPIT', 'land_use': 'grassland', 'lat': 40.485, 'lon': -80.214, 'name': 'PITTSBURGH INTERNATIONAL AIRPORT', 'tz': 5, 'ua': 'USM00072520', 'ua_elev': 361.0, 'ua_id': '72520', 'ua_lat': 40.5167, 'ua_lon': -80.2167, 'usaf': '725200', 'wban': '94823', 'wind_height_m': 10.05}, {'elev': 298.8, 'id': 'KOMA', 'land_use': 'grassland', 'lat': 41.312, 'lon': -95.902, 'name': 'EPPLEY AIRFIELD AIRPORT', 'tz': 6, 'ua': 'USM00072558', 'ua_elev': 351.5, 'ua_id': '72558', 'ua_lat': 41.32, 'ua_lon': -96.3669, 'usaf': '725500', 'wban': '14942', 'wind_height_m': 10.05}, {'elev': 208.6, 'id': 'KGRB', 'land_use': 'grassland', 'lat': 44.48, 'lon': -88.137, 'name': 'AUSTIN STRAUBEL INTERNATIONAL AP', 'tz': 6, 'ua': 'USM00072645', 'ua_elev': 209.3, 'ua_id': '72645', 'ua_lat': 44.4986, 'ua_lon': -88.1119, 'usaf': '726450', 'wban': '14898', 'wind_height_m': 10.05}, {'elev': 254.5, 'id': 'KMSP', 'land_use': 'grassland', 'lat': 44.885, 'lon': -93.231, 'name': 'MINNEAPOLIS-ST PAUL INTERNATIONAL AP', 'tz': 6, 'ua': 'USM00072649', 'ua_elev': 290.2, 'ua_id': '72649', 'ua_lat': 44.8497, 'ua_lon': -93.5647, 'usaf': '726580', 'wban': '14922', 'wind_height_m': 10.05}]
+ASSETS = {'722060-13889-2020.gz': '9f19cbc65011d29fc9d9c207ee0648d8f58ce301b5a4c62625ba4bf78e9e77e8', '722060-13889-2021.gz': 'f854bd3aaf07177347cd8c8c923685d5cc2001e0055296df960632cca76702dd', '722060-13889-2022.gz': '704cbfc0463daea169d25646505ff98ad4b850f8ab89d668350bd831a9be5cff', '722060-13889-2023.gz': 'f2b6447975dee67a5304c651940ad85e87b18a17fb3dcb2a766f160ce25e501b', '722060-13889-2024.gz': '0c7b713ea75254d577f8301d2d98792774b339f2d0bada69ddce80482e04ee6d', 'USM00072206-data.txt.zip': 'b15749289a496ba1a2148d551e68dc6e5ee9e9e3352034235a1ffb50f66e1515', '722480-13957-2020.gz': 'e5ebb657220602a4b9c01f73f0108a1c004cf97914cc8273063a9f7f5ac6f6a0', '722480-13957-2021.gz': 'ad6af23dd667f388d9dfcf38aa1f89518e150ea812a934632e029f716e22bccf', '722480-13957-2022.gz': '379a7155ad71526af6ad088813900d31121c40076b2c4816e2d26a98da093dc3', '722480-13957-2023.gz': '2b29d01d0611d9bdd6600a5b21525679045d29ae056971c3106700d015b80943', '722480-13957-2024.gz': 'f0035ebacc46b3a6790b8ea0517a5922b7e108ac13b8a22313ef9ee82beb95c6', 'USM00072248-data.txt.zip': 'cff6c5f44f23699d01489f2d5b80b4b122b74a5a2bd4cd7f82b222f0fba7a20d', '722510-12924-2020.gz': 'c51361ebe0e2b61245301eddfedfdb06c271c2a0dd6445ef89e5bcd338872c3b', '722510-12924-2021.gz': 'dabc70f66f7adb9552da30afe973106f3f6e46bf4c69021f3ffed7f4a6277543', '722510-12924-2022.gz': '23e46167620b04f0a448ff15677fc9da4d21f1c9b800656eb4ae0d0b8d0e7877', '722510-12924-2023.gz': 'e78c75094f17ad106bb695a7f2e83ac482a21b12ffe3e2eebb724485c67583d7', '722510-12924-2024.gz': 'd416111e9ff9b54d5afa735d469e5d469aa2e8803c863ccd131d43c04519c4e1', 'USM00072251-data.txt.zip': '7bd45a043b190ed71f4df46965160c71c60f57f5a49ce1d2731a515268f8ddc9', '722700-23044-2020.gz': '81e78237232ccfbc2bd810609f12d082f7492a9323301f1914fd58d62b139ae3', '722700-23044-2021.gz': '06b004920a045a2c04f61f7b403a8a78feeaa60ad970790b9383c3cb65fe1165', '722700-23044-2022.gz': '114215e2e02c0aa75223143607b7dc8a55a84727c31f8589f7979daf33bf7a41', '722700-23044-2023.gz': 'cbb0f701776503be4456d05a723757002f9a52e5ffe24517b7a2007349fd71cb', '722700-23044-2024.gz': '95b573c8f014c683c6842c03c6b8e03b6241a3ffa30f881fdd6f7d36a1b7ce73', 'USM00072364-data.txt.zip': '1a58f948d46c380f6ff8c711e1b51c42d39b63b63205291acf7561c6e265450c', '722740-23160-2020.gz': 'e10a10c4c0ffd938cfdf64d0ac1aefdd62c1df46157fa34f2a313a77fbd80c20', '722740-23160-2021.gz': 'eec51b652679e2b524623e74f14eb57c8ca7ed5e48665a0750ba290d0f02c13e', '722740-23160-2022.gz': '50b8cc294c4650c79ae859efd76b361c4525d3aed45220c35e1af2c1b26ce1ed', '722740-23160-2023.gz': 'bc00cab00e4fd8293dabf1e609a563484f21e787c0393e8c5bf8191fd5677c8b', '722740-23160-2024.gz': 'd92ca248111ab9b3542065fe7531a5fb4db9ad393e404bf616840c49cbb3470c', 'USM00072274-data.txt.zip': 'a5bdd85d486c90c0cf21e9de7a45d2ac6adca46643a4ec24bda3cbf950ceec11', '723630-23047-2020.gz': '4c28415f5610f46923a31816a8fd15376c873baac4714ec2b85f6551d2e2053c', '723630-23047-2021.gz': '1290553beaabf6ff684b84ba6275414fe3dbe098ca86989d62d48a64b40b7099', '723630-23047-2022.gz': 'cf877baf41021e0970cc5278c67326c956a2b554ee9b24462c0b4833e1f4565b', '723630-23047-2023.gz': 'bd988970c297b2fc1cd51ee872307773a387a271002e1b108cf0895f74b74cfd', '723630-23047-2024.gz': '99cd29d4b46d75c58bb442185d4374977dbb8952ad6a799e1e640055145dcd79', 'USM00072363-data.txt.zip': 'd7a5ddbce3491eec03f5045b1e71f4662b91db6c892d23a75ef656e401c3e74f', '723650-23050-2020.gz': 'fd34fbcfb8dcd6ab4aa4f3fad77e6f10db3096d23f8ecf73e08568ca5be9bd62', '723650-23050-2021.gz': 'ffbee1af6e641222f8908892e81698c1b83cf76220a9757320863577804e71b7', '723650-23050-2022.gz': '088c1d3e546532a7010e22b4edc81df76b9c2e9759b96f7a4ca860e8176d8db7', '723650-23050-2023.gz': 'f730a9a549706d97ea4da8a98e369a8c843eff8622e8083026f16282e2ce2117', '723650-23050-2024.gz': 'd55bcd9b6e4ac9c126543a1048dc8a316c95cf4209510649c071d9c7da4c558e', 'USM00072365-data.txt.zip': 'c366efacf62e2988c8b17a5e2c0803cbfc206b4215738d9005424a161288b289', '724030-93738-2020.gz': '24ff1774dbb25ce9c8948e28c3790c191d03e2d8582ed900d2e028090e2f7568', '724030-93738-2021.gz': '4bee4c4802a332861e8b3578bf4aeb79442d358c36592197e2f201e29f66f60a', '724030-93738-2022.gz': '35e5b7ed6861583fa66eddef46ad904b4e8cf1fda95b0d90f25ddcb91b553c3e', '724030-93738-2023.gz': '31e8e73f3431daa815de9307e7a37ab1c2d5a8bf26668db1e5291f4f5ef9b066', '724030-93738-2024.gz': 'e409da3b649354f7140a7003a7db167a49ffe58566a67d2defd016e804b3ad52', 'USM00072403-data.txt.zip': 'a86374f2749b2b0701246dca48f7924fd6789357fbe188ea8868af0ec72d3f70', '724510-13985-2020.gz': 'd4fade01904043d552638fe1e3082617441929eea643c2fea42b2955960f9a7c', '724510-13985-2021.gz': '443dff72bee29beef89d5fb00e53c06830b192c29a0dc3fc7d2806c8ee65e48e', '724510-13985-2022.gz': 'd187e718683b0dfcc264cc67bdb892040b50b108e8861878545024fb32ccc099', '724510-13985-2023.gz': '2f43fe0d70d85c739f57ae46079dd67f90141862ec85cacc4f913e3b02d3e4d0', '724510-13985-2024.gz': '827f5733c3ef14c6572ef08fcd10e7fcc721795e99ad098ff051850337fdfa35', 'USM00072451-data.txt.zip': '2f56eab4a247e7205c761d0a21bb4b9957816643c090f06b222373f4f262c2c6', '724560-13996-2020.gz': 'f78f63eac39ea3ba743cca4f29dfef0dbd9290de6a3269cb85b34b8677322415', '724560-13996-2021.gz': 'feecf019893f379acf7183862ba78c317132a7ce270e401a82b40cfc1e7817f4', '724560-13996-2022.gz': 'ac5c861c9753b522006cd5b7de3c156ff65686f66b991925c98e5b09a546e3d7', '724560-13996-2023.gz': '38f06f38639d0ee8c3625eabf7f9f1cf8dcfb0845f0d8afe1bfcdac39888d068', '724560-13996-2024.gz': 'f8ea66e126bd8c975c50a984eeb62badd42b5562a24e5152e0383936f643397b', 'USM00072456-data.txt.zip': 'd25092b12d73cd3f2a52fa7ff8a320178811754aaac7bbbe03e718ba2b44f229', '725180-14735-2020.gz': '852a530e37e4bdb15c70da7963567c7e65a39c5da884dde91cc728376a25ddcb', '725180-14735-2021.gz': '377e1f1984d832f00a967a6ae4e6054f9dbda1688a8b957384ffa7af7a9c610e', '725180-14735-2022.gz': 'db60296ff803e307f1f3989f1812ffcfe1ee044974d6c377ec7f25a43feea401', '725180-14735-2023.gz': '3ef72c2fce410daae49b71e550086ab0ccd2d2fac947ae7e47c60b8c5ea3c9f5', '725180-14735-2024.gz': '2f31e6ee6353736d42721be1e273448af053aa1196e83645a8a0d17ee13f7dfd', 'USM00072518-data.txt.zip': '21dcbc93dd30c837886295db28cd35620c6e19899055cb7a2664100797b1d305', '725200-94823-2020.gz': 'de580efda4ea5137846e041db41dfa79343e3e93991533a06068c7cb918c50ae', '725200-94823-2021.gz': '9b43ae524593f43105ecc5ac36aca8a7cd1659af3265df01023e575995171d5a', '725200-94823-2022.gz': '1808022647e19180605541d7f211dc2c139ae5054b233e87da96415eac66f060', '725200-94823-2023.gz': '31aa8148f89e4cf76852fce69e8baffc0d0b6e8ce23a6bedffeadf0b7bae1c1c', '725200-94823-2024.gz': '8ad6fcdbaf85e24660fc53238ef64199f6da43847e74f1f60f11d9822061b43f', 'USM00072520-data.txt.zip': 'a0ba44f84b8929bbc6edb916e332bbca24a8a6aeb4e94035eb83a20991bb4ff6', '725500-14942-2020.gz': '4eca08a43129ad53415f45f3937247daa3d20f8a25cbf433d943f6962203d2eb', '725500-14942-2021.gz': '428cad1f9535cb85d7a98148a60872524162c2d1a0f2dde284661ed08c38bed5', '725500-14942-2022.gz': '8af4c438f4ef63a14e874e65f9e1b202ff135353d618cb5f3672f2d1883b0e52', '725500-14942-2023.gz': 'df9168f357baf8bd047dde6ad0c305ac277ee566cb4993b773af4f2a9aa890cb', '725500-14942-2024.gz': '99925770a1a7747beb37f341f6c4830870fc0f385825be66bf41f64cfe2f9938', 'USM00072558-data.txt.zip': 'f009b9c8eef44e348519921887d8bbe322b38b389143ef040209fdc1ee510e49', '726450-14898-2020.gz': 'f9a3bf80a13cf39afc14db1f100701951e9fd54ba001d67ac57fce129e655696', '726450-14898-2021.gz': '336ccb4918cf202a1f792c5762949a1b392c741ba1c3c88a3ce61b90d4bd5fbd', '726450-14898-2022.gz': '0af444b44a30168a2b2e1da2b366e5b470c5130fe8c1091c7d882d492fa79147', '726450-14898-2023.gz': '15c1dd554aef60b99060af4976383f9ed84ed983cbaf2d812a23dc623ed54362', '726450-14898-2024.gz': '2ef3497f02152b54843c29b508feb95758428f3facf84d2730913418c2d162bf', 'USM00072645-data.txt.zip': 'f8402ffad5e402c985fd43ca2748865d2d1b8431c803d52f31b6073662dcc8ef', '726580-14922-2020.gz': 'a8f40a756b3afd93c66bc18ee809538e95578170140be800c885a3c30fc3d3d5', '726580-14922-2021.gz': '7fbd5800d87b31947497719d2d6d65fc0719dfff5d1b1747fd7a566cb7a77f3e', '726580-14922-2022.gz': 'cd323eed354a80118c691dfc5896335e117912c3f8aaba87481336245325f093', '726580-14922-2023.gz': 'f712fc46365fc1d5759ea94cd294e9f69e1c538ee9d884fd8e62ba35d3b0e15e', '726580-14922-2024.gz': '53b8d3ead33d31cfc823a544437de1ffbee59e50b8d455a193c4a43d1bec055d', 'USM00072649-data.txt.zip': '2f506d2fcc1279c348fa1550c943728b1f0498b4d969fc98a7be64a3dff58ae0'}
+
+PRODUCT = 'aermod-regulatory-runtime'
+RAW = Path('/opt/noaa')
+OUT = Path('/output')
+LAND_USE = {'grassland': [0.20, 0.75, 0.10], 'arid_grassland': [0.25, 2.0, 0.05]}
+# Synthetic engineering ranges: NOx-as-NO2, SO2, PM2.5 g/s; K; m/s; m diameter.
+ARCHETYPES = {
+    'gas_boilers': [[8, 40], [0.02, 0.3], [0.08, 0.8], [400, 480], [8, 18], [0.6, 1.6]],
+    'simple_cycle_turbine': [[20, 100], [0.05, 0.8], [0.1, 1.5], [650, 800], [15, 28], [1.5, 3.5]],
+    'process_heaters': [[10, 60], [0.2, 4], [0.3, 2], [430, 600], [8, 20], [0.7, 2.0]],
+    'kiln': [[25, 100], [3, 40], [2, 12], [400, 550], [10, 22], [1.2, 3.0]],
+    'small_refinery_mix': [[15, 80], [2, 25], [0.5, 6], [400, 600], [8, 22], [0.8, 2.5]],
+}
+# ug/m3; NO2 and SO2 ppb conversion at 25 C, 1 atm, 24.45 L/mol.
+STANDARDS = {
+    'NO2_1h': {'pollutant': 'NO2', 'averaging_time': '1h', 'limit': 100 * 46.0055 / 24.45, 'form': 'max_receptor_mean_of_5_annual_8th_daily_maxima'},
+    'NO2_annual': {'pollutant': 'NO2', 'averaging_time': 'annual', 'limit': 53 * 46.0055 / 24.45, 'form': 'max_receptor_max_annual_mean'},
+    'PM25_24h': {'pollutant': 'PM25', 'averaging_time': '24h', 'limit': 35.0, 'form': 'max_receptor_mean_of_5_annual_8th_daily_means'},
+    'PM25_annual_primary': {'pollutant': 'PM25', 'averaging_time': 'annual', 'limit': 9.0, 'form': 'max_receptor_mean_of_5_annual_means'},
+    'PM25_annual_secondary': {'pollutant': 'PM25', 'averaging_time': 'annual', 'limit': 15.0, 'form': 'max_receptor_mean_of_5_annual_means'},
+    'SO2_1h': {'pollutant': 'SO2', 'averaging_time': '1h', 'limit': 75 * 64.066 / 24.45, 'form': 'max_receptor_mean_of_5_annual_4th_daily_maxima'},
+    'SO2_annual': {'pollutant': 'SO2', 'averaging_time': 'annual', 'limit': 10 * 64.066 / 24.45, 'form': 'max_receptor_mean_of_5_annual_means'},
+    'SO2_3h': {'pollutant': 'SO2', 'averaging_time': '3h', 'limit': 500 * 64.066 / 24.45, 'form': 'max_receptor_max_annual_second_highest_3h_block'},
+}
+for standard in STANDARDS.values():
+    standard['units'] = 'ug/m3'
+
+
+def write_json(path, value):
+    path.write_text(json.dumps(value, sort_keys=True, indent=2, allow_nan=False) + '\n')
+
+
+def write_yaml(path, value):
+    path.write_text(yaml.safe_dump(value, sort_keys=True, allow_unicode=False))
+
+
+def asset_url(name):
+    if name.endswith('.gz'):
+        return f'https://www.ncei.noaa.gov/pub/data/noaa/{name[-7:-3]}/{name}'
+    return 'https://www.ncei.noaa.gov/data/integrated-global-radiosonde-archive/access/data-por/' + name
+
+
+def bake():
+    RAW.mkdir(parents=True, exist_ok=True)
+    def fetch(item):
+        name, expected = item
+        path = RAW / name
+        for attempt in range(3):
+            try:
+                digest = hashlib.sha256()
+                with urllib.request.urlopen(asset_url(name), timeout=180) as response, path.open('wb') as target:
+                    while block := response.read(1024 * 1024):
+                        target.write(block)
+                        digest.update(block)
+                if digest.hexdigest() != expected:
+                    raise RuntimeError(f'NOAA snapshot changed: {name}; expected {expected}, got {digest.hexdigest()}')
+                return
+            except Exception:
+                if attempt == 2:
+                    raise
+    with concurrent.futures.ThreadPoolExecutor(max_workers=4) as pool:
+        list(pool.map(fetch, sorted(ASSETS.items())))
+    write_json(RAW / 'sha256.json', ASSETS)
+
+
+def run(argv, cwd, timeout, logname='console.txt'):
+    with (cwd / logname).open('w') as log:
+        try:
+            subprocess.run(argv, cwd=cwd, stdout=log, stderr=subprocess.STDOUT,
+                           timeout=timeout, check=True)
+        except (subprocess.CalledProcessError, subprocess.TimeoutExpired) as exc:
+            log.flush()
+            raise RuntimeError(f'{Path(argv[0]).name} failed: {exc}; ' + (cwd / logname).read_text()[-5000:]) from exc
+
+
+def compile_models(work):
+    root = Path('/products') / PRODUCT
+    manifest = json.loads((root / 'manifest.json').read_text())
+    bindir = work / 'bin'
+    bindir.mkdir()
+    exes = {}
+    for model, unit_type in [('aermet', 'aermet-source-tree'), ('aermod', 'aermod-source-tree'), ('bpip', 'bpip-prime-source-tree')]:
+        units = [u for u in manifest['units'] if u['unit_type'] == unit_type]
+        if len(units) != 1:
+            raise RuntimeError(f'Expected one {unit_type} in runtime product')
+        src = root / units[0]['content_path']
+        if (src / 'content').is_dir():
+            src = src / 'content'
+        dest = bindir / model
+        dest.mkdir()
+        for path in sorted(src.rglob('*')):
+            if path.is_file() and path.suffix.lower() in ['.f', '.f90', '.for', '.bat']:
+                shutil.copyfile(path, dest / path.name)
+        exes[model] = str(bindir / (model + '.exe'))
+        if model == 'bpip':
+            path = dest / 'Bpipprm.for'
+            path.write_bytes(path.read_bytes().replace(b'\x1a', b''))
+            args = ['-O2', '-static', '-std=legacy', '-fallow-argument-mismatch', 'Bpipprm.for']
+        else:
+            bat = next(dest.glob('gfortran*.bat')).read_text()
+            order = re.findall(r'^gfortran -c %COMPILE_FLAGS%\s+(\S+)', bat, re.M)
+            if not order:
+                raise RuntimeError(f'No EPA compilation order for {model}')
+            if model == 'aermet':
+                args = ['-O2', '-static', '-fcheck=all', '-std=f2008', '-ffree-form', *order]
+            else:
+                args = ['-O2', '-static', '-fbounds-check', *order]
+        run(['gfortran', *args, '-o', exes[model]], dest, 240)
+    return exes
+
+
+def clean_report(text):
+    # Remove execution clock headers, preserving meteorological dates and model version.
+    lines = []
+    for line in text.replace('\r\n', '\n').splitlines():
+        if re.match(r'\s*(DATE\s*:|TIME\s*:)', line):
+            continue
+        if re.match(r'\s*\*+ AERM(?:OD|ET)\b', line):
+            line = re.sub(r'\s+\d{1,2}/\d{1,2}/\d{2,4}\s*$', '', line)
+            line = re.sub(r'\s+\d{1,2}:\d{2}:\d{2}\s*$', '', line)
+        if 'PROCESSING DATE/TIME:' in line:
+            continue
+        lines.append(line.rstrip())
+    return '\n'.join(lines) + '\n'
+
+
+def make_met(s, cache, exes):
+    directory = cache / s['id']
+    if directory.exists():
+        return directory
+    directory.mkdir(parents=True)
+    with (directory / 'surface.dat').open('wb') as target:
+        for year in range(2020, 2025):
+            with gzip.open(RAW / f'{s["usaf"]}-{s["wban"]}-{year}.gz') as source:
+                shutil.copyfileobj(source, target)
+    with zipfile.ZipFile(RAW / (s['ua'] + '-data.txt.zip')) as archive, (directory / 'upper.dat').open('wb') as target:
+        with archive.open(s['ua'] + '-data.txt') as source:
+            keep = False
+            for line in source:
+                if line.startswith(b'#'):
+                    keep = 2020 <= int(line[13:17]) <= 2024
+                if keep:
+                    target.write(line)
+    albedo, bowen, roughness = LAND_USE[s['land_use']]
+    inp = f'''JOB
+ REPORT report.txt
+ MESSAGES messages.txt
+UPPERAIR
+ DATA upper.dat IGRA
+ LOCATION {s['ua_id']} {s['ua_lat']}N {abs(s['ua_lon'])}W {s['tz']} {s['ua_elev']}
+ XDATES 2020/1/1 TO 2024/12/31
+ MODIFY
+SURFACE
+ DATA surface.dat ISHD
+ LOCATION {s['wban']} {s['lat']}N {abs(s['lon'])}W {s['tz']} {s['elev']}
+ XDATES 2020/1/1 TO 2024/12/31
+METPREP
+ XDATES 2020/1/1 TO 2024/12/31
+ OUTPUT {s['id']}.sfc
+ PROFILE {s['id']}.pfl
+ METHOD WIND_DIR RANDOM
+ METHOD REFLEVEL SUBNWS
+ NWS_HGT WIND {s['wind_height_m']}
+ FREQ_SECT ANNUAL 1
+ SECTOR 1 0 360
+ SITE_CHAR 1 1 {albedo} {bowen} {roughness}
+'''
+    (directory / 'aermet.inp').write_text(inp)
+    run([exes['aermet'], 'aermet.inp'], directory, 180)
+    if 'AERMET FINISHED SUCCESSFULLY' not in (directory / 'console.txt').read_text():
+        raise RuntimeError(f'AERMET failed for {s["id"]}: ' + (directory / 'messages.txt').read_text()[-5000:])
+    rows = (directory / (s['id'] + '.sfc')).read_text().splitlines()[1:]
+    if len(rows) != 43848 or not rows[0].startswith('2020') or not rows[-1].startswith('2024'):
+        raise RuntimeError(f'Incomplete five-year AERMET output for {s["id"]}')
+    for name in ['surface.dat', 'upper.dat', 'console.txt', 'messages.txt', 'report.txt']:
+        (directory / name).unlink()
+    return directory
+
+
+def receptors():
+    points = set()
+    for n in range(-250, 251, 50):
+        points.update([(n, -250), (n, 250), (-250, n), (250, n)])
+    for extent, step in [(1000, 250), (5000, 1000)]:
+        for x in range(-extent, extent + 1, step):
+            for y in range(-extent, extent + 1, step):
+                if max(abs(x), abs(y)) >= 250 and x*x + y*y <= 5000*5000:
+                    points.add((x, y))
+    assert len(points) <= 1500
+    return sorted(points)
+
+
+def draw_facility(rng, archetype):
+    buildings = []
+    for j, (x, y) in enumerate([(-90, -90), (90, -90), (-90, 90), (90, 90)][:rng.randint(1, 4)]):
+        w, d, h = [round(rng.uniform(a, b), 2) for a, b in [(25, 65), (25, 65), (12, 40)]]
+        buildings.append({'id': f'B{j+1}', 'base_elevation_m': 0, 'height_m': h,
+                          'corners_m': [[x-w/2, y-d/2], [x+w/2, y-d/2], [x+w/2, y+d/2], [x-w/2, y+d/2]]})
+    sources = []
+    for j in range(rng.randint(2, 6)):
+        b = buildings[j % len(buildings)]
+        x = b['corners_m'][1][0] + rng.uniform(3, 12)
+        y = (b['corners_m'][1][1] + b['corners_m'][2][1]) / 2 + rng.uniform(-10, 10)
+        kind = archetype
+        if archetype == 'small_refinery_mix':
+            kind = ['gas_boilers', 'process_heaters', 'small_refinery_mix'][j % 3]
+        ranges = ARCHETYPES[kind]
+        values = [round(rng.uniform(a, b), 6) for a, b in ranges]
+        sources.append({'id': f'S{j+1}', 'type': kind, 'location': {'x_m': round(x, 2), 'y_m': round(y, 2), 'base_elevation_m': 0},
+                        'uncontrolled_rates_g_s': dict(zip(['NO2', 'SO2', 'PM25'], values[:3])),
+                        'no2_nox_in_stack_ratio': round(rng.uniform(0.08, 0.25), 4),
+                        'stack_bounds': {'height_min_m': round(rng.uniform(8, min(25, b['height_m'])), 2)},
+                        'fixed_stack': {'temperature_K': values[3], 'velocity_m_s': values[4], 'diameter_m': values[5]}})
+    return buildings, sources
+
+
+def bpip_input(buildings, sources, heights):
+    lines = ["'Foundry synthetic facility'", "'P'", "'METERS' 1.0", "'UTMN' 0.0", str(len(buildings))]
+    for b in buildings:
+        lines += [f"'{b['id']}' 1 0", f"4 {b['height_m']}"]
+        lines += [f'{x:.4f} {y:.4f}' for x, y in b['corners_m']]
+    lines.append(str(len(sources)))
+    for u in sources:
+        p = u['location']
+        lines.append(f"'{u['id']}' 0 {heights[u['id']]} {p['x_m']} {p['y_m']}")
+    return '\n'.join(lines) + '\n'
+
+
+def run_bpip(directory, buildings, sources, heights, exes):
+    directory.mkdir(parents=True, exist_ok=True)
+    text = bpip_input(buildings, sources, heights)
+    (directory / 'bpip.inp').write_text(text)
+    (directory / 'fort.10').write_text(text)
+    run([exes['bpip']], directory, 60, 'bpip.console')
+    report = (directory / 'fort.12').read_text()
+    cards = [line.strip() for line in report.splitlines() if line.strip().startswith('SO ')]
+    if len(cards) != len(sources) * 30:
+        raise RuntimeError('BPIP did not emit all 36-direction PRIME parameters')
+    gep = {}
+    table = report.split('PRELIMINARY* GEP STACK HEIGHT RESULTS TABLE', 1)[1].split('* Results', 1)[0]
+    for line in table.splitlines():
+        fields = line.split()
+        if len(fields) == 5 and fields[0] in heights:
+            gep[fields[0]] = max(65.0, float(fields[-1]))
+    if set(gep) != set(heights):
+        raise RuntimeError('BPIP GEP results missing a source')
+    (directory / 'bpip.out').write_text(clean_report(report))
+    (directory / 'bpip.sum').write_text(clean_report((directory / 'fort.14').read_text()))
+    for name in ['fort.10', 'fort.12', 'fort.14', 'bpip.console']:
+        (directory / name).unlink()
+    return '\n'.join(cards), gep
+
+
+def concentration_rows(path):
+    with path.open() as source:
+        for line in source:
+            if line.strip() and not line.startswith('*'):
+                fields = line.split()
+                x, y, value = map(float, fields[:3])
+                if not math.isfinite(value) or value < 0:
+                    raise RuntimeError(f'Invalid concentration in {path.name}')
+                yield fields, x, y, value
+
+
+def max_concentration(path, expected):
+    rows = list(concentration_rows(path))
+    if len(rows) != expected:
+        raise RuntimeError(f'Unexpected receptor/year count in {path.name}: {len(rows)}')
+    return max(row[3] for row in rows)
+
+
+def so2_three_hour(path, nrec):
+    # POSTFILE 3 PLOT records every nonoverlapping 3-hour block. Track each
+    # receptor's two highest block means within each calendar year.
+    highs = {}
+    count = 0
+    for fields, x, y, value in concentration_rows(path):
+        year = 2000 + int(fields[8][:2])
+        key = (year, x, y)
+        a, b = highs.get(key, (-1.0, -1.0))
+        if value >= a:
+            a, b = value, a
+        elif value > b:
+            b = value
+        highs[key] = (a, b)
+        count += 1
+    if set(k[0] for k in highs) != set(range(2020, 2025)) or len(highs) != 5 * nrec or min(v[1] for v in highs.values()) < 0:
+        raise RuntimeError('Incomplete annual SO2 3-hour statistics')
+    summaries = [{'year': year, 'x_m': x, 'y_m': y, 'second_highest_ug_m3': vals[1]} for (year, x, y), vals in sorted(highs.items())]
+    write_json(path.with_name('annual_second_highest.json'), summaries)
+    path.unlink()
+    return max(v[1] for v in highs.values())
+
+
+def run_models(root, content, s, sources, heights, rates, cards, tier, ozone, exes):
+    results = {}
+    nrec = len(receptors())
+    configs = [('NO2', root, '1 ANNUAL', '1', '8TH'), ('PM25', root / 'pm25', '24 ANNUAL', '24', '8TH'),
+               ('SO2', root / 'so2', '1 ANNUAL', '1', '4TH'), ('SO2', root / 'so2_3h', '3', '3', '2ND')]
+    def model(config):
+        pollutant, directory, averages, period, rank = config
+        directory.mkdir(exist_ok=True)
+        metpath = os.path.relpath(content / 'met' / s['id'], directory)
+        recpath = os.path.relpath(content / 'receptors.inp', directory)
+        options = 'DFAULT CONC' + (' ' + tier if pollutant == 'NO2' else '')
+        lines = ['CO STARTING', 'CO TITLEONE Foundry synthetic permit facility', f'CO MODELOPT {options}',
+                 f'CO AVERTIME {averages}', f'CO POLLUTID {pollutant}', 'CO RUNORNOT RUN']
+        if pollutant == 'NO2' and tier == 'PVMRM':
+            lines.append(f'CO OZONEVAL {ozone} PPB')
+        lines += ['CO FINISHED', 'SO STARTING']
+        for u in sources:
+            name = u['id']; p = u['location']; st = u['fixed_stack']
+            lines += [f"SO LOCATION {name} POINT {p['x_m']} {p['y_m']} 0",
+                      f"SO SRCPARAM {name} {rates[name][pollutant]:.9f} {heights[name]} {st['temperature_K']} {st['velocity_m_s']} {st['diameter_m']}"]
+            if pollutant == 'NO2' and tier == 'PVMRM':
+                lines.append(f"SO NO2RATIO {name} {u['no2_nox_in_stack_ratio']}")
+        lines += [cards, 'SO SRCGROUP ALL', 'SO FINISHED', 'RE STARTING', f'RE INCLUDED {recpath}', 'RE FINISHED',
+                  'ME STARTING', f'ME SURFFILE {metpath}.sfc', f'ME PROFFILE {metpath}.pfl',
+                  f"ME SURFDATA {s['wban']} 2020", f"ME UAIRDATA {s['ua_id']} 2020", 'ME PROFBASE 0', 'ME FINISHED',
+                  'OU STARTING', f'OU RECTABLE {period} {rank}', f'OU PLOTFILE {period} ALL {rank} short.plt']
+        if 'ANNUAL' in averages:
+            if pollutant == 'NO2':
+                lines.append('OU POSTFILE ANNUAL ALL PLOT annual.plt')
+            else:
+                lines.append('OU PLOTFILE ANNUAL ALL annual.plt')
+        if directory.name == 'so2_3h':
+            lines.append('OU POSTFILE 3 ALL PLOT blocks.plt')
+        lines.append('OU FINISHED')
+        (directory / 'aermod.inp').write_text('\n'.join(lines) + '\n')
+        run([exes['aermod']], directory, 1800)
+        output = (directory / 'aermod.out').read_text()
+        if 'AERMOD Finishes Successfully' not in output or not re.search(r'43848 Hours Were Processed', output):
+            raise RuntimeError(f'AERMOD {pollutant} {averages} failed: ' + output[-6000:])
+        if directory.name == 'so2_3h':
+            results['SO2_3h'] = so2_three_hour(directory / 'blocks.plt', nrec)
+        else:
+            results[pollutant + ('_24h' if pollutant == 'PM25' else '_1h')] = max_concentration(directory / 'short.plt', nrec)
+            annual = max_concentration(directory / 'annual.plt', nrec * (5 if pollutant == 'NO2' else 1))
+            if pollutant == 'PM25':
+                results['PM25_annual_primary'] = annual
+                results['PM25_annual_secondary'] = annual
+            else:
+                results[pollutant + '_annual'] = annual
+        for path in sorted(directory.iterdir()):
+            if path.is_file() and path.suffix in ['.out', '.plt']:
+                path.write_text(clean_report(path.read_text()))
+        for path in list(directory.iterdir()):
+            if path.is_file() and path.name not in ['aermod.inp', 'aermod.out', 'short.plt', 'annual.plt', 'annual_second_highest.json', 'bpip.inp', 'bpip.out', 'bpip.sum']:
+                path.unlink()
+    with concurrent.futures.ThreadPoolExecutor(max_workers=4) as pool:
+        list(pool.map(model, configs))
+    if set(results) != set(STANDARDS):
+        raise RuntimeError('Missing admission statistics')
+    return results
+
+
+def generate_one(seed, index, work, exes):
+    digest = hashlib.sha256(seed.encode('utf-8') + str(index).encode('ascii')).hexdigest()
+    rng = random.Random(int(digest, 16))
+    s = rng.choice(STATIONS)
+    archetype = rng.choice(sorted(ARCHETYPES))
+    # Prefix-stable schedule guarantees >=70% Tier 3 for every positive COUNT.
+    tier = 'PVMRM' if index % 10 < 7 else 'ARM2'
+    met = make_met(s, work / 'met', exes)
+    for attempt in range(32):
+        candidate = work / 'candidate'
+        if candidate.exists():
+            shutil.rmtree(candidate)
+        content = candidate / 'content'
+        content.mkdir(parents=True)
+        shutil.copytree(met, content / 'met')
+        buildings, sources = draw_facility(rng, archetype)
+        write_json(content / 'buildings.json', {'coordinate_system': 'local Cartesian meters; flat terrain', 'buildings': buildings})
+        (content / 'receptors.inp').write_text(''.join(f'RE DISCCART {x} {y} 0 0\n' for x, y in receptors()))
+        minimum = {u['id']: u['stack_bounds']['height_min_m'] for u in sources}
+        uncontrol = {u['id']: u['uncontrolled_rates_g_s'] for u in sources}
+        costs = {'currency': 'USD', 'basis': 'synthetic annualized engineering costs; no real permit data',
+                 'stack_usd_per_m': round(rng.uniform(1500, 6500), 2), 'controls': []}
+        control_map = {}
+        efficiencies = {'NO2': 0.95, 'SO2': 0.98, 'PM25': 0.995}
+        for u in sources:
+            maximum_cost = rng.uniform(120000, 500000)
+            for label, eff, cost_scale in [('none', 0, 0), ('moderate', 0.75, 0.55), ('maximum', 1, 1)]:
+                cid = u['id'] + '_' + label
+                costs['controls'].append({'id': cid, 'applies_to': [u['id']],
+                    'efficiency_by_pollutant': {p: round(v * eff, 6) for p, v in efficiencies.items()},
+                    'annualized_usd': round(maximum_cost * cost_scale, 2)})
+                if label == 'maximum':
+                    control_map[u['id']] = cid
+        background = {k: round(v['limit'] * rng.uniform(0.10, 0.40), 6) for k, v in sorted(STANDARDS.items())}
+        background['PM25_annual_secondary'] = background['PM25_annual_primary']
+        ozone = round(rng.uniform(30, 55), 3)
+        base = content / 'uncontrolled'; draft = content / 'draft'
+        base_cards, gep = run_bpip(base, buildings, sources, minimum, exes)
+        for u in sources:
+            u['stack_bounds']['height_max_m'] = gep[u['id']]
+            u['stack_bounds']['gep_height_m'] = gep[u['id']]
+        draft_cards, draft_gep = run_bpip(draft, buildings, sources, gep, exes)
+        if draft_gep != gep:
+            raise RuntimeError('GEP changed with stack height')
+        controlled = {u['id']: {p: round(rate * (1 - efficiencies[p]), 9) for p, rate in u['uncontrolled_rates_g_s'].items()} for u in sources}
+        print(f'unit {index}, candidate {attempt}: {s["id"]} {archetype} {tier}', file=sys.stderr, flush=True)
+        baseline = run_models(base, content, s, sources, minimum, uncontrol, base_cards, tier, ozone, exes)
+        base_values = {k: baseline[k] + background[k] for k in STANDARDS}
+        base_ratios = {k: base_values[k] / STANDARDS[k]['limit'] for k in STANDARDS}
+        if max(base_ratios.values()) <= 1:
+            continue
+        designed = run_models(draft, content, s, sources, gep, controlled, draft_cards, tier, ozone, exes)
+        design_values = {k: designed[k] + background[k] for k in STANDARDS}
+        design_ratios = {k: design_values[k] / STANDARDS[k]['limit'] for k in STANDARDS}
+        if max(design_ratios.values()) > 1:
+            continue
+        write_json(base / 'admission.json', {'modeled_ug_m3': baseline, 'total_with_background_ug_m3': base_values, 'ratios': base_ratios})
+        write_json(draft / 'admission.json', {'modeled_ug_m3': designed, 'total_with_background_ug_m3': design_values, 'ratios': design_ratios})
+        controls_cost = sum(c['annualized_usd'] for c in costs['controls'] if c['id'] in control_map.values())
+        draft_cost = round(controls_cost + sum(gep[k] - minimum[k] for k in gep) * costs['stack_usd_per_m'], 2)
+        design = {'units': [{'id': u['id'], 'control_id': control_map[u['id']], 'stack_height_m': gep[u['id']], 'rates_g_s': controlled[u['id']]} for u in sources],
+                  'annualized_cost_usd': draft_cost, 'design_values_ug_m3': design_values}
+        write_yaml(draft / 'design.yaml', design)
+        write_json(content / 'cost_table.json', costs)
+        write_json(content / 'background.json', {'units': 'ug/m3', 'design_values': background, 'basis': 'seeded synthetic design-value backgrounds',
+                   'ozone': {'mode': 'OZONEVAL', 'value': ozone, 'units': 'ppb', 'basis': 'permitted synthetic constant fallback; no hourly ozone observations'}})
+        scenario = {'schema_version': 1, 'instance_id': digest, 'facility': {'archetype': archetype, 'lot_bounds_m': [-250, -250, 250, 250],
+                    'terrain': 'flat', 'dispersion_setting': 'rural', 'synthetic': True}, 'units': sources,
+                    'pollutants': ['NO2', 'PM25', 'SO2'], 'emission_units': 'g/s', 'NO2_rate_basis': 'total NOx mass expressed as NO2 before chemical conversion',
+                    'averaging_times': {'NO2': ['1h', 'annual'], 'PM25': ['24h', 'annual'], 'SO2': ['1h', '3h', 'annual']},
+                    'naaqs_thresholds': STANDARDS, 'naaqs_source': 'https://www.epa.gov/criteria-air-pollutants/naaqs-table',
+                    'naaqs_scope': 'current standards for modeled pollutants plus retained 3-hour SO2; no area-specific revoked standards',
+                    'locked_keywords': {'MODELOPT': ['DFAULT', 'CONC'], 'NO2_tier': tier, 'ozone_ppb': ozone, 'meteorology_years': [2020, 2021, 2022, 2023, 2024],
+                                        'receptors': 'receptors.inp', 'buildings': 'buildings.json', 'in_stack_ratios': 'units[].no2_nox_in_stack_ratio'},
+                    'model_runs': ['aermod.inp', 'pm25/aermod.inp', 'so2/aermod.inp', 'so2_3h/aermod.inp'],
+                    'run_directory': 'draft', 'surface_characteristics': {'assumption': 'fixed land-use class, not AERSURFACE or a site survey',
+                                        'class': s['land_use'], 'albedo_bowen_roughness_m': LAND_USE[s['land_use']]},
+                    'gep_method': 'BPIP-PRIME nearby-building formula with 65 m floor, 40 CFR 51.100(ii)(1)-(2); no field-study credit',
+                    'control_selection': 'choose exactly one mutually exclusive control per source; height may vary within bounds',
+                    'objective': 'minimize annualized control plus stack-extension cost while satisfying every listed standard with background',
+                    'archetype_parameter_ranges': ARCHETYPES}
+        write_yaml(content / 'scenario.yaml', scenario)
+        limiting = max(design_ratios, key=design_ratios.get)
+        binding = sorted(k for k in design_ratios if design_ratios[k] >= 0.9 * design_ratios[limiting])
+        relevant_assets = sorted([f'{s["usaf"]}-{s["wban"]}-{y}.gz' for y in range(2020, 2025)] + [s['ua'] + '-data.txt.zip'])
+        meta = {'instance_id': digest, 'equivalence_class': 'meteorology:' + s['id'], 'seed_sha256': hashlib.sha256(seed.encode()).hexdigest(),
+                'index': index, 'candidate_attempt': attempt, 'station_id': s['id'], 'station': s, 'archetype': archetype, 'n_sources': len(sources),
+                'pollutants': scenario['pollutants'], 'n_binding_standards': len(binding), 'binding_standards': binding,
+                'binding_definition': 'draft ratios within 10 percent of the largest draft ratio; limiting constraints, not exact active constraints',
+                'draft_design_values': design_values, 'uncontrolled_exceedance_ratios': base_ratios,
+                'uncontrolled_exceedance_ratio': max(base_ratios.values()), 'draft_cost': draft_cost, 'admissible': True,
+                'no2_tier': tier, 'no2_limited': limiting.startswith('NO2'),
+                'downwash_sensitive': any(minimum[k] < gep[k] for k in minimum),
+                'downwash_sensitive_definition': 'geometric screening flag: minimum stack height below BPIP GEP; not a no-building counterfactual',
+                'background_fraction': background[limiting] / STANDARDS[limiting]['limit'],
+                'background_fractions': {k: background[k] / v['limit'] for k, v in STANDARDS.items()},
+                'runtime_product': PRODUCT, 'versions': {'AERMOD': '26135', 'AERMET': '26135', 'BPIPPRM': '04274'},
+                'noaa_snapshots': [{'name': name, 'url': asset_url(name), 'sha256': ASSETS[name]} for name in relevant_assets],
+                'determinism': 'Random seed is sha256(UTF-8 SEED concatenated with ASCII index); AERMET uses its fixed EPA wind-direction table',
+                'no2_annual_statistic': 'maximum over all five years of ANNUAL POSTFILE results; multi-year average in standard report is not used',
+                'SO2_3h_statistic': 'second-highest 3h block per receptor per calendar year from POSTFILE, then maximum',
+                'n_receptors': len(receptors())}
+        write_json(content / 'meta.json', meta)
+        candidate.rename(OUT / f'scenario-{index:06d}')
+        return
+    raise RuntimeError(f'No admissible candidate for index {index} after 32 deterministic draws')
+
+
+def main():
+    if sys.argv[1:] == ['--bake']:
+        bake()
+        return
+    if sys.argv[1:]:
+        raise RuntimeError('Unexpected arguments; runtime takes SEED and COUNT environment variables')
+    count = int(os.environ.get('COUNT') or '360')
+    if count < 0:
+        raise RuntimeError('COUNT must be nonnegative')
+    # RESUME=1 (datafoundry.resume): /output holds only finished units, each
+    # published by one rename; skip them and make the rest.
+    resume = os.environ.get('RESUME') == '1'
+    present = list(OUT.iterdir())
+    if present and not resume:
+        raise RuntimeError('/output must initially be empty')
+    stray = [p.name for p in present if not (p.is_dir() and re.fullmatch(r'scenario-\d{6}', p.name))]
+    if stray:
+        raise RuntimeError(f'with RESUME=1 /output may hold only finished scenario-NNNNNN directories: {stray[:3]}')
+    if count == 0:
+        return
+    work = OUT / '.work'
+    work.mkdir()
+    (work / 'tmp').mkdir()
+    os.environ['TMPDIR'] = str(work / 'tmp')
+    os.environ['LC_ALL'] = 'C'
+    os.environ['TZ'] = 'UTC'
+    try:
+        exes = compile_models(work)
+        for index in range(count):
+            if (OUT / f'scenario-{index:06d}').is_dir():
+                continue
+            generate_one(os.environ.get('SEED', '0'), index, work, exes)
+    finally:
+        shutil.rmtree(work)
+
+
+if __name__ == '__main__':
+    try:
+        main()
+    except Exception as exc:
+        print(f'generator failed: {exc}', file=sys.stderr)
+        sys.exit(1)

@@ -1,0 +1,39 @@
+{
+  "counts": {
+    "archetype": {
+      "gas_boilers": 43,
+      "kiln": 51,
+      "process_heaters": 45,
+      "simple_cycle_turbine": 47,
+      "small_refinery_mix": 44
+    },
+    "eligibility": {
+      "eligible": 230,
+      "ineligible": 0,
+      "pending": 0
+    },
+    "n_sources": {
+      "2": 41,
+      "3": 35,
+      "4": 49,
+      "5": 51,
+      "6": 54
+    },
+    "split": {
+      "train": 230
+    },
+    "station": {
+      "KALB": 21,
+      "KAMA": 20,
+      "KCRP": 29,
+      "KELP": 21,
+      "KGRB": 26,
+      "KIAD": 19,
+      "KMSP": 21,
+      "KPIT": 17,
+      "KSHV": 28,
+      "KTUS": 28
+    },
+    "total": 230
+  }
+}

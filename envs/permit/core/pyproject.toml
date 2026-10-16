@@ -1,0 +1,29 @@
+[build-system]
+requires = ["setuptools==80.9.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "permit-core"
+version = "0.1.0"
+description = "PermitForge's faithful native physical verifier"
+requires-python = ">=3.11"
+dependencies = ["PyYAML==6.0.3", "numpy==2.3.4"]
+
+[dependency-groups]
+dev = ["pytest==8.4.2", "ruff==0.14.1"]
+
+[tool.setuptools.packages.find]
+include = ["permit_core*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = ["native: runs the supplied native models (included by default)", "slow: reruns the native fidelity comparisons"]
+
+[tool.ruff.lint]
+select = ["E4", "E7", "E9", "F"]
+
+[tool.ruff.lint.per-file-ignores]
+# Preserve the published functions' statements and local names.
+"permit_core/native.py" = ["E701", "E702", "E741"]
+"permit_core/validate.py" = ["E701", "E702", "E741"]
+"permit_core/render.py" = ["E701", "E702"]

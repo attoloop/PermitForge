@@ -1,0 +1,31 @@
+spec_version: 1
+name: permit_forge
+type: space
+runtime: fastapi
+app: permit_openenv.server:app
+port: 7860
+description: PermitForge v2 chooses controls and stack heights for synthetic plants under real weather; terminal BPIP/AERMOD verification and open-ended savings reward.
+version: "0.1.0"
+variables:
+  PERMIT_TASKS_DIR: ""
+  PERMIT_EVALUATOR: ""
+  PERMIT_FIELDS_DIR: ""
+  MAX_CONCURRENT_ENVS: "1"
+validation:
+  reward:
+    range: [0.0, 1.0]
+  resources:
+    cpu: 4.0
+    memory_mb: 6144
+    disk_mb: 20480
+    episode_timeout_s: 7200.0
+  network:
+    mode: no-network
+  capabilities:
+    verifier:
+      kind: reward_channel
+    rubric_tree: true
+    task_api: true
+    declared_tools: [get_scenario, check_design, evaluate_design, submit_design]
+  types:
+    tags: [simulation, air-quality, engineering, mcp, real-world-data]

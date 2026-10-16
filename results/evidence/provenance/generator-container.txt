@@ -1,0 +1,10 @@
+FROM python:3.12.13-bookworm AS python
+FROM gcc:13.4.0-bookworm
+COPY --from=python /usr/local/ /usr/local/
+RUN python3.12 -m pip install --no-cache-dir PyYAML==6.0.2
+ENV PYTHONDONTWRITEBYTECODE=1 PYTHONHASHSEED=0 LC_ALL=C TZ=UTC
+COPY op/ /op/
+RUN python3.12 /op/entrypoint --bake
+WORKDIR /output
+ENTRYPOINT ["/usr/local/bin/python3.12", "/op/entrypoint"]
+LABEL datafoundry.resume=1

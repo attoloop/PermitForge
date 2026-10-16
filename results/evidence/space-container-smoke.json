@@ -1,0 +1,366 @@
+{
+  "url": "http://127.0.0.1:7860",
+  "endpoints": {
+    "/healthz": {
+      "status": 200,
+      "seconds": 0.002673240000149235
+    },
+    "/play/": {
+      "status": 200,
+      "seconds": 0.0023381930077448487
+    },
+    "/web/": {
+      "status": 200,
+      "seconds": 0.0018402630084892735
+    }
+  },
+  "tasks": {
+    "040cd27878ef-s47": {
+      "seconds": {
+        "reset": 0.00213034100306686,
+        "get_scenario": 0.003284153004642576,
+        "evaluate_design": 0.826160445009009,
+        "submit_design": 59.235073221992934
+      },
+      "evaluation": {
+        "valid": true,
+        "errors": [],
+        "feasible": true,
+        "cost": 1506438.0984,
+        "standards": [
+          {
+            "id": "NO2_1h",
+            "value": 3.2613,
+            "background": 70.956208,
+            "limit": 188.16155419222906,
+            "margin": 113.94404619222907,
+            "binding_receptor": {
+              "index": 95,
+              "x_m": 0.0,
+              "y_m": 750.0
+            }
+          },
+          {
+            "id": "NO2_annual",
+            "value": 0.17652,
+            "background": 32.381355,
+            "limit": 99.72562372188139,
+            "margin": 67.1677487218814,
+            "binding_receptor": {
+              "index": 76,
+              "x_m": -250.0,
+              "y_m": 1000.0
+            }
+          },
+          {
+            "id": "PM25_24h",
+            "value": 0.00083,
+            "background": 9.928561,
+            "limit": 35.0,
+            "margin": 25.070609,
+            "binding_receptor": {
+              "index": 76,
+              "x_m": -250.0,
+              "y_m": 1000.0
+            }
+          },
+          {
+            "id": "PM25_annual_primary",
+            "value": 0.00016,
+            "background": 0.915527,
+            "limit": 9.0,
+            "margin": 8.084313,
+            "binding_receptor": {
+              "index": 76,
+              "x_m": -250.0,
+              "y_m": 1000.0
+            }
+          },
+          {
+            "id": "PM25_annual_secondary",
+            "value": 0.00016,
+            "background": 0.915527,
+            "limit": 15.0,
+            "margin": 14.084313,
+            "binding_receptor": {
+              "index": 76,
+              "x_m": -250.0,
+              "y_m": 1000.0
+            }
+          },
+          {
+            "id": "SO2_1h",
+            "value": 0.00482,
+            "background": 64.472665,
+            "limit": 196.52147239263803,
+            "margin": 132.04398739263803,
+            "binding_receptor": {
+              "index": 95,
+              "x_m": 0.0,
+              "y_m": 750.0
+            }
+          },
+          {
+            "id": "SO2_3h",
+            "value": 0.00454,
+            "background": 167.852312,
+            "limit": 1310.1431492842537,
+            "margin": 1142.2862972842538,
+            "binding_receptor": {
+              "index": 124,
+              "x_m": 250.0,
+              "y_m": 750.0
+            }
+          },
+          {
+            "id": "SO2_annual",
+            "value": 0.00022,
+            "background": 4.228981,
+            "limit": 26.202862985685076,
+            "margin": 21.973661985685077,
+            "binding_receptor": {
+              "index": 76,
+              "x_m": -250.0,
+              "y_m": 1000.0
+            }
+          }
+        ],
+        "backend": "fast evaluator",
+        "note": "Fields are cached on demand. The first evaluation of a task may take about 40 seconds; later evaluations reuse the cache.",
+        "evaluations_left": 29
+      },
+      "submission": {
+        "valid": true,
+        "errors": [],
+        "cost": 1506438.0984,
+        "evaluations_left": 29,
+        "feasible": true,
+        "standards": [
+          {
+            "id": "NO2_1h",
+            "value": 3.2613,
+            "background": 70.956208,
+            "limit": 188.16155419222906,
+            "margin": 113.94404619222907,
+            "binding_receptor": {
+              "index": 95,
+              "x_m": 0.0,
+              "y_m": 750.0
+            }
+          },
+          {
+            "id": "NO2_annual",
+            "value": 0.17652,
+            "background": 32.381355,
+            "limit": 99.72562372188139,
+            "margin": 67.1677487218814,
+            "binding_receptor": {
+              "index": 76,
+              "x_m": -250.0,
+              "y_m": 1000.0
+            }
+          },
+          {
+            "id": "PM25_24h",
+            "value": 0.00083,
+            "background": 9.928561,
+            "limit": 35.0,
+            "margin": 25.070609,
+            "binding_receptor": {
+              "index": 76,
+              "x_m": -250.0,
+              "y_m": 1000.0
+            }
+          },
+          {
+            "id": "PM25_annual_primary",
+            "value": 0.00016,
+            "background": 0.915527,
+            "limit": 9.0,
+            "margin": 8.084313,
+            "binding_receptor": {
+              "index": 76,
+              "x_m": -250.0,
+              "y_m": 1000.0
+            }
+          },
+          {
+            "id": "PM25_annual_secondary",
+            "value": 0.00016,
+            "background": 0.915527,
+            "limit": 15.0,
+            "margin": 14.084313,
+            "binding_receptor": {
+              "index": 76,
+              "x_m": -250.0,
+              "y_m": 1000.0
+            }
+          },
+          {
+            "id": "SO2_1h",
+            "value": 0.00482,
+            "background": 64.472665,
+            "limit": 196.52147239263803,
+            "margin": 132.04398739263803,
+            "binding_receptor": {
+              "index": 95,
+              "x_m": 0.0,
+              "y_m": 750.0
+            }
+          },
+          {
+            "id": "SO2_3h",
+            "value": 0.00454,
+            "background": 167.852312,
+            "limit": 1310.1431492842537,
+            "margin": 1142.2862972842538,
+            "binding_receptor": {
+              "index": 124,
+              "x_m": 250.0,
+              "y_m": 750.0
+            }
+          },
+          {
+            "id": "SO2_annual",
+            "value": 0.00022,
+            "background": 4.228981,
+            "limit": 26.202862985685076,
+            "margin": 21.973661985685077,
+            "binding_receptor": {
+              "index": 76,
+              "x_m": -250.0,
+              "y_m": 1000.0
+            }
+          }
+        ],
+        "backend": "full AERMOD",
+        "reward": 0.0,
+        "prescore_usd_saved": 0.0,
+        "pct_saved": 0.0,
+        "anchors": {
+          "worst": 0,
+          "best": null,
+          "saturation": null,
+          "source": "none"
+        },
+        "best_known_search_cost": null
+      }
+    },
+    "0558a6a6c25d-s47": {
+      "seconds": {
+        "reset": 0.037673068000003695,
+        "get_scenario": 0.004459482996026054,
+        "evaluate_design": 3.5474376310012303
+      },
+      "evaluation": {
+        "valid": true,
+        "errors": [],
+        "feasible": true,
+        "cost": 1150544.3225,
+        "standards": [
+          {
+            "id": "NO2_1h",
+            "value": 5.51848,
+            "background": 23.856275,
+            "limit": 188.16155419222906,
+            "margin": 158.78679919222907,
+            "binding_receptor": {
+              "index": 130,
+              "x_m": 500.0,
+              "y_m": 0.0
+            }
+          },
+          {
+            "id": "NO2_annual",
+            "value": 0.29256,
+            "background": 36.308763,
+            "limit": 99.72562372188139,
+            "margin": 63.12430072188139,
+            "binding_receptor": {
+              "index": 123,
+              "x_m": 250.0,
+              "y_m": 500.0
+            }
+          },
+          {
+            "id": "PM25_24h",
+            "value": 0.00442,
+            "background": 12.356977,
+            "limit": 35.0,
+            "margin": 22.638603,
+            "binding_receptor": {
+              "index": 123,
+              "x_m": 250.0,
+              "y_m": 500.0
+            }
+          },
+          {
+            "id": "PM25_annual_primary",
+            "value": 0.00136,
+            "background": 1.917647,
+            "limit": 9.0,
+            "margin": 7.080993,
+            "binding_receptor": {
+              "index": 123,
+              "x_m": 250.0,
+              "y_m": 500.0
+            }
+          },
+          {
+            "id": "PM25_annual_secondary",
+            "value": 0.00136,
+            "background": 1.917647,
+            "limit": 15.0,
+            "margin": 13.080993,
+            "binding_receptor": {
+              "index": 123,
+              "x_m": 250.0,
+              "y_m": 500.0
+            }
+          },
+          {
+            "id": "SO2_1h",
+            "value": 0.25699,
+            "background": 53.231904,
+            "limit": 196.52147239263803,
+            "margin": 143.03257839263804,
+            "binding_receptor": {
+              "index": 130,
+              "x_m": 500.0,
+              "y_m": 0.0
+            }
+          },
+          {
+            "id": "SO2_3h",
+            "value": 0.20236,
+            "background": 350.196098,
+            "limit": 1310.1431492842537,
+            "margin": 959.7446912842537,
+            "binding_receptor": {
+              "index": 106,
+              "x_m": 150.0,
+              "y_m": 250.0
+            }
+          },
+          {
+            "id": "SO2_annual",
+            "value": 0.01201,
+            "background": 3.272736,
+            "limit": 26.202862985685076,
+            "margin": 22.918116985685074,
+            "binding_receptor": {
+              "index": 123,
+              "x_m": 250.0,
+              "y_m": 500.0
+            }
+          }
+        ],
+        "backend": "fast evaluator",
+        "note": "Fields are cached on demand. The first evaluation of a task may take about 40 seconds; later evaluations reuse the cache.",
+        "evaluations_left": 29
+      },
+      "submission": null
+    }
+  },
+  "readme_client": "passed"
+}

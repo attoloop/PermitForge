@@ -1,0 +1,9 @@
+{
+  "task_id": "05efc240e839-s47",
+  "sources": 4,
+  "fields": 32,
+  "jobs": 1,
+  "wall_seconds": 302.99558072599757,
+  "cpu_seconds": 299.175586,
+  "command": "uv run --project envs/permit/core python convert/benchmark_search.py --task 05efc240e839-s47 --label cold-fields --measure-fields --jobs 1"
+}

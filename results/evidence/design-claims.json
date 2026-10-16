@@ -1,0 +1,152 @@
+[
+  {
+    "section": "Packs: source inventory, station splits, archetypes",
+    "numbers": "360; 230/130; 15 stations; 5 archetypes; all station/archetype table counts",
+    "sources": [
+      "results/evidence/conversion.json",
+      "envs/permit/tasks/permit-v2-train/tasks.jsonl",
+      "envs/permit/tasks/permit-v2-eval/tasks.jsonl"
+    ],
+    "command": "python3 envs/permit/openenv/space_root/report_evidence.py"
+  },
+  {
+    "section": "Packs: physical geometry and years",
+    "numbers": "2\u20136 sources; 1\u20134 buildings; 184 receptors; 2020\u20132024",
+    "sources": [
+      "envs/permit/tasks/data/*/{task.json,buildings.json,receptors.inp}"
+    ],
+    "command": "The read-only Python inventory block in DESIGN.md, Packs."
+  },
+  {
+    "section": "Packs: menu",
+    "numbers": "6 interior seventh-points; 0.5 m; at most 8 heights",
+    "sources": [
+      "envs/permit/core/permit_core/menu.py"
+    ],
+    "command": "cat envs/permit/core/permit_core/menu.py"
+  },
+  {
+    "section": "Task: cost and budgets",
+    "numbers": "none cost/efficiency 0; 4 tools; 30 valid evaluations; one terminal submission",
+    "sources": [
+      "envs/permit/core/permit_core/cost.py",
+      "envs/permit/core/permit_core/verify.py",
+      "envs/permit/openenv/permit_openenv/environment.py"
+    ],
+    "command": "cat envs/permit/core/permit_core/{cost,verify}.py; sed -n '20,220p' envs/permit/openenv/permit_openenv/environment.py"
+  },
+  {
+    "section": "NO2: polynomial and clipping",
+    "numbers": "all ARM2 coefficients; 0.50/0.90 bounds",
+    "sources": [
+      "envs/permit/core/native_build/model-source/aermod/calc1.f:10813",
+      "envs/permit/core/native_build/model-source/aermod/coset.f:657"
+    ],
+    "command": "The source sed commands in DESIGN.md, NO2 and the fast evaluator."
+  },
+  {
+    "section": "Fast statistics and rounding",
+    "numbers": "9-decimal rates; 0.75/+0.4 denominator; 5 decimals/F13.5",
+    "sources": [
+      "envs/permit/core/permit_core/evaluate.py",
+      "envs/permit/core/permit_core/render.py",
+      "envs/permit/core/permit_core/validate.py",
+      "envs/permit/core/native_build/model-source/aermod/calc2.f:2436"
+    ],
+    "command": "cat envs/permit/core/permit_core/evaluate.py; sed -n '80,150p' envs/permit/core/permit_core/{render,validate}.py"
+  },
+  {
+    "section": "Fidelity tables",
+    "numbers": "1920/1920; 240/240; 40 designs \u00d7 6 tasks; all per-standard exact counts/errors and per-task latency, compressed bytes, float32 changes; 100 total changed values",
+    "sources": [
+      "results/evidence/fidelity.json"
+    ],
+    "command": "python3 envs/permit/openenv/space_root/report_evidence.py"
+  },
+  {
+    "section": "Cache defaults and Space constants",
+    "numbers": "40 GiB; 4 interactive jobs; 2 eval showcases; 8 GiB Space cap; 1 field job; 1 server worker; 4 build jobs",
+    "sources": [
+      "envs/permit/core/permit_core/field_cache.py",
+      "envs/permit/openenv/permit_openenv/evaluator.py",
+      "envs/permit/openenv/Dockerfile",
+      "envs/permit/openenv/space_root/bake_showcases.py"
+    ],
+    "command": "cat envs/permit/openenv/{Dockerfile,space_root/bake_showcases.py}; rg -n 'PERMIT_FIELDS|jobs' envs/permit/core/permit_core/field_cache.py envs/permit/openenv/permit_openenv/evaluator.py"
+  },
+  {
+    "section": "Reward",
+    "numbers": "sentinel -1; worst 0; b>0; s=b+3*(b-w); coefficients 0.4/1.2/2; points 0/0.4/0.8; asymptote 1.0",
+    "sources": [
+      "envs/permit/core/permit_core/reward.py",
+      "envs/permit/openenv/permit_openenv/tasks.py",
+      "envs/permit/openenv/permit_openenv/environment.py"
+    ],
+    "command": "cat envs/permit/core/permit_core/reward.py; the reference-point Python block in DESIGN.md, The reward."
+  },
+  {
+    "section": "Baselines/search policies and limits",
+    "numbers": "random-30; v1-CD 25; 60 seconds / 10000 nodes; 1200-second benchmark cap",
+    "sources": [
+      "envs/permit/core/permit_core/baselines.py",
+      "envs/permit/core/permit_core/search.py",
+      "convert/run_baselines.py",
+      "results/evidence/search/*.json"
+    ],
+    "command": "cat envs/permit/core/permit_core/baselines.py; rg -n 'closed|seconds|max_nodes|unlimited' envs/permit/core/permit_core/search.py convert/run_baselines.py"
+  },
+  {
+    "section": "timing table and projection",
+    "numbers": "Every table node/evaluation/time/cost; 2/4/6 sources; 8.099 hours / 12 cores; 6-hour target; 6.918 hours without search",
+    "sources": [
+      "results/evidence/search/*.json",
+      "results/evidence/pipeline-budget.json"
+    ],
+    "command": "python3 convert/report_search.py"
+  },
+  {
+    "section": "Admission",
+    "numbers": "360 admitted; 230 train and 130 eval; every draft is native-feasible under ARM2; no baseline/search filter",
+    "sources": [
+      "envs/permit/tasks/permit-v2-train/tasks.jsonl",
+      "envs/permit/tasks/permit-v2-eval/tasks.jsonl"
+    ],
+    "command": "python3 envs/permit/openenv/space_root/report_evidence.py"
+  },
+  {
+    "section": "v1 differences",
+    "numbers": "75 launches / 25 full evaluations vs 30; -1 v1 floor",
+    "sources": [
+      "convert/v1-src/family/bind.py",
+      "convert/v1-src/shared/tests/grade.py",
+      "envs/permit/openenv/permit_openenv/environment.py"
+    ],
+    "command": "rg -n 'query_tokens|floor|EVALUATE_BUDGET' convert/v1-src/family/bind.py convert/v1-src/shared/tests/grade.py envs/permit/openenv/permit_openenv/environment.py"
+  },
+  {
+    "section": "Native source versions and build pins",
+    "numbers": "AERMOD/AERMET 26135; BPIP 04274; Debian tag/digest/snapshot; compiler flags; port 7860",
+    "sources": [
+      "SOURCES.md",
+      "envs/permit/core/native_build/model-source/aermod/aermod.f:16",
+      "envs/permit/core/native_build/model-source/bpipprm/Bpipprm.for:3",
+      "envs/permit/core/native_build/Dockerfile",
+      "envs/permit/core/native_build/build-models.sh",
+      "envs/permit/openenv/Dockerfile",
+      "envs/permit/openenv/openenv.yaml"
+    ],
+    "command": "The native headers, build-script and SHA256SUMS commands in DESIGN.md, Native build and pins."
+  },
+  {
+    "section": "Dependencies",
+    "numbers": "All Python, runtime, build, dev and uv version pins",
+    "sources": [
+      "pyproject.toml",
+      "envs/permit/core/pyproject.toml",
+      "envs/permit/openenv/pyproject.toml",
+      "envs/permit/openenv/uv.lock",
+      "envs/permit/openenv/Dockerfile"
+    ],
+    "command": "cat pyproject.toml envs/permit/{core,openenv}/pyproject.toml; rg -n 'uv==' envs/permit/openenv/Dockerfile"
+  }
+]

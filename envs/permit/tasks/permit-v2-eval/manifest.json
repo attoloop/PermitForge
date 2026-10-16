@@ -1,0 +1,34 @@
+{
+  "counts": {
+    "archetype": {
+      "gas_boilers": 31,
+      "kiln": 27,
+      "process_heaters": 19,
+      "simple_cycle_turbine": 16,
+      "small_refinery_mix": 37
+    },
+    "eligibility": {
+      "eligible": 130,
+      "ineligible": 0,
+      "pending": 0
+    },
+    "n_sources": {
+      "2": 33,
+      "3": 23,
+      "4": 29,
+      "5": 24,
+      "6": 21
+    },
+    "split": {
+      "eval": 130
+    },
+    "station": {
+      "KABQ": 22,
+      "KDDC": 33,
+      "KJAX": 23,
+      "KOMA": 20,
+      "KTOP": 32
+    },
+    "total": 130
+  }
+}

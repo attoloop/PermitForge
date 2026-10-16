@@ -1,0 +1,18 @@
+{
+  "scenario-generator.py.txt": {
+    "origin": "datafoundry/generators/aermod-permit-scenarios/op/entrypoint",
+    "sha256": "ef55e46bfa30d08f9f8c44d0861a682396815952b882be92207fbc2ea504112f"
+  },
+  "generator-container.txt": {
+    "origin": "datafoundry/generators/aermod-permit-scenarios/Containerfile",
+    "sha256": "f4a36fd478a2353f5869f9deb15ca76e3f0b84f7d27f070ad821459a8cd85e90"
+  },
+  "runtime-source.yaml": {
+    "origin": "datafoundry/sources/aermod-regulatory-runtime.yaml",
+    "sha256": "c6941bcb41924d833c8d8359bce8082ec8d5ac6d4dd8303b358765ea6acff66a"
+  },
+  "scenario-source.yaml": {
+    "origin": "datafoundry/sources/aermod-permit-scenarios.yaml",
+    "sha256": "984b3f51cf1fcf9a983913671a5501d869934e70702512f0bc1aeef67e0c83b0"
+  }
+}

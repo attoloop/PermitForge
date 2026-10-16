@@ -1,0 +1,47 @@
+{
+  "counts": {
+    "archetype": {
+      "gas_boilers": 74,
+      "kiln": 78,
+      "process_heaters": 64,
+      "simple_cycle_turbine": 63,
+      "small_refinery_mix": 81
+    },
+    "eligibility": {
+      "eligible": 0,
+      "ineligible": 0,
+      "pending": 360
+    },
+    "n_sources": {
+      "2": 74,
+      "3": 58,
+      "4": 78,
+      "5": 75,
+      "6": 75
+    },
+    "split": {
+      "eval": 130,
+      "train": 230
+    },
+    "station": {
+      "KABQ": 22,
+      "KALB": 21,
+      "KAMA": 20,
+      "KCRP": 29,
+      "KDDC": 33,
+      "KELP": 21,
+      "KGRB": 26,
+      "KIAD": 19,
+      "KJAX": 23,
+      "KMSP": 21,
+      "KOMA": 20,
+      "KPIT": 17,
+      "KSHV": 28,
+      "KTOP": 32,
+      "KTUS": 28
+    },
+    "total": 360
+  },
+  "decision_required": false,
+  "failing_standards": {}
+}

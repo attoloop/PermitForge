@@ -1,0 +1,29 @@
+[build-system]
+requires = ["setuptools==80.9.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "permit-openenv"
+version = "0.1.0"
+description = "PermitForge v2 OpenEnv tools, native grading and episode records"
+requires-python = ">=3.11"
+dependencies = ["permit-core", "openenv==0.7.0", "fastmcp>=3,<4", "gradio>=5", "uvicorn[standard]>=0.30"]
+
+[project.optional-dependencies]
+agents = ["anthropic>=0.40"]
+
+[dependency-groups]
+dev = ["pytest==8.4.2", "ruff==0.14.1"]
+
+[tool.uv.sources]
+permit-core = {path = "../core", editable = true}
+
+[tool.setuptools.packages.find]
+include = ["permit_openenv*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = ["native: runs the real BPIP/AERMOD smoke rollout (included by default)"]
+
+[tool.ruff.lint]
+select = ["E4", "E7", "E9", "F"]

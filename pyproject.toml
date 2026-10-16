@@ -1,0 +1,16 @@
+[project]
+name = "permit-forge-tools"
+version = "0.1.0"
+description = "One-shot conversion and preservation tools for PermitForge"
+requires-python = ">=3.11"
+dependencies = ["permit-core"]
+
+[tool.uv.sources]
+permit-core = {path = "envs/permit/core", editable = true}
+
+[dependency-groups]
+dev = ["pytest==8.4.2"]
+
+[tool.pytest.ini_options]
+pythonpath = [".", "envs/permit/core"]
+testpaths = ["tests"]

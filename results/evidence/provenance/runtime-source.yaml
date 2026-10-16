@@ -1,0 +1,56 @@
+id: aermod-regulatory-runtime
+name: AERMOD v26135 source (EPA SCRAM)
+authority: U.S. EPA Office of Air Quality Planning and Standards, Support Center for
+  Regulatory Atmospheric Modeling
+version: 26135 (memo dated July 9, 2026; HTTP last-modified 2026-07-09)
+access_class: public HTTPS download
+license: U.S. Government work (17 U.S.C. 105) [usc17-105, aermod-source]
+redistribution_class: internal
+redistributable: true
+license_spdx: LicenseRef-US-Gov-Public-Domain
+raw_units: 4
+usable_units: 4
+estimated_bytes: 4427924
+processing: 'Bound whole: compiled once per environment image with gfortran 13 (EPA
+  build-script order and flags). Compiled and run in this run.'
+role: runtime
+url: https://gaftp.epa.gov/Air/aqmg/SCRAM/models/preferred/aermod/aermod_source.zip
+sha256: 5092c1d68b77d9407c9f67d497b440a79d2ee746f9ed6515a63ad4a5b11cd8ed
+additional_sources:
+- name: AERMOD User's Guide, EPA-454/B-26-001 (July 2026)
+  version: EPA-454/B-26-001, July 2026 (HTTP last-modified 2026-07-09)
+  license: U.S. Government work (17 U.S.C. 105) [usc17-105, aermod-userguide]
+  url: https://gaftp.epa.gov/Air/aqmg/SCRAM/models/preferred/aermod/aermod_userguide.pdf
+  sha256: 8b747d154076635c2057bb939050fff196004312cceb8a8fc04688ee694a58e5
+  extract:
+    format: file
+    unit_type: pdf-document
+    name: aermod_userguide.pdf
+- name: AERMET v26135 source (EPA SCRAM)
+  version: '26135'
+  license: U.S. Government work (17 U.S.C. 105) [usc17-105, aermet-source]
+  url: https://gaftp.epa.gov/Air/aqmg/SCRAM/models/met/aermet/aermet_source.zip
+  sha256: 11b0f7efaaa384fe20651d6553aed6c3604803f0a3e8bd103b925e88f7088686
+  extract:
+    format: archive-tree
+    unit_type: aermet-source-tree
+    select:
+    - '*.f90'
+    - '*.bat'
+- name: BPIP-PRIME (BPIPPRM) source and examples (EPA SCRAM)
+  version: bpipprime.zip as served 2026-10-06 (Bpipprm.for dated 2004-12-07 in the
+    archive)
+  license: U.S. Government work (17 U.S.C. 105) [usc17-105, bpip-prime]
+  url: https://gaftp.epa.gov/Air/aqmg/SCRAM/models/related/bpip/bpipprime.zip
+  sha256: a51a93fc8c306065830ded33772ad473fed9d10114dd5b317026c5616b21ed6f
+  extract:
+    format: archive-tree
+    unit_type: bpip-prime-source-tree
+    select:
+    - '*'
+extract:
+  format: archive-tree
+  unit_type: aermod-source-tree
+  select:
+  - '*.f'
+  - '*.bat'
