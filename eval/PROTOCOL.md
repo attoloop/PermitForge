@@ -96,7 +96,7 @@ uv run --no-sync python -m eval.select_tasks --jobs 4 --field-jobs 3 \
 # Rebuild selection from frozen probes, without native work:
 uv run --no-sync python -m eval.select_tasks --report-only \
   --cache internal/reports/WP2.8-evidence/difficulty-probes --output results/subsets.json
-PERMIT_FIELDS_CACHE_GB=72 uv run --no-sync python -m eval.warm_fields \
+PERMIT_FIELDS_CACHE_GB=64 uv run --no-sync python -m eval.warm_fields \
   --subsets results/subsets.json --field-jobs 12
 ```
 
