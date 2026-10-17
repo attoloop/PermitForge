@@ -227,10 +227,68 @@ Reproduce the source review without new physics runs:
 sed -n '1,27p;147,211p' internal/reports/*-coherence.md
 ```
 
-**Evaluation audit — pending.** Fill this section after the frozen evaluation
-panel: measured lazy-policy rewards, invalid/infeasible/no-submit
-failure categories, new attempted reward shortcuts, per-finding closure evidence,
-and any remaining loopholes. No model evaluation results are supplied here.
+## Evaluation audit — final-medium3
+
+Canonical completed episodes and their append-only transcripts were scanned once each; compatibility snapshots and successful-attempt capture copies are not double-counted. Counts describe observed calls and responses, not inferred intent or proof against untried shortcuts. Reproduce every count in this section (including per-model totals and finding locations) with:
+
+```sh
+export PERMIT_FIELDS_CACHE_GB=64
+uv run --project envs/permit/openenv --no-sync python -m eval.card final-medium3 --audit
+```
+
+Scanned **240 episodes / 240 transcripts**. All completed episodes submitted feasible designs under native verification.
+
+| Outcome | Episodes |
+|---|---:|
+| submitted | 240 |
+| invalid | 0 |
+| infeasible | 0 |
+| no_submit | 0 |
+| turn_limit | 0 |
+| error | 0 |
+| timeout | 0 |
+
+| Transcript/raw-evidence scan | Count |
+|---|---:|
+| Tool calls | 5870 |
+| Calls outside the four tools | 0 |
+| Invalid designs returned by check/evaluate/submit | 10 |
+| Draft submissions | 0 |
+| Evaluate calls after exhaustion | 0 |
+| Repeated identical evaluations (beyond the first per episode) | 6 |
+| Proxy rejection markers in GPT CLI events/stderr | 0 |
+
+Design comparisons ignore mapping order, numeric spelling and the `none` control alias. Invalid-design counts include free checks, not just terminal submissions; infeasible exploratory evaluations are ordinary optimization. Repeated evaluations consume budget without improving information and are not evidence of an exploit. Exhaustion is detected from the preceding tool result’s evaluations_left. The proxy scan matches explicit rejection/unadvertised-tool markers; ordinary unstable-feature and temporary-directory warnings are not proxy rejections. Raw GPT CLI execution and MCP events are also checked for calls absent from the transcript. All invalid design findings were E_MENU responses to evaluate_design; none was a terminal submission. Per-event locations and errors are in the command’s findings output.
+
+Lazy-policy rewards on the selected eval tasks (equal task means):
+
+| Model-free policy | Mean saved fraction |
+|---|---:|
+| draft | 0.000000 |
+| cheapest_first_greedy | 0.330772 |
+| v1_coordinate_descent | 0.396380 |
+| random_30 (mean over 8 seeds) | 0.313358 |
+| best of 8 random 30-evaluation runs | 0.455739 |
+| search (60 seconds; not proven optimal) | 0.475663 |
+
+These use fast-field selection probes, verified by the saved search `verification_source: fast-field selection probe` and task `grading` labels; they are not native grades. Random failures count as zero, random_30 averages eight seeds within each task, and best-of-eight uses eight times that budget. The 60-second search is not proven optimal. Train comparisons are in final-train.md.
+
+Measurement issues and handling:
+
+- The discarded final-medium2 run’s verifier counted long-lived server RSS, including resident memory-mapped fields. Nine environment logs record E_RESOURCE; public final results sanitize this to E_INFRA, so the logs establish the cause. The contemporaneous snapshot was described as 9 of 75; the retained directory contains 80 submissions and the same nine resource failures. None contributes to final-medium3. Commit `348404f` moved verification into a fresh spawned process. The adapter regression `test_verify_adapter_forces_arm2` asserts that spawn context and the ARM2 call.
+- A missing/stale selected field pack was caught before episodes at launch. The preflight error named 07b4e4050840-s47; no episode ran in that failed launch.
+- Two GPT-6.1 Sol r1 train attempts (6b3a997f0ce8-s47 and 8e62c1a7ddb2-s47) failed before submission. CLI events record incomplete responses/502; upstream SSE names service_unavailable_error. The protocol permitted fresh attempts on resume. Failed attempts remain preserved and are excluded from grades, not silently zeroed.
+
+Reproduce the measurement checks without new physics:
+
+```sh
+export PERMIT_FIELDS_CACHE_GB=64
+uv run --project envs/permit/openenv --no-sync python -m eval.card final-medium3 --issues
+git show --stat 348404f
+uv run --project envs/permit/openenv --no-sync python -m pytest envs/permit/openenv/tests/test_adapters.py::test_verify_adapter_forces_arm2 -q
+```
+
+This is an observational evaluation audit. It does not close the historical deployment/resource findings above, re-execute adversarial probes, or establish that unobserved shortcut attempts are impossible.
 
 ## Regeneration and limits
 
