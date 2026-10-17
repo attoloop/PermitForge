@@ -11,10 +11,11 @@ is in `envs/permit/openenv/permit_openenv/` and physical grading in `permit_core
 
 Connect to the local OpenEnv server as shown in [README.md](README.md#connect-an-agent).
 `reset(task_id=...)` selects a task, or use `reset(split="train", index=0)`.
-Reset metadata includes `instructions`, scenario data, admission status and the
-evaluator name. A new reset starts a new budget. Tasks explicitly marked ineligible
-are excluded; pending admission is exposed in metadata, not treated as completed
-admission. Task discovery is available through `list_splits`, `num_tasks`,
+Reset metadata includes instructions, prompt version, tool names, identifiers,
+budget and exactly the public scenario returned by `get_scenario`. Geometry,
+wind rose and receptor arrays remain in private episode records. A new reset
+starts a new budget. Tasks explicitly marked ineligible are excluded.
+Task discovery is available through `list_splits`, `num_tasks`,
 `get_task` and `list_tasks` on the environment.
 
 | Tool | Arguments | Effect |
@@ -31,6 +32,9 @@ after exhaustion and does not consume an evaluation. Every submission is termina
 including an invalid one. Calls after termination return an episode-over error;
 they cannot change the submission or regrade. Only submission produces a grade;
 other actions and an episode ending without submission earn zero reward.
+Disconnect or graceful harness termination finalizes `no_submit` with zero reward
+and a fixed terminal timestamp. Scored servers disable the shared Gradio playground
+with `ENABLE_WEB_INTERFACE=false`; the public Space's playground is a demo only.
 
 Reproduce the budget, terminal behavior and reset semantics:
 
@@ -50,6 +54,9 @@ and include every source rather than copying this single row:
 
 - Include every source exactly once and no unknown source. Each row has exactly
   `control` and `height_m`; extra or missing fields are invalid.
+- Designs are limited to 6 sources, 64 characters per key and 4096 serialized UTF-8
+  bytes. Requests are limited to 65536 bytes before JSON parsing. Oversized designs
+  receive `E_SIZE`, cost no evaluation, and their payload is not retained.
 - `control` is a returned control ID whose `applies_to` contains that source, or
   the literal `"none"` for zero cost and zero efficiency. A returned source-specific
   none row is also allowed.
@@ -114,7 +121,7 @@ from the task at full stored precision; the example is not a rounded grading lim
 design. An invalid design omits `cost` and returns errors with the unchanged budget:
 
 ```json
-{"valid": false, "errors": ["S3: height 50.0 not on menu"], "evaluations_left": 30}
+{"valid": false, "errors": ["E_MENU: use every source exactly once with a compatible control and listed height"], "evaluations_left": 30}
 ```
 
 `evaluate_design()` returns:
@@ -134,20 +141,23 @@ message for exhaustion, failed evaluation or calls after termination. A failed
 evaluation may have an empty `standards` list.
 
 `submit_design()` returns the evaluation fields from full verification plus
-`reward`, `prescore_usd_saved`, `pct_saved`, `anchors` and
-`best_known_search_cost` (nullable when no search result is recorded). For example,
+`reward`, `prescore_usd_saved`, `pct_saved` and `anchors`. Search/baseline data are
+never returned through tools, reset or state. For example,
 an unchanged feasible draft without calibration adds:
 
 ```json
 {"reward": 0.0, "prescore_usd_saved": 0, "pct_saved": 0.0,
- "anchors": {"worst": 0, "best": null, "saturation": null, "source": "none"},
- "best_known_search_cost": null}
+ "anchors": {"worst": 0, "best": null, "saturation": null, "source": "none"}}
 ```
 
 With calibration, `anchors` holds numeric `worst`, `best`, `saturation` and a
 `source` identifying model calibration, such as `"panel"`. Invalid submission still returns terminal
-grade fields with `valid: false`, `feasible: false` and no standards. Errors may be
-validation strings or native `{code, detail}` records.
+grade fields with `valid: false`, `feasible: false` and no standards. Public errors
+are stable messages; native exceptions and paths remain in private diagnostics.
+Live episodes retain at most 256 steps and 256 diagnostic entries, each diagnostic
+capped at 8192 characters; dropped counts are recorded. Evaluations/submission are
+retained ahead of free checks. The eval transcript preserves the complete conversation.
+Reproduce these limits with `cat envs/permit/openenv/permit_openenv/{protocol,limits,episode}.py`.
 
 Reproduce export fields, binding-receptor selection and submission additions:
 

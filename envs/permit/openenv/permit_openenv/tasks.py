@@ -13,7 +13,7 @@ from permit_core.model import Scenario, extraction_root, load_v1_instance, load_
 from permit_core.native import Reject
 from permit_core.validate import validate_ledger
 
-from .protocol import json_value
+from .protocol import design_size_ok, json_value
 
 DEFAULT_TASKS = Path(__file__).resolve().parents[2] / 'tasks'
 
@@ -49,7 +49,7 @@ class Task:
     @property
     def anchors(self) -> dict:
         anchors = self.record.get('anchors') or self.scenario.task.get('anchors')
-        if not anchors:
+        if not anchors or anchors.get('best') is None:
             return {'worst': 0, 'best': None, 'saturation': None, 'source': 'none'}
         from permit_core.reward import Anchors
         result = Anchors.from_dict(anchors).to_dict()
@@ -60,12 +60,14 @@ class Task:
         return cost(self.scenario.draft_design, self.scenario.task)
 
     def check(self, design: Any) -> dict:
+        if not design_size_ok(design):
+            return {'valid': False, 'errors': ['E_SIZE: design exceeds input limits']}
         try:
             ledger = validate_ledger(to_ledger(design), self.scenario.task,
                                      height_menu=self.scenario.height_menu)
             return {'valid': True, 'errors': [], 'cost': float(cost(ledger, self.scenario.task))}
-        except (Reject, ValueError, TypeError, ArithmeticError) as exc:
-            return {'valid': False, 'errors': [getattr(exc, 'detail', str(exc))]}
+        except (Reject, ValueError, TypeError, ArithmeticError):
+            return {'valid': False, 'errors': ['E_MENU: use every source exactly once with a compatible control and listed height']}
 
     def view(self, evaluations_left: int = 30) -> dict:
         s = self.scenario
@@ -102,12 +104,15 @@ class TaskPack:
         return sum(t.split == split for t in self.tasks)
 
     def get(self, task_id: str) -> Task:
-        return self._by_id[task_id]
+        try:
+            return self._by_id[task_id]
+        except (KeyError, TypeError):
+            raise ValueError('unknown task selection') from None
 
     def at(self, split: str, index: int) -> Task:
         tasks = [t for t in self.tasks if t.split == split]
         if index < 0 or index >= len(tasks):
-            raise IndexError(f'index {index} outside split {split}')
+            raise ValueError('unknown task selection')
         return tasks[index]
 
     def public(self, task: Task) -> dict:

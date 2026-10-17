@@ -7,6 +7,7 @@ from openenv.core.env_server.mcp_types import CallToolAction, CallToolObservatio
 from .environment import PermitForgeEnvironment, PermitState
 from .evaluator import Evaluator
 from .gradio_ui import build_ui
+from .limits import RequestLimits
 from .tasks import TaskPack, load_pack
 
 
@@ -26,6 +27,7 @@ def create_server(*, pack: TaskPack | None = None, evaluator: Evaluator | None =
                      max_concurrent_envs=min(4, int(os.environ.get('MAX_CONCURRENT_ENVS', '4'))),
                      gradio_builder=gradio_builder, custom_tab_name='Guide', show_default_tab=True,
                      title_override='PermitForge v2', state_cls=PermitState)
+    app.add_middleware(RequestLimits)
 
     @app.get('/healthz', include_in_schema=False)
     def healthz():

@@ -36,7 +36,8 @@ def test_anthropic_loop_records_submission_without_network(pack, monkeypatch):
         assert record['ended'] == 'submitted' and record['final']['reward'] == 0
         assert record['usage'] == {'input_tokens': 10, 'output_tokens': 20, 'usd': None}
         assert len(record['steps'][0]['assistant_text']) == 2000
-        assert record['geometry']['station'] == 'KMSP'
+        assert record['geometry'] == {}
+        assert env.episode.record()['geometry']['station'] == 'KMSP'
         assert len(calls) == 1
         assert {t['name'] for t in calls[0]['tools']} == {
             'get_scenario', 'check_design', 'evaluate_design', 'submit_design'}

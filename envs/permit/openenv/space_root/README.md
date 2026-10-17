@@ -20,6 +20,8 @@ meeting every task air-quality standard.
 Open **[/web/](/web/)** for the standard OpenEnv Gradio playground and task guide,
 and **[/healthz](/healthz)** for health. The MCP endpoint is **`/mcp`**; the
 repository README provides a client example.
+The shared playground is a demo, not a scored endpoint. Scored runs use the eval
+harness, which forces `ENABLE_WEB_INTERFACE=false`.
 
 The image prepares float64 fields for the eval tasks listed in
 `space_root/bake_showcases.py`. Other tasks prepare fields on their first

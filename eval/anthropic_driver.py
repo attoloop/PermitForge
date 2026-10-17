@@ -23,6 +23,8 @@ def plain(value: Any) -> Any:
         return {k: plain(v) for k, v in vars(value).items()}
     if isinstance(value, list):
         return [plain(v) for v in value]
+    if isinstance(value, dict):
+        return {k: plain(v) for k, v in value.items()}
     return value
 
 
@@ -53,7 +55,7 @@ def transient(exc: Exception) -> bool:
 
 
 def run_anthropic(session: Any, model: str, *, api: Any = None, max_turns: int = 40,
-                  max_tokens: int = 4096, wall_clock: float = 7200,
+                  max_tokens: int = 4096, wall_clock: float = 1800,
                   sleep: Callable[[float], None] = time.sleep) -> dict:
     model_id = model.removeprefix('anthropic:')
     request_cost(model_id, {})
@@ -66,22 +68,49 @@ def run_anthropic(session: Any, model: str, *, api: Any = None, max_turns: int =
         raise ValueError('environment must expose exactly the four permitforge tools')
     messages = [{'role': 'user', 'content': 'Use the permitforge tools. '
                  f'You have {max_turns} turns; submit before the last turn ends.'}]
+    capture = getattr(session, 'capture', None)
+    if capture:
+        capture.event('system', INSTRUCTIONS)
+        capture.event('user', messages[0]['content'])
     usage = {'input_tokens': 0, 'output_tokens': 0, 'usd': 0.0, 'requests': []}
     retries, model_trace = [], []
     ended, error, retryable, turn = 'no_submit', None, False, 0
     try:
         for turn in range(1, max_turns+1):
+            if capture:
+                capture.turn = turn
             if turn == max_turns:
                 messages.append({'role': 'user', 'content': 'Last turn: submit your best feasible design now.'})
+                if capture:
+                    capture.event('user', messages[-1]['content'])
             for attempt in range(3):
+                from .transport import TERMINATING
+                if TERMINATING.is_set():
+                    raise InterruptedError('harness terminated')
                 remaining = deadline-time.monotonic()
                 if remaining <= 0:
                     raise TimeoutError('episode wall clock exhausted')
+                prefix = f'anthropic-{turn:04d}-{attempt+1}'
+                request = dict(model=model_id, system=INSTRUCTIONS, tools=tools,
+                               messages=messages, max_tokens=max_tokens, timeout=min(1800, remaining))
+                if capture:
+                    capture.raw_json(prefix+'-request.json', request)
                 try:
-                    response = api.messages.create(model=model_id, system=INSTRUCTIONS, tools=tools,
-                        messages=messages, max_tokens=max_tokens, timeout=min(1800, remaining))
+                    if capture and hasattr(api.messages, 'with_raw_response'):
+                        wire = api.messages.with_raw_response.create(**request)
+                        capture.raw_text(prefix+'-response.json', wire.http_response.text)
+                        capture.raw_text(prefix+'-request.json', wire.http_response.request.content.decode())
+                        response = wire.parse()
+                    else:
+                        response = api.messages.create(**request)
+                        if capture:
+                            capture.raw_json(prefix+'-response.json', plain(response))
                     break
                 except Exception as exc:
+                    if capture:
+                        if getattr(exc, 'response', None) is not None:
+                            capture.raw_text(prefix+'-response.txt', exc.response.text)
+                        capture.failed(prefix, {'type': type(exc).__name__, 'message': str(exc)})
                     if not transient(exc) or attempt == 2:
                         raise
                     retries.append({'turn': turn, 'attempt': attempt+1, 'at': now(),
@@ -94,6 +123,8 @@ def run_anthropic(session: Any, model: str, *, api: Any = None, max_turns: int =
             usage['output_tokens'] += u.get('output_tokens', 0)
             usage['usd'] += usd
             blocks = [plain(b) for b in response.content]
+            if capture:
+                capture.event('assistant', blocks, usage=u)
             model_trace.append({'turn': turn, 'content': blocks, 'usage': u})
             if hasattr(session, 'checkpoint'):
                 session.checkpoint({'usage': usage, 'turns': turn, 'retries': retries, 'model_trace': model_trace})
@@ -124,10 +155,12 @@ def run_anthropic(session: Any, model: str, *, api: Any = None, max_turns: int =
         retryable = transient(exc) and not session.submit_attempted
         if type(exc).__name__ in ('APITimeoutError', 'APIConnectionError', 'ReadTimeout'):
             usage.update(known_usd=usage['usd'], usd=None, billing_incomplete=True)
+    if hasattr(session, 'finalize'):
+        session.finalize()
     record = session.record()
     if record.get('final') is not None:
         ended, retryable = 'submitted', False
-    record.update(model=model, prompt_version=PROMPT_VERSION, started_at=started, finished_at=now(),
+    record.update(model=model, prompt_version=PROMPT_VERSION, started_at=started, finished_at=record.get('finished_at') or now(),
                   turns=turn, ended=ended, usage=usage, retries=retries, model_trace=model_trace,
                   error=error, retryable=retryable, submit_attempted=session.submit_attempted,
                   error_type='timeout' if error and error['type'] in ('TimeoutError', 'APITimeoutError') else None,

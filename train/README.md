@@ -3,7 +3,7 @@
 The training adapter uses `permit_core.evaluate` for both evaluation and final
 submission. Native verification remains the evaluation harness's responsibility.
 Only eligible train tasks enter GRPO or regular SFT. Ordinary training requires
-model-calibration anchors; `--smoke` alone permits a labelled provisional anchor
+model-calibration anchors; `--smoke` or `--memory-probe` permits a labelled provisional anchor
 equal to the largest positive feasible saving in that task's recorded diagnostics.
 
 Run from the repository root:
@@ -48,9 +48,8 @@ accumulation, generation, context and LoRA flags allow different model sizes.
 Prerequisites: CUDA must be visible, and `--fields-dir` must already contain all
 selected float64 fields (either `<task>.npz` or `<task>/<source>/<height>.npy`
 with the core cache metadata). The adapter reads and hashes these inputs without
-precomputing, editing or evicting them. At handoff the second selected task's
-field directory was absent. Obtain it through the field work package before
-running the GPU smoke. Do not interpret `--prepare-only` as field validation.
+precomputing, editing or evicting them. The trial's field loader checks the
+selected inputs before training. Do not interpret `--prepare-only` as field validation.
 
 The no-GPU preparation commands used during this work were:
 
@@ -76,6 +75,48 @@ tool feedback is excluded from the loss. Overlong prompts/episodes fail before
 training instead of silently truncating away the submission.
 
 The default GRPO settings are defined in `config_values()`; reproduce them with
-the preparation command's `config.json`. If GPU memory is insufficient, the
-explicit smaller-group retry is `--num-generations 4 --accum 4` with a fresh
-output directory. This has not been measured on the hidden GPU.
+the preparation command's `config.json`. Cloud/default settings are unchanged.
+For the local memory investigation use the opt-in sweep below.
+
+## Local GPU memory sweep (WP2.3c)
+
+First reproduce the CPU token measurements and commands without training:
+
+```bash
+train/.venv/bin/python -m train.token_budget --output train/evidence/token-budget.json --markdown train/evidence/token-budget.md
+train/.venv/bin/python -m train.memory_sweep --fields-dir convert/cache/fields --prepare-only --output train/evidence/memory-sweep-plan.json
+```
+
+On the reviewer's GPU-visible host, with both existing field packs available:
+
+```bash
+train/.venv/bin/python -m train.memory_sweep --models Qwen/Qwen3-0.6B Qwen/Qwen3-1.7B --tasks 074897d0f159-s47 01addc2a86f1-s47 --fields-dir convert/cache/fields --diagnostics-dir convert/cache/wp110-batch --token-budget train/evidence/token-budget.json --output train/evidence/memory-sweep.json
+```
+
+The default runs every configuration sequentially, each in a fresh process for
+one optimizer step covering both tasks. `--stop-after-success` optionally stops
+at the first success per model. Configurations prefer larger groups and longer
+conversations; their actual memory use is measured, not assumed monotonic.
+The run directory is unique by default. Reusing an existing trial directory is
+rejected so stale measurements cannot pass as a new run.
+
+`memory-sweep.json` is written after each trial, with exact commands, allocated
+and reserved peak VRAM (including model loading), total and optimizer-step
+seconds, assistant and full-completion token lengths, reward groups/spread,
+task coverage, weight-change status, OOM flags, and errors. Each trial also
+stores `worker.log`, `attention.json`, `metrics.json`, `trainer_metrics.json`,
+and episode traces when execution reaches those stages. A child timeout has
+unknown VRAM/OOM. `--timeout` is the
+per-child wall-clock limit in seconds. The sweep exits successfully after
+recording failed trials; inspect `first_success` and each result's `status`.
+
+A memory probe does not save/reload adapters and accepts zero-spread groups;
+it reports whether weights changed. Missing grading fails the probe. A fitting
+trial with short completions or zero reward spread does not establish useful
+training or prove that all longer episodes fit. The normal smoke command still
+requires changed weights and a successful adapter round-trip.
+
+Memory flags are independent of the environment: `--generation-batch-size`,
+`--generation-microbatch-size`, `--loss-chunk-size`, `--sdpa-backend`, and
+`--empty-cache-after-generation`. See [DESIGN.md](DESIGN.md) for measured context
+budgets, the ordered configurations and the attention compatibility check.

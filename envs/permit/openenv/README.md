@@ -15,6 +15,10 @@ uv run uvicorn permit_openenv.server:app --port 8012
 `/healthz` reports task counts. `/web/` serves the standard OpenEnv Gradio
 playground with the task guide. Episode records retain geometry, wind counts,
 and per-receptor values and margins for analysis.
+The shared playground is a public demo, not a scored evaluation endpoint.
+The eval harness forces `ENABLE_WEB_INTERFACE=false`; use `eval/run_eval.py` for
+scored runs and complete private capture. Reset returns only the public scenario;
+geometry, wind counts and receptor arrays stay in the private episode record.
 
 Connect an agent to the running local server (no model API required):
 
@@ -69,8 +73,10 @@ calls share process-safe native slots; independent legacy jobs still require
 coordinating the repository's native-process limit. The tests execute no model API.
 
 `agent.run_episode(client, model, max_turns=40)` implements an Anthropic tool-use
-loop, records token usage and truncated assistant text, and handles missing
+demo loop, records token usage and truncated assistant text, and handles missing
 submission, turn limit and errors. Run it only after authorizing API spend:
+Its public-client record has no geometry; complete private records come from the
+eval harness's authenticated recording sidecar.
 
 ```sh
 uv sync --extra agents
@@ -82,7 +88,7 @@ Configuration:
 
 - `PERMIT_TASKS_DIR`: converted tasks root (default `../tasks`). Tasks explicitly
   marked ineligible are excluded; pending records retain their admission status
-  in Task API/reset metadata. If converted manifests are absent, load the preserved
+  in the Task API. If converted manifests are absent, load the preserved
   v1 extraction through `permit_core.model.load_v1_instance` and its manifest splits.
 - `PERMIT_V1_DIR`: core's extraction-root override.
 - `PERMIT_EVALUATOR=fast|verify`: selects evaluation, never final grading. When

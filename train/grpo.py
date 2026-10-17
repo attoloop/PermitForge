@@ -81,8 +81,8 @@ def select_tasks(pack: TaskPack, task_ids: list[str] | None, limit: int | None) 
 
 
 def config_values(args: argparse.Namespace) -> dict:
-    return dict(
-        output_dir=str(args.output), max_steps=2 if args.smoke else args.steps,
+    values = dict(
+        output_dir=str(args.output), max_steps=1 if args.memory_probe else 2 if args.smoke else args.steps,
         num_generations=args.num_generations, per_device_train_batch_size=args.batch_size,
         gradient_accumulation_steps=args.accum, max_tool_calling_iterations=args.max_turns,
         max_completion_length=args.max_completion_length, scale_rewards='group', beta=0,
@@ -90,47 +90,61 @@ def config_values(args: argparse.Namespace) -> dict:
         chat_template_kwargs={'enable_thinking': False}, use_vllm=False,
         learning_rate=args.learning_rate, bf16=True, gradient_checkpointing=True,
         gradient_checkpointing_kwargs={'use_reentrant': False}, optim='paged_adamw_8bit',
-        logging_steps=1, save_strategy='no' if args.smoke else 'steps', save_steps=50,
+        logging_steps=1, save_strategy='no' if args.smoke or args.memory_probe else 'steps', save_steps=50,
         report_to='none', push_to_hub=False, seed=args.seed,
     )
+    if args.generation_batch_size is not None:
+        values['generation_batch_size'] = args.generation_batch_size
+    if args.generation_microbatch_size is not None or args.sdpa_backend != 'auto' or args.loss_chunk_size:
+        values['generation_kwargs'] = {'use_cache': True, 'logits_to_keep': 1}
+    return values
 
 
-def main() -> None:
+def main(argv: list[str] | None = None) -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     add_arguments(parser, 'grpo')
     parser.add_argument('--tasks', nargs='+')
     parser.add_argument('--limit', type=int)
     parser.add_argument('--fields-dir', type=Path, required=True)
-    parser.add_argument('--diagnostics-dir', type=Path, help='Recorded per-task baseline/search JSON; smoke only')
-    args = parser.parse_args()
+    parser.add_argument('--diagnostics-dir', type=Path, help='Recorded baseline/search JSON; smoke or memory probe only')
+    args = parser.parse_args(argv)
     validate_arguments(args)
     if args.limit is not None and args.limit <= 0:
         parser.error('--limit must be positive')
     pack = load_pack(args.tasks_dir)
-    tasks = select_tasks(pack, args.tasks, 2 if args.smoke else args.limit)
-    if args.smoke and len(tasks) != 2:
-        parser.error('Smoke requires two train tasks')
-    anchors = {t.task_id: resolve_anchors(t, smoke=args.smoke, diagnostics_dir=args.diagnostics_dir) for t in tasks}
+    bounded = args.smoke or args.memory_probe
+    tasks = select_tasks(pack, args.tasks, 2 if bounded else args.limit)
+    if bounded and len(tasks) != 2:
+        parser.error('Smoke or memory probe requires two train tasks')
+    anchors = {t.task_id: resolve_anchors(t, smoke=bounded, diagnostics_dir=args.diagnostics_dir) for t in tasks}
     args.output.mkdir(parents=True, exist_ok=True)
     rows = [{'prompt': [{'role': 'system', 'content': training_instructions(args.max_turns)},
                         {'role': 'user', 'content': 'Optimize the plant and submit your design.\n'}],
              'split': 'train', 'task_id': t.task_id} for t in tasks]
     (args.output/'selection.json').write_text(json.dumps({'tasks': list(anchors), 'anchors': anchors,
-                                                        'smoke': args.smoke}, indent=2)+'\n')
+                                                        'smoke': args.smoke,
+                                                        'memory_probe': args.memory_probe}, indent=2)+'\n')
     (args.output/'config.json').write_text(json.dumps(config_values(args), indent=2)+'\n')
     if args.prepare_only:
         return
     from datasets import Dataset
     from trl import GRPOConfig, GRPOTrainer
+    from .memory import attention_probe, memory_trainer_class
+
+    if (args.generation_microbatch_size is not None or args.loss_chunk_size or args.memory_probe
+            or args.empty_cache_after_generation or args.sdpa_backend != 'auto'):
+        GRPOTrainer = memory_trainer_class(GRPOTrainer, args)
 
     model, tokenizer = load_model(args)
+    if args.memory_probe:
+        (args.output/'attention.json').write_text(json.dumps(attention_probe(model.config), indent=2)+'\n')
     for task, row in zip(tasks, rows):
         prompt = [*row['prompt'][:-1], {'role': 'user', 'content': row['prompt'][-1]['content'] + scenario_text(task)}]
         if len(prompt_ids(tokenizer, prompt, tool_schemas())) > args.max_prompt_length:
             raise ValueError(f'{task.task_id}: prompt exceeds --max-prompt-length; increase explicitly')
     fields = FieldStore(args.fields_dir)
     # Warm only the smoke tasks; full training loads task-major groups lazily.
-    if args.smoke:
+    if bounded:
         for task in tasks:
             fields(task)
     records = []
@@ -142,7 +156,7 @@ def main() -> None:
         trainer = GRPOTrainer(model=model, processing_class=tokenizer,
                               args=GRPOConfig(**config_values(args)), train_dataset=Dataset.from_list(rows),
                               environment_factory=partial(PermitTrainingEnv, pack=pack, fields_loader=fields,
-                                                          smoke=args.smoke, diagnostics_dir=args.diagnostics_dir,
+                                                          smoke=bounded, diagnostics_dir=args.diagnostics_dir,
                                                           trace_sink=capture))
         run_training(trainer, tokenizer, args, records_per_step=records)
 

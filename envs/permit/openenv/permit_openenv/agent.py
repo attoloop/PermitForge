@@ -25,7 +25,7 @@ def run_episode(client: Any, model: str, max_turns: int = 40, *, task_id: str | 
         'schema_version': 1, 'task_id': meta['task_id'], 'split': meta['split'],
         'station': meta['scenario']['station'], 'model': model, 'prompt_version': PROMPT_VERSION,
         'started_at': utc_now(), 'finished_at': None, 'scenario': meta['scenario'],
-        'geometry': meta['geometry'], 'steps': [], 'evaluations_used': 0, 'ended': 'no_submit',
+        'geometry': {}, 'steps': [], 'evaluations_used': 0, 'ended': 'no_submit',
         'final': None, 'usage': {'input_tokens': 0, 'output_tokens': 0, 'usd': None},
     }
     started = time.monotonic()

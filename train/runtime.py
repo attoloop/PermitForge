@@ -37,6 +37,16 @@ def add_arguments(parser: argparse.ArgumentParser, kind: str) -> None:
     parser.add_argument('--lora-alpha', type=int, default=32)
     parser.add_argument('--seed', type=int, default=0)
     parser.add_argument('--no-4bit', action='store_true', help='Use bf16 on a larger local/cloud GPU')
+    if kind == 'grpo':
+        parser.add_argument('--memory-probe', action='store_true',
+                            help='One optimizer step on two tasks; provisional anchors allowed; no adapter save')
+        parser.add_argument('--generation-batch-size', type=int)
+        parser.add_argument('--generation-microbatch-size', type=int,
+                            help='Text-only HF generation chunk size; preserves GRPO reward groups')
+        parser.add_argument('--loss-chunk-size', type=int, default=0,
+                            help='Checkpoint the vocabulary projection in token chunks; 0 uses stock TRL')
+        parser.add_argument('--sdpa-backend', choices=('auto', 'fused', 'flash', 'efficient'), default='auto')
+        parser.add_argument('--empty-cache-after-generation', action='store_true')
 
 
 def validate_arguments(args: argparse.Namespace) -> None:
@@ -49,6 +59,18 @@ def validate_arguments(args: argparse.Namespace) -> None:
     if args.kind == 'grpo' and (args.num_generations < 2 or
                               args.batch_size * args.accum % args.num_generations):
         raise ValueError('batch_size * accum must be divisible by num_generations >= 2')
+    if args.kind == 'grpo':
+        size = args.generation_batch_size
+        if size is not None and (size <= 0 or size % args.num_generations or size % args.batch_size):
+            raise ValueError('generation_batch_size must be positive and divisible by group and batch size')
+        if args.generation_microbatch_size is not None and args.generation_microbatch_size <= 0:
+            raise ValueError('generation_microbatch_size must be positive')
+        if args.loss_chunk_size < 0:
+            raise ValueError('loss_chunk_size must be nonnegative')
+        if args.memory_probe and (args.smoke or args.batch_size != 1 or
+                size != args.num_generations or args.accum != 2*args.num_generations):
+            raise ValueError('memory_probe requires batch=1, generation_batch_size=num_generations, '
+                             'accum=2*num_generations and no --smoke')
     args.revision = args.revision or MODEL_REVISIONS.get(args.model)
     if args.revision is None:
         raise ValueError('Pass --revision for a model outside the pinned Qwen3 defaults')
@@ -158,13 +180,25 @@ def run_training(trainer, tokenizer, args: argparse.Namespace,
     initial = {k: v.detach().cpu().clone() for k, v in get_peft_model_state_dict(trainer.model).items()}
     step_seconds = []
     trainer.add_callback(StepTimer())
-    torch.cuda.reset_peak_memory_stats()
+    if not getattr(args, 'memory_probe', False):
+        torch.cuda.reset_peak_memory_stats()
     started = time.perf_counter()
     summary = {'kind': args.kind, 'model': args.model, 'revision': args.revision,
                'smoke': args.smoke, 'status': 'failed', 'weights_changed': False,
                'adapter_reload_equal': False}
     try:
-        trainer.train()
+        from .memory import attention_context
+        with attention_context(getattr(args, 'sdpa_backend', 'auto')):
+            trainer.train()
+        if getattr(args, 'memory_probe', False):
+            trained = get_peft_model_state_dict(trainer.model)
+            summary['weights_changed'] = any(not torch.equal(initial[k], v.detach().cpu())
+                                             for k, v in trained.items())
+            assert trainer.state.global_step == 1, 'Memory probe requires one optimizer step'
+            assert len({r['task_id'] for r in records_per_step}) == 2, 'Probe must exercise two train tasks'
+            assert not any(r.get('grading_failed') for r in records_per_step), 'Probe had unavailable grading'
+            summary['status'] = 'passed'
+            return
         trainer.save_model(str(args.output/'adapter'))
         tokenizer.save_pretrained(args.output/'adapter')
         trainer.save_state()
@@ -197,6 +231,8 @@ def run_training(trainer, tokenizer, args: argparse.Namespace,
             summary.update(episodes=len(records_per_step), episodes_per_hour=len(records_per_step)*3600/elapsed,
                            provisional=any(r['provisional'] for r in records_per_step),
                            groups=reward_groups(records_per_step, args.num_generations))
+            summary['tasks_seen'] = sorted({r['task_id'] for r in records_per_step})
+        summary['completion_lengths'] = getattr(trainer, 'memory_lengths', [])
         (args.output/'metrics.json').write_text(json.dumps(summary, indent=2, allow_nan=False)+'\n')
         # Trainer logs may contain NaN for all-ungraded batches; encode them as null.
         logs = deepcopy(trainer.state.log_history)

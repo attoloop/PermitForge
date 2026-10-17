@@ -4,8 +4,41 @@ import json
 import math
 from typing import Any
 
+MAX_SOURCES = 6
+MAX_KEY_LENGTH = 64
+MAX_DESIGN_BYTES = 4096
+
+
+def design_size_ok(design: Any) -> bool:
+    """Reject oversized or deeply nested data before validation or record copying."""
+    if not isinstance(design, dict):
+        return design is None or isinstance(design, (bool, int, float)) or design == []
+    if len(design) > MAX_SOURCES:
+        return False
+    for sid, row in design.items():
+        if not isinstance(sid, str) or len(sid) > MAX_KEY_LENGTH:
+            return False
+        if not isinstance(row, dict):
+            return False
+        if len(row) > 2:
+            return False
+        for key, value in row.items():
+            if not isinstance(key, str) or len(key) > MAX_KEY_LENGTH:
+                return False
+            if not isinstance(value, (str, bool, int, float, Decimal, type(None))):
+                return False
+            if isinstance(value, str) and len(value) > MAX_DESIGN_BYTES:
+                return False
+    try:
+        return len(json.dumps(json_value(design), ensure_ascii=False).encode()) <= MAX_DESIGN_BYTES
+    except (ValueError, OverflowError):
+        return False
+
+
 DESIGN_SCHEMA = {
     'type': 'object',
+    'maxProperties': MAX_SOURCES,
+    'propertyNames': {'maxLength': MAX_KEY_LENGTH},
     'additionalProperties': {
         'type': 'object', 'additionalProperties': False,
         'required': ['control', 'height_m'],

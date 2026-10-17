@@ -7,6 +7,7 @@ from pathlib import Path
 import signal
 import subprocess
 import tempfile
+import threading
 import time
 from typing import Any
 
@@ -14,7 +15,7 @@ from fastapi import Request
 from permit_openenv.prompts import INSTRUCTIONS, PROMPT_VERSION
 
 from .common import TOOLS, now
-from .transport import gateway, serve
+from .transport import TERMINATING, gateway, serve
 
 UPSTREAM = 'https://chatgpt.com/backend-api/codex/responses'
 
@@ -33,13 +34,14 @@ class CodexBoundary:
     Filtering the request alone is insufficient: an unadvertised function call could
     still name a built-in tool. Buffer and validate the response before releasing it.
     """
-    def __init__(self, prompt: str, *, max_turns: int, max_tokens: int):
+    def __init__(self, prompt: str, *, max_turns: int, max_tokens: int, capture: Any = None):
         self.prompt, self.max_turns, self.max_tokens = prompt, max_turns, max_tokens
         self.turns = 0
         self.allowed = {'mcp__permitforge__'+t for t in TOOLS}
         self.trace: list[dict] = []
         self.error: str | None = None
         self.retries: list[dict] = []
+        self.capture = capture
 
     def prepare(self, body: dict) -> dict:
         if self.turns >= self.max_turns:
@@ -67,8 +69,12 @@ class CodexBoundary:
                     raise IsolationError('non-permitforge tool in conversation')
                 inputs.append(item)
         self.turns += 1
+        if self.capture:
+            self.capture.turn = self.turns
         if self.turns == self.max_turns:
             inputs.append({'role': 'user', 'content': [{'type': 'input_text', 'text': 'Last turn: submit your best feasible design now.'}]})
+            if self.capture:
+                self.capture.event('user', inputs[-1]['content'])
         result = {**body, 'tools': tools, 'instructions': INSTRUCTIONS,
                   'input': inputs, 'parallel_tool_calls': False, 'max_output_tokens': self.max_tokens}
         for key in ('previous_response_id', 'prompt_cache_key', 'temperature'):
@@ -92,7 +98,7 @@ class CodexBoundary:
 
 
 def proxy_app(boundary: CodexBoundary, *, upstream: str = UPSTREAM, session: Any = None,
-              wall_clock: float = 7200, transport: Any = None):
+              wall_clock: float = 1800, transport: Any = None):
     from fastapi import FastAPI
     from fastapi.responses import Response
     import httpx
@@ -112,19 +118,38 @@ def proxy_app(boundary: CodexBoundary, *, upstream: str = UPSTREAM, session: Any
             'authorization', 'chatgpt-account-id', 'openai-beta', 'originator', 'user-agent')}
         headers.update({'content-type': 'application/json', 'accept': 'text/event-stream'})
         for attempt in range(3):
+            prefix = f'codex-{boundary.turns:04d}-{attempt+1}'
+            capture = boundary.capture
+            if capture:
+                capture.raw_json(prefix+'-request.json', body)
             remaining = deadline-time.monotonic()
-            if remaining <= 0:
+            if remaining <= 0 or TERMINATING.is_set():
                 boundary.error = 'timeout'
                 return Response('episode wall clock exhausted', status_code=408)
             try:
                 timeout = httpx.Timeout(remaining, connect=min(10, remaining))
                 async with httpx.AsyncClient(timeout=timeout, transport=transport) as client:
-                    response = await client.post(upstream, json=body, headers=headers)
+                    chunks = []
+                    async with client.stream('POST', upstream, json=body, headers=headers) as response:
+                        if capture:
+                            capture.raw_json(prefix+'-status.json', {'status_code': response.status_code})
+                        try:
+                            async for chunk in response.aiter_bytes():
+                                chunks.append(chunk)
+                        finally:
+                            raw_body = b''.join(chunks)
+                            if capture:
+                                capture.raw_text(prefix+'-response.sse', raw_body.decode('utf-8', errors='replace'))
+                    response = httpx.Response(response.status_code, headers=response.headers, content=raw_body)
                 if response.status_code in (408, 429, 500, 502, 503, 504, 529) and attempt < 2:
+                    if capture:
+                        capture.failed(prefix, {'status_code': response.status_code})
                     boundary.retries.append({'turn': boundary.turns, 'attempt': attempt+1,
                                              'status': response.status_code, 'at': now()})
                     continue
                 if response.status_code != 200:
+                    if capture:
+                        capture.failed(prefix, {'status_code': response.status_code})
                     boundary.error = 'infrastructure' if response.status_code >= 500 else 'provider'
                     return Response(response.content, status_code=response.status_code,
                                     media_type=response.headers.get('content-type', 'application/json'))
@@ -137,18 +162,27 @@ def proxy_app(boundary: CodexBoundary, *, upstream: str = UPSTREAM, session: Any
                 if not any(e.get('type') == 'response.completed' for e in events):
                     raise ValueError('incomplete provider response; not replayed')
                 boundary.trace.append({'turn': boundary.turns, 'events': events})
+                if capture:
+                    completed = next(e['response'] for e in events if e.get('type') == 'response.completed')
+                    capture.event('assistant', completed.get('output', []), usage=completed.get('usage'))
                 if session is not None and hasattr(session, 'checkpoint'):
                     session.checkpoint({'turns': boundary.turns, 'model_trace': boundary.trace,
                                         'retries': boundary.retries})
                 return Response(response.content, media_type='text/event-stream')
-            except IsolationError:
+            except IsolationError as exc:
+                if capture:
+                    capture.failed(prefix, str(exc))
                 return Response('isolation boundary rejected provider tool call', status_code=400)
             except (httpx.ConnectError, httpx.ConnectTimeout) as exc:
+                if capture:
+                    capture.failed(prefix, {'type': type(exc).__name__, 'message': str(exc)})
                 boundary.retries.append({'turn': boundary.turns, 'attempt': attempt+1, 'at': now(), 'error': type(exc).__name__})
                 if attempt == 2:
                     boundary.error = 'infrastructure'
                     return Response('provider connection failed', status_code=502)
-            except (httpx.ReadTimeout, ValueError):
+            except (httpx.ReadTimeout, httpx.ReadError, httpx.RemoteProtocolError, ValueError) as exc:
+                if capture:
+                    capture.failed(prefix, {'type': type(exc).__name__, 'message': str(exc)})
                 # A response may have been billed; never replay a partially sampled response.
                 boundary.error = 'timeout'
                 return Response('provider response incomplete', status_code=502)
@@ -229,42 +263,82 @@ def recorded_usage(events: list[dict], trace: list[dict]) -> dict:
 
 
 def run_codex(session: Any, model: str, *, max_turns: int = 40, max_tokens: int = 4096,
-              wall_clock: float = 7200, prompt: str | None = None) -> dict:
+              wall_clock: float = 1800, prompt: str | None = None) -> dict:
     # This driver cannot fall back to API-key billing.
     login = subprocess.run(['codex', 'login', 'status'], capture_output=True, text=True, timeout=10)
     if login.returncode or 'ChatGPT' not in login.stdout+login.stderr:
         raise RuntimeError('Codex requires ChatGPT subscription login; API billing is not permitted')
     prompt = prompt or INSTRUCTIONS+'\nUse the permitforge tools. '+f'You have {max_turns} turns.'
-    boundary = CodexBoundary(prompt, max_turns=max_turns, max_tokens=max_tokens)
+    capture = getattr(session, 'capture', None)
+    if capture:
+        capture.event('system', INSTRUCTIONS)
+        capture.event('user', prompt)
+    boundary = CodexBoundary(prompt, max_turns=max_turns, max_tokens=max_tokens, capture=capture)
     started = now()
     with tempfile.TemporaryDirectory(prefix='permit-eval-codex-') as work:
         with serve(gateway(session)) as endpoint, serve(proxy_app(boundary, session=session, wall_clock=wall_clock)) as proxy:
             argv = codex_command(model.removeprefix('codex:'), endpoint+'/mcp', proxy, Path(work))
+            if capture:
+                capture.raw_json('command.json', {'argv': argv, 'cwd': work, 'stdin': prompt})
+                capture.raw_json('config.json', dict(argv[i+1].split('=', 1) for i, value in enumerate(argv) if value == '-c'))
+                capture.raw_text('model-catalog.json', (Path(work)/'model-catalog.json').read_text())
+                capture.raw_text('codex-events.jsonl', '')
+                capture.raw_text('codex-stderr.log', '')
             env = {k:v for k,v in os.environ.items() if not any(x in k.upper() for x in
                    ('API_KEY', 'ANTHROPIC', 'HF_TOKEN', 'PERMIT_EVAL_TOKEN', 'OPENAI_BASE_URL'))}
             process = subprocess.Popen(argv, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
                                        stderr=subprocess.PIPE, text=True, env=env, start_new_session=True)
+            output, errors = [], []
+            def read(stream, chunks, name):
+                for line in stream:
+                    chunks.append(line)
+                    if capture:
+                        capture.raw_text(name, line, append=True)
+                stream.close()
+            readers = [threading.Thread(target=read, args=(process.stdout, output, 'codex-events.jsonl')),
+                       threading.Thread(target=read, args=(process.stderr, errors, 'codex-stderr.log'))]
+            for reader in readers:
+                reader.start()
             try:
-                stdout, stderr = process.communicate(prompt, timeout=wall_clock)
+                process.stdin.write(prompt)
+                process.stdin.close()
+                deadline = time.monotonic() + wall_clock
+                while process.poll() is None:
+                    if TERMINATING.is_set():
+                        boundary.error = 'terminated'
+                        break
+                    if time.monotonic() >= deadline:
+                        raise subprocess.TimeoutExpired(argv, wall_clock)
+                    try:
+                        process.wait(timeout=min(.25, deadline-time.monotonic()))
+                    except subprocess.TimeoutExpired:
+                        pass
             except subprocess.TimeoutExpired:
                 boundary.error = 'timeout'
-                os.killpg(process.pid, signal.SIGTERM)
-                try:
-                    stdout, stderr = process.communicate(timeout=5)
-                except subprocess.TimeoutExpired:
-                    os.killpg(process.pid, signal.SIGKILL)
-                    stdout, stderr = process.communicate()
+            finally:
+                if process.poll() is None:
+                    os.killpg(process.pid, signal.SIGTERM)
+                    try:
+                        process.wait(timeout=5)
+                    except subprocess.TimeoutExpired:
+                        os.killpg(process.pid, signal.SIGKILL)
+                        process.wait()
+                for reader in readers:
+                    reader.join(timeout=5)
+            stdout, stderr = ''.join(output), ''.join(errors)
     events = []
     for line in stdout.splitlines():
         try:
             events.append(json.loads(line))
         except json.JSONDecodeError:
             pass
+    if hasattr(session, 'finalize'):
+        session.finalize()
     record = session.record()
     ended = ('submitted' if record.get('final') is not None else
              'turn_limit' if boundary.error == 'turn_limit' else
              'error' if boundary.error or process.returncode else 'no_submit')
-    record.update(model=model, prompt_version=PROMPT_VERSION, started_at=started, finished_at=now(),
+    record.update(model=model, prompt_version=PROMPT_VERSION, started_at=started, finished_at=record.get('finished_at') or now(),
                   turns=boundary.turns, ended=ended, usage=recorded_usage(events, boundary.trace),
                   retries=boundary.retries, model_trace=boundary.trace, codex_events=events,
                   codex_exit_code=process.returncode, codex_stderr=stderr[-4000:],

@@ -1,6 +1,6 @@
 # PermitForge evaluation protocol
 
-Protocol version: WP2.1 / 2026-10-17. Freeze this file and each run's `run.json` before model sampling.
+Protocol version: WP2.0b / 2026-10-17. Freeze this file and each run's `run.json` before model sampling.
 
 ## Cohort and attempts
 
@@ -18,14 +18,14 @@ The operator must authorize spending before invoking a paid driver, including th
 
 ## Locked interaction
 
-The task is v2; `permit_openenv.prompts.INSTRUCTIONS` currently has `PROMPT_VERSION = 1`.
+The task is v2; `permit_openenv.prompts.INSTRUCTIONS` currently has `PROMPT_VERSION = 2`.
 Every run records that integer and the SHA-256 of the exact text. Both drivers use that text as the system instruction.
 Both expose exactly `get_scenario`, `check_design`, `evaluate_design`, and `submit_design`.
 The environment owns the evaluation budget (30), validity, costs, and terminal native verification.
 The harness does not approximate a grade. There are at most 40 model responses, provider-default temperature,
 and a default cap of 4096 output tokens per response. Overrides below the turn ceiling are diagnostic runs and must
 be disclosed; token caps, wall-clock seconds, provider price snapshot and concurrency are recorded.
-The default wall-clock allowance is 7200 seconds. A timeout never becomes a fresh graded attempt.
+The default wall-clock allowance is 1800 seconds (30 minutes). A timeout never becomes a fresh graded attempt.
 
 Anthropic uses the synchronous Messages API, with no requested caching, batch mode, fast mode or regional surcharge.
 SDK retries are disabled. Input, cached input, output and per-response cost are retained; aggregate input tokens include
@@ -42,6 +42,9 @@ An external `--server` must run `python -m eval.transport` with `PERMIT_EVAL_TOK
 recording route is rejected before sampling. This avoids silently omitting SCHEMAS' record-only receptor arrays.
 Each episode gets its own OpenEnv session. A separate streamable HTTP MCP gateway exposes only that session's four tools;
 there is no reset, task-selection, filesystem, record-reading, or arbitrary HTTP tool on that gateway.
+The recording server forces `ENABLE_WEB_INTERFACE=false`, including when the caller sets it true. Scored runs
+never serve the shared Gradio playground. The public Space may keep `/web/` as a demo; it is not a scored endpoint.
+Reset carries the same public scenario as `get_scenario`; geometry and full receptor arrays remain private.
 
 Codex runs `codex exec -m MODEL --json` in a fresh temporary working directory, with user configuration ignored,
 project instructions disabled, shell/file-image tools and apps/plugins/browser/agents disabled. Authentication must
@@ -59,18 +62,37 @@ Unsupported protocol/tool shapes fail closed. A changed CLI must pass the isolat
 
 The implementation is grounded in the installed `codex features list`, `codex exec --help`, its cached model metadata,
 and the [official configuration reference](https://learn.chatgpt.com/docs/config-file/config-reference).
+CLI event capture follows the [official non-interactive output documentation](https://learn.chatgpt.com/docs/non-interactive-mode)
+and [CLI reference](https://learn.chatgpt.com/docs/cli/reference), checked 2026-10-17.
 The tests run the installed CLI against a fake provider with a prompt requesting local file listing and
 `envs/permit/tasks` access, exercise an actual MCP tool, inspect the outgoing tool inventory, and separately inject
 forbidden file/shell calls to prove they never reach execution. No external model is used in those tests.
 
-SCHEMAS Episode records include scenario, geometry, full public tool trace, successful evaluate/submit receptor arrays,
-usage, end reason and timestamps. Model response traces, retry logs and driver settings are additional private record
-fields. Assistant text on each tool step is capped at 2000 characters; the model trace retains full text.
+Each episode directory is `results/rollouts/<run>/<model_slug>/<task_id>/`:
+
+- `episode.json`: SCHEMAS record with private geometry, retained tool steps, receptor arrays, grade and usage.
+- `transcript.jsonl`: ordered system/user/assistant messages, tool calls/results, timestamps and per-response usage.
+  Text and provider-returned thinking/reasoning blocks or summaries are retained in full; nothing unreturned is inferred.
+- `raw/`: Anthropic wire request/response JSON; Codex provider request/SSE responses, full CLI JSONL and stderr,
+  exact argv/config, stdin and the temporary model catalog. Request options are also retained before dispatch.
+- `env.log`: episode-specific receipt, field-preparation, evaluation timing and native-verification diagnostic lines.
+- `attempts/`: failed request attempts with their raw inputs/outputs and error; terminal failures retain the full raw capture.
+
+The live environment bounds retained steps/diagnostics; the append-only harness transcript is the complete conversation.
+Assistant text on each Episode step remains capped at 2000 characters; transcript and raw content are not truncated.
+The flat `<task_id>.json` remains a compatibility snapshot; readers prefer the canonical `episode.json` and never double count.
+Per run, `run.json` records git commit/dirty status, prompt version/hash, protocol hash, models, sampling settings,
+concurrency, budget, host and start/end timestamps. `harness.log`, `costs.jsonl`, `index.json` and boards are retained.
+Writes redact credential keys, known credential environment values and token/header patterns. Authentication headers
+are never captured. Redacted wire text otherwise preserves original content. Capture tests scan every generated file.
+
+Session close and graceful SIGINT/SIGTERM finalize unfinished private records as `no_submit`, zero reward, with a fixed
+terminal timestamp. An in-flight native submission keeps its authority to finish the grade. SIGKILL or host loss cannot
+execute cleanup; durable checkpoints/raw files remain, and resume never starts another attempt under that run name.
 `ended` stays within `submitted|no_submit|turn_limit|error`; timeout and infrastructure detail use `error_type`.
 
-The eval-only `EvalTask` adapter accepts SCHEMAS' `source:none, best:null` anchor shape. The current ordinary Task
-property tries to validate that shape as a positive anchor; the adapter prevents uncalibrated episodes from failing
-at submission. No `permit_openenv` or `permit_core` source is modified. Native evaluation and reward logic remain theirs.
+Both the environment Task and eval's `EvalTask` accept SCHEMAS' `source:none, best:null` anchor shape.
+Native evaluation and reward logic remain in the existing core package.
 
 ## Retries, resume and budget
 
@@ -141,4 +163,8 @@ uv run --project envs/permit/openenv --no-sync python eval/report.py RUN --compu
 uv run --project envs/permit/openenv --no-sync python eval/calibrate.py --runs RUN
 uv run --project envs/permit/openenv --no-sync python eval/rescore.py RUN
 uv run --project envs/permit/openenv --no-sync python eval/report.py RUN
+
+# Local, redacted HF dataset configs; does not upload. Use an empty destination.
+uv run --project envs/permit/openenv --no-sync python eval/export_hf.py RUN \
+  --out results/rollouts/RUN/hf-export
 ```

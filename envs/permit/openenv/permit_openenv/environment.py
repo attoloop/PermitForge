@@ -6,6 +6,8 @@ import copy
 import json
 import random
 import threading
+import time
+import traceback
 import uuid
 from typing import Annotated, Any
 
@@ -20,7 +22,7 @@ from permit_core.verify import Verification
 
 from .episode import Episode, STORE, public_result
 from .evaluator import Evaluator, VerifyEvaluator, select_evaluator
-from .geometry import geometry
+from .diagnostics import diagnostic_sink
 from .prompts import INSTRUCTIONS, PROMPT_VERSION
 from .protocol import DESIGN_SCHEMA, json_value
 from .rubric import PermitRubric
@@ -125,17 +127,17 @@ class PermitForgeEnvironment(MCPEnvironment):
             STORE.add(self._episode)
             self._state = PermitState(episode_id=self.episode.episode_id, task_id=task.task_id, split=task.split)
             self._reset_rubric()
+            self.episode.log('episode reset')
             return Observation(done=False, reward=0.0, metadata={
                 'episode_id': self.episode.episode_id, 'task_id': task.task_id, 'split': task.split,
                 'instructions': INSTRUCTIONS, 'prompt_version': PROMPT_VERSION, 'tools': TOOLS,
-                'scenario': task.view(), 'geometry': geometry(task), 'evaluate_budget': EVALUATE_BUDGET,
-                'evaluator': type(self.evaluator).__name__, 'eligible': task.record.get('eligible'),
-                'eligibility_reason': task.record.get('eligibility_reason'),
+                'scenario': task.view(), 'evaluate_budget': EVALUATE_BUDGET,
             })
 
     def _dispatch(self, name: str, args: dict) -> str:
         with self._lock:
             ep = self.episode
+            ep.log('tool received: ' + name)
             left = EVALUATE_BUDGET - self._state.evaluations_used
             if ep.done:
                 result = {'error': 'episode is over; reset to start another', 'evaluations_left': left}
@@ -160,10 +162,11 @@ class PermitForgeEnvironment(MCPEnvironment):
                     self._state.evaluations_used += 1
                     ep.evaluations_used = self._state.evaluations_used
                     try:
-                        result = self.evaluator.evaluate(ep.task, design)
-                    except Exception as exc:
+                        result = self._evaluate(self.evaluator, design)
+                    except Exception:
+                        ep.log(traceback.format_exc())
                         result = {'valid': True, 'feasible': False, 'cost': checked['cost'], 'standards': [],
-                                  'errors': [f'{type(exc).__name__}: {exc}'], 'error': 'evaluation failed'}
+                                  'errors': ['E_INFRA: evaluation unavailable'], 'error': 'evaluation failed'}
                     result['evaluations_left'] = left-1
                     self._state.history.append(copy.deepcopy(json_value({'design': design, 'evaluation': public_result(result)})))
                     if result.get('feasible') and result.get('cost') is not None:
@@ -180,9 +183,10 @@ class PermitForgeEnvironment(MCPEnvironment):
         result = {**checked, 'feasible': False, 'cost': checked.get('cost'), 'standards': []}
         if checked['valid']:
             try:
-                result.update(self.verifier.evaluate(task, design))
-            except Exception as exc:
-                result['errors'] = [f'{type(exc).__name__}: {exc}']
+                result.update(self._evaluate(self.verifier, design))
+            except Exception:
+                self.episode.log(traceback.format_exc())
+                result['errors'] = ['E_INFRA: verification unavailable']
         exact_cost = cost(to_ledger(design), task.scenario.task) if checked['valid'] else None
         verified = Verification(feasible=bool(result.get('feasible')), cost=exact_cost)
         saved = prescore(verified, task.scenario)
@@ -190,11 +194,38 @@ class PermitForgeEnvironment(MCPEnvironment):
         score = reward(saved, anchors) if anchors['best'] is not None else 0.0
         result.update(reward=score, prescore_usd_saved=float(saved),
                       pct_saved=float(100 * saved / task.draft_cost) if verified.feasible else 0.0,
-                      anchors=anchors, best_known_search_cost=task.record.get('best_known_search_cost'),
+                      anchors=anchors,
                       evaluations_left=EVALUATE_BUDGET-self._state.evaluations_used)
         return result
 
+    def _evaluate(self, evaluator: Evaluator, design: dict) -> dict:
+        started = time.monotonic()
+        with diagnostic_sink(self.episode.log):
+            result = evaluator.evaluate(self.episode.task, design)
+        self.episode.log(f'{type(evaluator).__name__} completed in {time.monotonic()-started:.6f}s; '
+                         f'feasible={result.get("feasible")}; errors={result.get("errors", [])}')
+        # Backend errors may contain native paths or diagnostics. Expose only known codes.
+        messages = {'E_NAAQS': 'air-quality standard exceeded', 'E_GEP': 'stack exceeds GEP',
+                    'E_MENU': 'invalid design', 'E_INFRA': 'model computation unavailable'}
+        codes = list(dict.fromkeys(str(e).split(':', 1)[0] for e in result.get('errors', [])))[:4]
+        result['errors'] = [f'{c}: {messages[c]}' if c in messages else 'E_INFRA: model computation unavailable'
+                            for c in codes]
+        return result
+
+    def close(self) -> None:
+        with self._lock:
+            if self._episode is not None and self._episode.finished_at is None:
+                self._episode.finish()
+                self._state.done = True
+                self._state.reward = 0.0
+        super().close()
+
     def _after_step(self, action: Action, obs: Observation) -> Observation:
+        if getattr(obs, 'error', None) is not None:
+            if self._episode:
+                self.episode.log(str(obs.error))
+            obs.error = obs.error.model_copy(update={'message': 'tool request failed; check its name and arguments'})
+            obs.result = None
         if isinstance(action, CallToolAction) and self._episode:
             self._state.step_count += 1
             obs.reward = self._apply_rubric(action, obs)

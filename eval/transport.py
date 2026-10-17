@@ -24,6 +24,19 @@ from permit_openenv.tasks import Task, TaskPack, load_pack
 
 from .common import TOOLS, anchors_for
 
+TERMINATING = threading.Event()
+_SESSIONS: set = set()
+_SESSION_LOCK = threading.Lock()
+
+
+def terminate_sessions() -> None:
+    """Graceful harness termination preserves no-submit records before socket cleanup."""
+    TERMINATING.set()
+    with _SESSION_LOCK:
+        sessions = list(_SESSIONS)
+    for session in sessions:
+        session.finalize()
+
 
 class EvalTask(Task):
     @property
@@ -42,6 +55,7 @@ def load_eval_pack(root: Path | None = None) -> TaskPack:
 def recording_app(token: str, *, pack: TaskPack | None = None, evaluator: Any = None, verifier: Any = None):
     from fastapi import Header, HTTPException
     from permit_openenv.server import create_server
+    os.environ['ENABLE_WEB_INTERFACE'] = 'false'
     app = create_server(pack=pack, evaluator=evaluator, verifier=verifier)
 
     @app.get('/eval/records/{episode_id}', include_in_schema=False)
@@ -51,6 +65,18 @@ def recording_app(token: str, *, pack: TaskPack | None = None, evaluator: Any = 
         ep = STORE.get(episode_id)
         if ep is None:
             raise HTTPException(status_code=404, detail='episode not found')
+        return ep.record()
+
+    @app.post('/eval/records/{episode_id}/finish', include_in_schema=False)
+    def finish(episode_id: str, authorization: str = Header(default='')):
+        if not secrets.compare_digest(authorization, 'Bearer '+token):
+            raise HTTPException(status_code=403, detail='recording credentials required')
+        ep = STORE.get(episode_id)
+        if ep is None:
+            raise HTTPException(status_code=404, detail='episode not found')
+        # A native submission already in flight retains authority to finish its grade.
+        if not ep.done or ep.final is not None:
+            ep.finish('submitted' if ep.final is not None else 'no_submit')
         return ep.record()
     return app
 
@@ -80,10 +106,12 @@ def serve(app: Any) -> Iterator[str]:
 
 class Session:
     """One OpenEnv WebSocket session; the driver never exposes its reset/record endpoints."""
-    def __init__(self, url: str, token: str, task_id: str, *, timeout: float = 7200, checkpoint: Any = None):
+    def __init__(self, url: str, token: str, task_id: str, *, timeout: float = 1800, checkpoint: Any = None,
+                 capture: Any = None):
         self.url, self.token, self.task_id, self.timeout = url.rstrip('/'), token, task_id, timeout
         self.submit_attempted = False
         self.checkpoint = checkpoint or (lambda record: None)
+        self.capture = capture
         self._texts: list[str] = []
         self._lock = threading.RLock()
 
@@ -94,14 +122,36 @@ class Session:
         try:
             reset = self.client.reset(task_id=self.task_id)
             self.meta = reset.observation.metadata
-            self.checkpoint(self.record())  # Reject a missing recorder before model spend.
+            self.snapshot()  # Reject a missing recorder before model spend.
+            with _SESSION_LOCK:
+                _SESSIONS.add(self)
         except BaseException:
             self._context.__exit__(None, None, None)
             raise
         return self
 
     def __exit__(self, *exc):
-        return self._context.__exit__(*exc)
+        try:
+            self.finalize()
+        finally:
+            self._context.__exit__(*exc)
+            with _SESSION_LOCK:
+                _SESSIONS.discard(self)
+
+    def finalize(self) -> dict:
+        import httpx
+        response = httpx.post(self.url+'/eval/records/'+self.meta['episode_id']+'/finish',
+                             headers={'Authorization': 'Bearer '+self.token}, timeout=30, trust_env=False)
+        response.raise_for_status()
+        record = response.json()
+        snapshot = {k: v for k, v in record.items() if k != 'usage'}
+        self.checkpoint(snapshot)
+        if self.capture:
+            self.capture.environment(record)
+        return record
+
+    def snapshot(self) -> None:
+        self.checkpoint({k: v for k, v in self.record().items() if k != 'usage'})
 
     def tools(self) -> list[dict]:
         specs = [{'name': t.name, 'description': t.description, 'input_schema': t.input_schema}
@@ -117,13 +167,19 @@ class Session:
         with self._lock:
             if self.submit_attempted:
                 return {'error': 'episode is over'}
+            if self.capture:
+                self.capture.event('assistant', {'name': name, 'args': args}, kind='tool_call')
             if name == 'submit_design':
                 self.submit_attempted = True  # A lost response is never a reason to re-grade.
-                self.checkpoint({**self.record(), 'submit_attempted': True, 'pending_submission': args})
+                self.checkpoint({**{k: v for k, v in self.record().items() if k != 'usage'},
+                                 'submit_attempted': True, 'pending_submission': args})
             self._texts.append(text[:2000])
             result = self.client.step(CallToolAction(tool_name=name, arguments=args))
-            self.checkpoint(self.record())
-            return tool_result(result.observation)
+            self.snapshot()
+            public = tool_result(result.observation)
+            if self.capture:
+                self.capture.event('tool', public, kind='tool_result', name=name)
+            return public
 
     def record(self) -> dict:
         import httpx
@@ -131,6 +187,8 @@ class Session:
                              headers={'Authorization': 'Bearer '+self.token}, timeout=30, trust_env=False)
         response.raise_for_status()
         record = response.json()
+        if self.capture:
+            self.capture.environment(record)
         for step, text in zip(record['steps'], self._texts):
             if text:
                 step['assistant_text'] = text
@@ -157,7 +215,10 @@ def gateway(session: Session):
                     result = await asyncio.to_thread(session.call, self.name, arguments)
                     return ToolResult(content=[TextContent(type='text', text=json.dumps(result))])
             mcp.add_tool(Forward(name=name, description=spec['description'], parameters=spec['input_schema']))
-    return mcp.http_app(path='/mcp', stateless_http=True)
+    from permit_openenv.limits import RequestLimits
+    app = mcp.http_app(path='/mcp', stateless_http=True)
+    app.add_middleware(RequestLimits)
+    return app
 
 
 def main() -> None:

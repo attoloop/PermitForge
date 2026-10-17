@@ -10,6 +10,7 @@ from typing import Protocol
 from permit_core.native_pool import native_slot
 
 from .protocol import json_value
+from .diagnostics import log
 from .tasks import Task, to_ledger
 
 # Each verification launches its native cases sequentially. Bound in-server native work.
@@ -23,8 +24,10 @@ class Evaluator(Protocol):
 class VerifyEvaluator:
     def evaluate(self, task: Task, design: dict) -> dict:
         from permit_core.verify import verify
+        log('native verification queued')
         with _NATIVE_SLOTS, native_slot(), tempfile.TemporaryDirectory(prefix='permit-openenv-') as work:
             result = verify(task.scenario, to_ledger(design), work, no2_tier='ARM2')
+        log(f'native verification: feasible={result.feasible}; errors={result.errors}; standards={result.design_values}')
         return json_value({
             'valid': True, 'errors': [f"{e['code']}: {e['detail']}" for e in result.errors],
             'feasible': result.feasible, 'cost': result.cost,
@@ -48,6 +51,7 @@ class FastEvaluator:
         self._lock = threading.Lock()
 
     def evaluate(self, task: Task, design: dict) -> dict:
+        log('field preparation requested')
         configured = os.environ.get('PERMIT_FIELDS_DIR')
         if configured:
             path = Path(configured)/f'{task.task_id}.npz'
@@ -55,11 +59,12 @@ class FastEvaluator:
         else:
             lease = self.fields_module.ensure_pack(task.scenario, jobs=int(os.environ.get('PERMIT_FIELDS_JOBS', '4')))
         with lease as pack:
+            log('field preparation complete; evaluating design')
             result = self.module.evaluate(task.scenario, design, pack, include_receptors=True)
         result['backend'] = 'fast evaluator'
         with self._lock:
             if task.task_id not in self._seen:
-                result['note'] = 'Fields are cached on demand. The first evaluation of a task may take about 40 seconds; later evaluations reuse the cache.'
+                result['note'] = 'Fields are cached on demand. The first evaluation may take minutes; later evaluations reuse the cache.'
                 self._seen.add(task.task_id)
         return json_value(result)
 

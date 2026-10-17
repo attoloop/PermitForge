@@ -11,6 +11,8 @@ import re
 import tempfile
 from typing import Any
 
+from .privacy import redact, redact_text
+
 ROOT = Path(__file__).resolve().parents[1]
 TOOLS = ('get_scenario', 'check_design', 'evaluate_design', 'submit_design')
 
@@ -35,7 +37,7 @@ def write_text(path: Path, text: str) -> None:
     fd, temporary = tempfile.mkstemp(prefix=path.name+'.', dir=path.parent)
     try:
         with os.fdopen(fd, 'w') as stream:
-            stream.write(text)
+            stream.write(redact_text(text))
             stream.flush()
             os.fsync(stream.fileno())
         os.replace(temporary, path)
@@ -44,14 +46,16 @@ def write_text(path: Path, text: str) -> None:
 
 
 def write_json(path: Path, value: Any) -> None:
-    write_text(path, json.dumps(value, indent=2, allow_nan=False, ensure_ascii=False)+'\n')
+    write_text(path, json.dumps(redact(value), indent=2, allow_nan=False, ensure_ascii=False)+'\n')
 
 
 def records(runs: list[Path]) -> list[tuple[Path, dict]]:
     found = []
     seen = set()
     for run in runs:
-        for path in sorted(run.glob('*/*.json')):
+        canonical = sorted(run.glob('*/*/episode.json'))
+        legacy = [p for p in sorted(run.glob('*/*.json')) if not (p.parent/p.stem/'episode.json').exists()]
+        for path in canonical + legacy:
             if path.resolve() in seen:
                 continue
             seen.add(path.resolve())
