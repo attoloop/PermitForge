@@ -14,7 +14,7 @@ from .diagnostics import log
 from .tasks import Task, to_ledger
 
 # Each verification launches its native cases sequentially. Bound in-server native work.
-_NATIVE_SLOTS = threading.BoundedSemaphore(1)
+_NATIVE_SLOTS = threading.BoundedSemaphore(max(1, min(12, int(os.environ.get('PERMIT_NATIVE_VERIFY_SLOTS', '1')))))
 
 
 class Evaluator(Protocol):

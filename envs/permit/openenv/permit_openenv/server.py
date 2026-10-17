@@ -24,7 +24,7 @@ def create_server(*, pack: TaskPack | None = None, evaluator: Evaluator | None =
     os.environ.setdefault('ENABLE_WEB_INTERFACE', 'true')
     os.environ.setdefault('GRADIO_ANALYTICS_ENABLED', 'false')
     app = create_app(factory, CallToolAction, CallToolObservation, env_name='permit_forge',
-                     max_concurrent_envs=min(4, int(os.environ.get('MAX_CONCURRENT_ENVS', '4'))),
+                     max_concurrent_envs=min(16, int(os.environ.get('MAX_CONCURRENT_ENVS', '4'))),  # eval harness raises it; Space default 4
                      gradio_builder=gradio_builder, custom_tab_name='Guide', show_default_tab=True,
                      title_override='PermitForge v2', state_cls=PermitState)
     app.add_middleware(RequestLimits)
