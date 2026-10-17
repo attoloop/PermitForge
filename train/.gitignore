@@ -1,0 +1,7 @@
+.venv/
+runs/
+cache/
+evidence/
+*.safetensors
+*.bin
+*.pt

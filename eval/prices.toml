@@ -1,0 +1,30 @@
+# Standard, synchronous Messages API; global inference, USD per million tokens.
+# No caching is requested, but any reported cache usage is priced explicitly.
+[models.claude-opus-5-5]
+input = 4.0
+output = 20.0
+cache_write_5m = 5.0
+cache_write_1h = 8.0
+cache_read = 0.20
+source = "https://platform.claude.com/docs/en/about-claude/pricing"
+verified_at = "2026-10-17"
+
+[models.claude-sonnet-5-5]
+input = 2.0
+output = 10.0
+cache_write_5m = 2.50
+cache_write_1h = 4.0
+cache_read = 0.20
+source = "https://platform.claude.com/docs/en/about-claude/pricing"
+verified_at = "2026-10-17"
+
+[models.claude-haiku-5-5]
+input = 0.10
+output = 0.50
+cache_write_5m = 0.125
+cache_write_1h = 0.20
+cache_read = 0.01
+long_context_threshold = 100000
+long_context_multiplier = 5.0
+source = "https://platform.claude.com/docs/en/about-claude/pricing"
+verified_at = "2026-10-17"

@@ -1,0 +1,136 @@
+"""Messages tool loop; `python -m eval.run_eval --models anthropic:MODEL ...`."""
+from __future__ import annotations
+
+import json
+from pathlib import Path
+import time
+import tomllib
+from typing import Any, Callable
+
+from permit_openenv.prompts import INSTRUCTIONS, PROMPT_VERSION
+
+from .common import TOOLS, now
+
+
+def prices() -> dict:
+    return tomllib.loads(Path(__file__).with_name('prices.toml').read_text())['models']
+
+
+def plain(value: Any) -> Any:
+    if hasattr(value, 'model_dump'):
+        return value.model_dump(exclude_none=True)
+    if hasattr(value, '__dict__'):
+        return {k: plain(v) for k, v in vars(value).items()}
+    if isinstance(value, list):
+        return [plain(v) for v in value]
+    return value
+
+
+def request_cost(model: str, usage: dict) -> float:
+    table = prices()
+    if model not in table:
+        raise ValueError(f'No verified price for {model}')
+    p = table[model]
+    inputs = usage.get('input_tokens', 0)
+    reads = usage.get('cache_read_input_tokens', 0) or 0
+    writes = usage.get('cache_creation_input_tokens', 0) or 0
+    creation = usage.get('cache_creation') or {}
+    long_writes = creation.get('ephemeral_1h_input_tokens', 0) or 0
+    short_writes = creation.get('ephemeral_5m_input_tokens', writes-long_writes) or 0
+    if short_writes + long_writes != writes:
+        raise ValueError('cache creation usage does not reconcile')
+    multiplier = (p.get('long_context_multiplier', 1) if
+                  inputs+reads+writes > p.get('long_context_threshold', float('inf')) else 1)
+    return multiplier * (inputs*p['input'] + usage.get('output_tokens', 0)*p['output'] +
+                         reads*p['cache_read'] + short_writes*p['cache_write_5m'] +
+                         long_writes*p['cache_write_1h']) / 1_000_000
+
+
+def transient(exc: Exception) -> bool:
+    status = getattr(exc, 'status_code', None)
+    return isinstance(exc, (ConnectionError, TimeoutError)) or status in (408, 429, 500, 502, 503, 504, 529) or type(exc).__name__ in {
+        'APIConnectionError', 'APITimeoutError', 'ReadTimeout', 'ConnectTimeout', 'ConnectionClosedError'}
+
+
+def run_anthropic(session: Any, model: str, *, api: Any = None, max_turns: int = 40,
+                  max_tokens: int = 4096, wall_clock: float = 7200,
+                  sleep: Callable[[float], None] = time.sleep) -> dict:
+    model_id = model.removeprefix('anthropic:')
+    request_cost(model_id, {})
+    if api is None:
+        import anthropic
+        api = anthropic.Anthropic(max_retries=0, timeout=min(1800, wall_clock))
+    started, deadline = now(), time.monotonic()+wall_clock
+    tools = session.tools()
+    if {t['name'] for t in tools} != set(TOOLS):
+        raise ValueError('environment must expose exactly the four permitforge tools')
+    messages = [{'role': 'user', 'content': 'Use the permitforge tools. '
+                 f'You have {max_turns} turns; submit before the last turn ends.'}]
+    usage = {'input_tokens': 0, 'output_tokens': 0, 'usd': 0.0, 'requests': []}
+    retries, model_trace = [], []
+    ended, error, retryable, turn = 'no_submit', None, False, 0
+    try:
+        for turn in range(1, max_turns+1):
+            if turn == max_turns:
+                messages.append({'role': 'user', 'content': 'Last turn: submit your best feasible design now.'})
+            for attempt in range(3):
+                remaining = deadline-time.monotonic()
+                if remaining <= 0:
+                    raise TimeoutError('episode wall clock exhausted')
+                try:
+                    response = api.messages.create(model=model_id, system=INSTRUCTIONS, tools=tools,
+                        messages=messages, max_tokens=max_tokens, timeout=min(1800, remaining))
+                    break
+                except Exception as exc:
+                    if not transient(exc) or attempt == 2:
+                        raise
+                    retries.append({'turn': turn, 'attempt': attempt+1, 'at': now(),
+                                    'error': type(exc).__name__, 'reason': str(exc)[:800]})
+                    sleep(min(2**attempt, max(0, deadline-time.monotonic())))
+            u = plain(response.usage)
+            usd = request_cost(model_id, u)
+            usage['requests'].append({**u, 'usd': usd})
+            usage['input_tokens'] += u.get('input_tokens', 0)+(u.get('cache_read_input_tokens', 0) or 0)+(u.get('cache_creation_input_tokens', 0) or 0)
+            usage['output_tokens'] += u.get('output_tokens', 0)
+            usage['usd'] += usd
+            blocks = [plain(b) for b in response.content]
+            model_trace.append({'turn': turn, 'content': blocks, 'usage': u})
+            if hasattr(session, 'checkpoint'):
+                session.checkpoint({'usage': usage, 'turns': turn, 'retries': retries, 'model_trace': model_trace})
+            messages.append({'role': 'assistant', 'content': blocks})
+            calls = [b for b in blocks if b['type'] == 'tool_use']
+            text = ''.join(b.get('text', '') for b in blocks if b['type'] == 'text')[:2000]
+            if not calls:
+                break
+            results = []
+            for call in calls:
+                if time.monotonic() >= deadline:
+                    raise TimeoutError('episode wall clock exhausted')
+                if call['name'] not in TOOLS:
+                    result = {'error': 'unknown tool'}
+                else:
+                    result = session.call(call['name'], call['input'], text)
+                results.append({'type': 'tool_result', 'tool_use_id': call['id'], 'content': json.dumps(result)})
+                if session.submit_attempted:
+                    ended = 'submitted' if session.record().get('final') is not None else 'error'
+                    break
+            if session.submit_attempted:
+                break
+            messages.append({'role': 'user', 'content': results})
+        else:
+            ended = 'turn_limit'
+    except Exception as exc:
+        ended, error = 'error', {'type': type(exc).__name__, 'message': str(exc)[:800]}
+        retryable = transient(exc) and not session.submit_attempted
+        if type(exc).__name__ in ('APITimeoutError', 'APIConnectionError', 'ReadTimeout'):
+            usage.update(known_usd=usage['usd'], usd=None, billing_incomplete=True)
+    record = session.record()
+    if record.get('final') is not None:
+        ended, retryable = 'submitted', False
+    record.update(model=model, prompt_version=PROMPT_VERSION, started_at=started, finished_at=now(),
+                  turns=turn, ended=ended, usage=usage, retries=retries, model_trace=model_trace,
+                  error=error, retryable=retryable, submit_attempted=session.submit_attempted,
+                  error_type='timeout' if error and error['type'] in ('TimeoutError', 'APITimeoutError') else None,
+                  settings={'max_turns': max_turns, 'max_tokens': max_tokens, 'wall_clock': wall_clock,
+                            'temperature': 'provider-default', 'evaluate_budget': 30, 'prices': prices()[model_id]})
+    return record
