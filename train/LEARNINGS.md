@@ -18,7 +18,8 @@ the resulting token counts are in the same probe output.
 SFT must tokenize before constructing the Arrow dataset: otherwise differing
 source maps can acquire null entries. Explicit assistant masks survive the
 pretokenized TRL path and exclude tool feedback. Tests also distinguish a failed
-grader from a policy that earns zero, and keep diagnostic anchors smoke-only.
+grader from a policy that earns zero. Reward now uses saved fraction throughout;
+the earlier smoke-only diagnostic anchors have been removed.
 Reproduce the complete CPU suite with:
 
 ```bash

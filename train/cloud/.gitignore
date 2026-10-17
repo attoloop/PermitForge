@@ -1,0 +1,6 @@
+.venv/
+runs/
+cache/
+data/
+*.tar
+*.tar.gz

@@ -13,7 +13,7 @@ from typing import Any, Callable
 
 from permit_core.cost import cost
 from permit_core.evaluate import evaluate
-from permit_core.reward import Anchors, reward
+from permit_core.reward import reward
 from permit_openenv.prompts import INSTRUCTIONS, PROMPT_VERSION
 from permit_openenv.protocol import DESIGN_SCHEMA, json_value
 from permit_openenv.tasks import Task, TaskPack, load_pack, to_ledger
@@ -26,40 +26,6 @@ def training_instructions(max_turns: int | None = None) -> str:
     if max_turns is None:
         return INSTRUCTIONS
     return INSTRUCTIONS.replace('you have 30 evaluations', f'you have {max_turns} tool turns')
-
-
-def resolve_anchors(task: Task, *, smoke: bool = False,
-                    diagnostics_dir: Path | None = None) -> dict:
-    raw = task.record.get('anchors') or task.scenario.task.get('anchors')
-    if raw and raw.get('best') is not None:
-        source = str(raw.get('source') or raw.get('anchor_source') or task.record.get('anchor_source') or '').lower()
-        if (source in ('', 'none') or raw.get('provisional')
-                or any(word in source for word in ('search', 'baseline', 'provisional'))):
-            raise ValueError('Regular task anchors must come from model calibration')
-        anchors = Anchors.from_dict({**raw, 'source': source})
-        return {k: (float(v) if k != 'source' else v) for k, v in anchors.to_dict().items()} | {'provisional': False}
-    if not smoke:
-        raise ValueError(f'{task.task_id}: missing model calibration anchors; provisional anchors are smoke-only')
-    candidates = []
-    recorded = dict(task.record)
-    if diagnostics_dir is not None:
-        path = diagnostics_dir / f'{task.task_id}.json'
-        recorded = json.loads(path.read_text())
-        if recorded.get('id', recorded.get('task_id')) != task.task_id or recorded.get('split') != task.split:
-            raise ValueError('diagnostic task identity mismatch')
-    for entry in [*recorded.get('baselines', {}).values(), recorded.get('search', {})]:
-        if entry.get('feasible') is not True or isinstance(entry.get('usd_saved'), bool):
-            continue
-        try:
-            saved = Decimal(str(entry['usd_saved']))
-        except (KeyError, ArithmeticError):
-            continue
-        if saved.is_finite() and saved > 0:
-            candidates.append(saved)
-    if not candidates:
-        raise ValueError(f'{task.task_id}: no positive feasible recorded baseline/search savings for smoke anchor')
-    anchors = Anchors(Decimal(0), max(candidates), source='provisional_baseline_search_smoke')
-    return {k: (float(v) if k != 'source' else v) for k, v in anchors.to_dict().items()} | {'provisional': True}
 
 
 def tool_schemas() -> list[dict]:
@@ -104,7 +70,7 @@ class PermitTrainingEnv:
                  trace_sink: Callable[[dict], None] | None = None):
         self._pack = pack if pack is not None else load_pack()
         self._fields_loader = fields_loader
-        self._smoke, self._diagnostics_dir = smoke, diagnostics_dir
+        # smoke/diagnostics_dir remain accepted for older launch commands; grading is identical.
         self._trace_sink = trace_sink
         self._task: Task | None = None
         self._done = False
@@ -117,8 +83,7 @@ class PermitTrainingEnv:
         task = self._pack.get(task_id) if task_id is not None else self._pack.at(split, 0 if index is None else index)
         if task.split != 'train' or task.record.get('eligible') is not True:
             raise ValueError('Training requires an eligible train task')
-        anchors = resolve_anchors(task, smoke=self._smoke, diagnostics_dir=self._diagnostics_dir)
-        self._task, self._anchors = task, anchors
+        self._task = task
         self._done, self._grading_failed, self._flushed = False, False, False
         self._evaluations_used = 0
         self._steps: list[dict] = []
@@ -126,7 +91,7 @@ class PermitTrainingEnv:
         return scenario_text(task)
 
     def get_reward(self) -> float:
-        """Return a calibrated grade; unavailable grading is NaN, no submission is zero."""
+        """Return the saved fraction; unavailable grading is NaN, no submission is zero."""
         if self._task is None:
             raise RuntimeError('reset must precede get_reward')
         score = math.nan if self._grading_failed else (self._final['reward'] if self._final else 0.0)
@@ -193,8 +158,9 @@ class PermitTrainingEnv:
                         result['error'] = 'Grading unavailable'
                 exact = cost(to_ledger(design), self._task.scenario.task) if checked['valid'] else None
                 saved = self._task.draft_cost - exact if result['feasible'] else Decimal(-1)
-                result.update(reward=None if self._grading_failed else reward(saved, self._anchors),
-                              prescore_usd_saved=float(saved), anchors=self._anchors,
+                result.update(reward=None if self._grading_failed else reward(saved, self._task.draft_cost),
+                              prescore_usd_saved=float(saved),
+                              pct_saved=float(100*saved/self._task.draft_cost) if result['feasible'] else 0.0,
                               grading_failed=self._grading_failed, training_grade='fast')
                 self._final = copy.deepcopy(result)
             elif checked['valid'] and name == 'evaluate_design':
@@ -220,5 +186,4 @@ class PermitTrainingEnv:
             'steps': self._steps, 'final': self._final,
             'ended': 'submitted' if self._done else 'no_submit',
             'evaluations_used': self._evaluations_used, 'grading_failed': self._grading_failed,
-            'anchors': self._anchors, 'provisional': self._anchors['provisional'],
         }))

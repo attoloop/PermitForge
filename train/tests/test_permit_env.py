@@ -6,7 +6,7 @@ import pytest
 
 from permit_core.reward import reward
 from permit_openenv.prompts import INSTRUCTIONS
-from train.permit_env import PermitTrainingEnv, resolve_anchors, training_instructions
+from train.permit_env import PermitTrainingEnv, training_instructions
 
 
 def test_class_contract(env):
@@ -33,7 +33,9 @@ def test_real_fast_reward_and_terminal_state(env, design):
     assert checked['cost'] == evaluated['cost'] == submitted['cost'] == 6
     assert evaluated['standards'] == submitted['standards']
     assert submitted['prescore_usd_saved'] == 16
-    assert env.get_reward() == reward(16, submitted['anchors']) == .4
+    assert env.get_reward() == reward(16, 22) == 16/22
+    assert 'anchors' not in submitted
+    assert submitted['pct_saved'] == pytest.approx(100*16/22)
     for name in ('get_scenario', 'check_design', 'evaluate_design', 'submit_design'):
         args = () if name == 'get_scenario' else (design,)
         assert 'error' in json.loads(getattr(env, name)(*args))
@@ -48,7 +50,7 @@ def test_invalid_is_free_and_budget_exhaustion(env, design):
     for _ in range(30):
         env.evaluate_design(design)
     assert json.loads(env.evaluate_design(design))['evaluations_left'] == 0
-    assert json.loads(env.submit_design(design))['reward'] == .4
+    assert json.loads(env.submit_design(design))['reward'] == 16/22
 
 
 @pytest.mark.parametrize('choice', [{}, {'S1': {'control': 'none', 'height_m': 10}}])
@@ -76,41 +78,13 @@ def test_train_split_only(env):
         env.reset(task_id='synthetic-eval')
 
 
-def test_provisional_only_for_smoke(task_pack, tmp_path):
-    task = task_pack[0].at('train', 0)
-    task.record.pop('anchors')
-    diagnostics = {'id': task.task_id, 'split': 'train', 'baselines': {
-        'good': {'feasible': True, 'usd_saved': 12},
-        'failed': {'feasible': False, 'usd_saved': 1000}},
-        'search': {'feasible': True, 'usd_saved': 16}}
-    (tmp_path / f'{task.task_id}.json').write_text(json.dumps(diagnostics))
-    with pytest.raises(ValueError, match='anchor'):
-        resolve_anchors(task, smoke=False, diagnostics_dir=tmp_path)
-    anchors = resolve_anchors(task, smoke=True, diagnostics_dir=tmp_path)
-    assert anchors['best'] == 16 and anchors['provisional'] is True
-    assert anchors['source'] == 'provisional_baseline_search_smoke'
-    diagnostics['id'] = 'another-task'
-    (tmp_path / f'{task.task_id}.json').write_text(json.dumps(diagnostics))
-    with pytest.raises(ValueError, match='identity'):
-        resolve_anchors(task, smoke=True, diagnostics_dir=tmp_path)
-
-
-def test_search_anchor_rejected_outside_smoke(task_pack):
-    task = task_pack[0].at('train', 0)
-    task.record['anchors']['source'] = 'search'
-    with pytest.raises(ValueError, match='calibration'):
-        resolve_anchors(task)
-
-
-def test_reward_increases_beyond_anchor(env):
+@pytest.mark.parametrize('smoke', [False, True])
+def test_training_needs_no_anchors(task_pack, design, smoke):
+    pack, fields = task_pack
+    task = pack.at('train', 0)
+    assert 'anchors' not in task.record
+    env = PermitTrainingEnv(pack=pack, fields_loader=lambda _: fields, smoke=smoke)
     env.reset(index=0)
-    result = json.loads(env.submit_design({'S1': {'control': 'none', 'height_m': 20}}))
-    assert result['reward'] > 0
-    assert reward(32, {'worst': 0, 'best': 16}) > .4
-
-
-def test_unlabelled_anchor_is_not_calibration(task_pack):
-    task = task_pack[0].at('train', 0)
-    task.record['anchors'].pop('source')
-    with pytest.raises(ValueError, match='calibration'):
-        resolve_anchors(task)
+    env.submit_design(design)
+    assert env.get_reward() == 16/22
+    assert 'anchors' not in env._record() and 'provisional' not in env._record()

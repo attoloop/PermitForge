@@ -22,7 +22,7 @@ def add_arguments(parser: argparse.ArgumentParser, kind: str) -> None:
     parser.add_argument('--adapter', type=Path, help='Optional local SFT LoRA to continue training')
     parser.add_argument('--output', type=Path, default=Path('train/runs') / kind)
     parser.add_argument('--tasks-dir', type=Path, default=Path('envs/permit/tasks'))
-    parser.add_argument('--smoke', action='store_true', help='Exactly two optimizer steps; permits provisional anchors')
+    parser.add_argument('--smoke', action='store_true', help='Exactly two optimizer steps')
     parser.add_argument('--prepare-only', action='store_true', help='Validate data/config without loading model or training')
     parser.add_argument('--steps', type=int, default=1000)
     parser.add_argument('--batch-size', type=int, default=1)
@@ -39,7 +39,7 @@ def add_arguments(parser: argparse.ArgumentParser, kind: str) -> None:
     parser.add_argument('--no-4bit', action='store_true', help='Use bf16 on a larger local/cloud GPU')
     if kind == 'grpo':
         parser.add_argument('--memory-probe', action='store_true',
-                            help='One optimizer step on two tasks; provisional anchors allowed; no adapter save')
+                            help='One optimizer step on two tasks; no adapter save')
         parser.add_argument('--generation-batch-size', type=int)
         parser.add_argument('--generation-microbatch-size', type=int,
                             help='Text-only HF generation chunk size; preserves GRPO reward groups')
@@ -229,7 +229,6 @@ def run_training(trainer, tokenizer, args: argparse.Namespace,
                        peak_vram_reserved_bytes=torch.cuda.max_memory_reserved())
         if records_per_step is not None:
             summary.update(episodes=len(records_per_step), episodes_per_hour=len(records_per_step)*3600/elapsed,
-                           provisional=any(r['provisional'] for r in records_per_step),
                            groups=reward_groups(records_per_step, args.num_generations))
             summary['tasks_seen'] = sorted({r['task_id'] for r in records_per_step})
         summary['completion_lengths'] = getattr(trainer, 'memory_lengths', [])

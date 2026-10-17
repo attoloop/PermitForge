@@ -156,11 +156,8 @@ def main() -> int:
     if args.timeout <= 0 or len(set(args.tasks)) != 2:
         parser.error('Timeout must be positive and tasks distinct')
     from .grpo import select_tasks
-    from .permit_env import resolve_anchors
     from permit_openenv.tasks import load_pack
-    tasks = select_tasks(load_pack(args.tasks_dir), args.tasks, None)
-    for task in tasks:
-        resolve_anchors(task, smoke=True, diagnostics_dir=args.diagnostics_dir)
+    select_tasks(load_pack(args.tasks_dir), args.tasks, None)
     budgets = json.loads(args.token_budget.read_text())['models']
     limits = {n: max(budgets[m]['recommended_completion_limits'][str(n)] for m in args.models)
               for n in (8, 10, 12)}

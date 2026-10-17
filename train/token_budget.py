@@ -54,7 +54,7 @@ def recorded_results(task: Task, path: Path) -> dict:
     evaluated = dict(valid=True, feasible=True, cost=float(task.draft_cost), standards=standards)
     return {'get_scenario': view, 'check_design': checked, 'evaluate_design': evaluated,
             'submit_design': {**checked, **evaluated, 'reward': 0.0, 'prescore_usd_saved': 0.0,
-                              'anchors': task.anchors, 'grading_failed': False, 'training_grade': 'fast'}}
+                              'pct_saved': 0.0, 'grading_failed': False, 'training_grade': 'fast'}}
 
 
 def measure_task(tokenizer, task: Task, draft_path: Path, schemas: list[dict]) -> dict:

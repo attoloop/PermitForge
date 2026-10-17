@@ -15,7 +15,7 @@ import numpy as np
 from permit_core.fields import FieldPack, height_key, load_pack as load_fields, met_calendar
 from permit_openenv.tasks import Task, TaskPack, load_pack
 
-from .permit_env import PermitTrainingEnv, resolve_anchors, scenario_text, tool_schemas, training_instructions
+from .permit_env import PermitTrainingEnv, scenario_text, tool_schemas, training_instructions
 from .runtime import add_arguments, load_model, prompt_ids, run_training, validate_arguments
 
 
@@ -106,7 +106,7 @@ def main(argv: list[str] | None = None) -> None:
     parser.add_argument('--tasks', nargs='+')
     parser.add_argument('--limit', type=int)
     parser.add_argument('--fields-dir', type=Path, required=True)
-    parser.add_argument('--diagnostics-dir', type=Path, help='Recorded baseline/search JSON; smoke or memory probe only')
+    parser.add_argument('--diagnostics-dir', type=Path, help='Legacy compatibility option; saved-fraction grading needs no diagnostics')
     args = parser.parse_args(argv)
     validate_arguments(args)
     if args.limit is not None and args.limit <= 0:
@@ -116,12 +116,11 @@ def main(argv: list[str] | None = None) -> None:
     tasks = select_tasks(pack, args.tasks, 2 if bounded else args.limit)
     if bounded and len(tasks) != 2:
         parser.error('Smoke or memory probe requires two train tasks')
-    anchors = {t.task_id: resolve_anchors(t, smoke=bounded, diagnostics_dir=args.diagnostics_dir) for t in tasks}
     args.output.mkdir(parents=True, exist_ok=True)
     rows = [{'prompt': [{'role': 'system', 'content': training_instructions(args.max_turns)},
                         {'role': 'user', 'content': 'Optimize the plant and submit your design.\n'}],
              'split': 'train', 'task_id': t.task_id} for t in tasks]
-    (args.output/'selection.json').write_text(json.dumps({'tasks': list(anchors), 'anchors': anchors,
+    (args.output/'selection.json').write_text(json.dumps({'tasks': [t.task_id for t in tasks],
                                                         'smoke': args.smoke,
                                                         'memory_probe': args.memory_probe}, indent=2)+'\n')
     (args.output/'config.json').write_text(json.dumps(config_values(args), indent=2)+'\n')

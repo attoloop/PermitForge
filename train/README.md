@@ -2,9 +2,9 @@
 
 The training adapter uses `permit_core.evaluate` for both evaluation and final
 submission. Native verification remains the evaluation harness's responsibility.
-Only eligible train tasks enter GRPO or regular SFT. Ordinary training requires
-model-calibration anchors; `--smoke` or `--memory-probe` permits a labelled provisional anchor
-equal to the largest positive feasible saving in that task's recorded diagnostics.
+Only eligible train tasks enter GRPO or regular SFT. Reward is feasible savings
+divided by draft cost, including smoke and memory probes. No anchors, provisional
+grades or model-calibration runs are required.
 
 Run from the repository root:
 
@@ -66,7 +66,7 @@ can legitimately produce no update; rewards are never fabricated to pass this
 check. An unavailable grade is NaN to TRL and `grading_failed: true` in JSON.
 Missing submissions and invalid/infeasible submissions score zero.
 
-Regular runs omit `--smoke` and `--diagnostics-dir`, supply calibrated tasks and
+Regular runs omit `--smoke` and `--diagnostics-dir`, supply eligible train tasks and
 existing fields, and explicitly select `--steps`. SFT consumes saved episode
 JSON/JSONL with `--records`; it rejects eval identities, missing submissions and
 non-improvements, checks submitted design cost, and keeps complete tool calls.

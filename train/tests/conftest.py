@@ -27,8 +27,7 @@ def task_pack(tmp_path):
                         (source,), controls, (standard,), {}, ((D(0), D(0)),),
                         {'S1': {'control': 'S1_maximum', 'stack_height_m': D(20)}},
                         {'S1': (D(10), D(20))})
-    task = Task(scenario.id, 'train', {'eligible': True, 'anchors': {
-        'worst': 0, 'best': 16, 'saturation': 64, 'source': 'model_calibration'}})
+    task = Task(scenario.id, 'train', {'eligible': True})
     task.__dict__['scenario'] = scenario
     eval_task = Task('synthetic-eval', 'eval', task.record.copy())
     eval_task.__dict__['scenario'] = scenario

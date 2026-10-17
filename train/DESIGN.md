@@ -1,6 +1,6 @@
 # Training implementation decisions
 
-Domain validation, exact cost, field evaluation and calibration remain in
+Domain validation, exact cost, field evaluation and saved-fraction reward remain in
 `permit_core`. `PermitTrainingEnv` reuses `permit_openenv.tasks` and the public
 instructions. Its only public methods beyond TRL's `reset` and `get_reward`
 lifecycle hooks are the four tools. Reset returns compact public tables; tools
@@ -45,12 +45,11 @@ TRL's training chat template and masks assistant tokens before Arrow can alter
 variable source dictionaries. The CPU regression initializes an SFT trainer
 with a tiny random model only to verify labels; it performs no optimizer step.
 
-Provisional anchors are never persisted into task packs. Their source and
-`provisional` flag are recorded in selection and episode evidence, and they are
-exposed to the policy only after submission. Normal training rejects missing,
-unlabelled, baseline and search anchors. Provisional savings are taken only from
-positive, finite, feasible diagnostics with matching task identity and split.
-Search quality is not presented as a reward calibration result.
+Training and smoke/probe runs use feasible saved fraction with no provisional
+anchors. GRPO group normalization removes the common positive per-task cost
+scale (apart from numerical stabilizers); zero-spread groups still carry no
+relative learning signal. Unavailable grading remains NaN, distinct from a
+policy that scores zero. No model calibration is required.
 
 This WP does not generate fields. Read-only memory maps let the training process
 reuse field inputs across rollouts without changing the concurrently owned
@@ -67,7 +66,10 @@ are unchanged. There are no new dependencies, model copies, or field writes.
 
 ### CPU tokenizer measurements
 
-Reproduce every number in the following tables and the suggested limits with:
+The following tables and suggested limits are historical, before removal of the
+anchor payload. Inspect those recorded measurements with
+`python3 -m json.tool train/evidence/token-budget.json`. Regenerate measurements
+for the current payload (which can differ) with:
 
 ```bash
 train/.venv/bin/python -m train.token_budget --output train/evidence/token-budget.json --markdown train/evidence/token-budget.md
@@ -85,12 +87,13 @@ These are constructed sizing episodes, not observed policy rollouts. Each uses
 one `get_scenario`, two checks, the remaining evaluations, and a submission,
 followed by a short acknowledgment. Calls reuse the draft design; evaluate and
 submit payloads use stored ARM2 draft verification values from
-`convert/cache/drafts-arm2/<id>.json`. Submission uses pending task anchors for
-payload sizing only; this does not generate or persist training anchors. The
+`convert/cache/drafts-arm2/<id>.json`. Current submission sizing uses saved fraction
+and percentage savings with no anchors. The historical table below predates that
+payload change and has not been remeasured in this work package. The
 JSON includes input and draft-evidence hashes. These representative payloads
-account for the unchanged tool reply sizes without running native models or
+record the earlier tool reply sizes without running native models or
 field computation. Longer reasoning, different values, errors and numeric
-calibration anchors will change actual trajectory lengths.
+tool payloads will change actual trajectory lengths.
 
 | Task | Sources | Instructions | Scenario | Full prompt | get_scenario | check | evaluate | submit |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|
