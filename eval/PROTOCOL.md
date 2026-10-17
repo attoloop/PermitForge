@@ -14,7 +14,7 @@ the protocol hash and sampling settings differ. The operator launches all model 
 | `--effort high` | `model_reasoning_effort="high"`; wire `reasoning.effort="high"` | `output_config={"effort":"high"}` |
 | `--effort xhigh` (default) | `model_reasoning_effort="xhigh"`; wire `reasoning.effort="xhigh"` | `output_config={"effort":"max"}` |
 
-The Codex models are `codex:gpt-6.1-sol` and `codex:gpt-6-astra`; Claude models are
+The Codex models are `codex:gpt-6.1-sol` and `codex:gpt-5.6-sol` (GPT-6 Astra was dropped on 2026-10-17 to stay within plan usage limits); Claude models are
 `anthropic:claude-opus-5-5` and `anthropic:claude-sonnet-5-5`. Anthropic names its
 highest level `max`; the launch value `xhigh` maps to `max` on Claude. At every
 effort level both Claude requests use
@@ -188,7 +188,7 @@ The following command spends model credit and is for the operator only. Add
 ```sh
 PERMIT_FIELDS_CACHE_GB=72 uv run --project envs/permit/openenv --no-sync python -m eval.run_eval \
   --run final-xhigh --models anthropic:claude-opus-5-5 anthropic:claude-sonnet-5-5 \
-  codex:gpt-6.1-sol codex:gpt-6-astra --subsets results/subsets.json --split both \
+  codex:gpt-6.1-sol codex:gpt-5.6-sol --subsets results/subsets.json --split both \
   --effort xhigh --repeats 4 --order round-robin --codex-concurrency 2 --anthropic-concurrency 1 \
   --max-tokens 32768 --max-turns 40 --wall-clock 1800 --budget-usd 190
 ```

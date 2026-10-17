@@ -107,7 +107,7 @@ def test_redaction_covers_structures_headers_and_environment(monkeypatch):
 
 
 @pytest.mark.parametrize('effort', ['medium', 'high', 'xhigh'])
-@pytest.mark.parametrize('model', ['gpt-6.1-sol', 'gpt-6-astra'])
+@pytest.mark.parametrize('model', ['gpt-6.1-sol', 'gpt-5.6-sol'])
 def test_codex_cli_captures_full_stream_command_and_returned_reasoning(tmp_path, monkeypatch, effort, model):
     import eval.codex_driver as driver
     from eval.capture import EpisodeCapture

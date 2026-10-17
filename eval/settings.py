@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 MODELS = ('anthropic:claude-opus-5-5', 'anthropic:claude-sonnet-5-5',
-          'codex:gpt-6.1-sol', 'codex:gpt-6-astra')
+          'codex:gpt-6.1-sol', 'codex:gpt-5.6-sol')  # 2026-10-17: Astra dropped (plan usage limits)
 MAX_TOKENS = 32768
 EFFORTS = ('medium', 'high', 'xhigh')
 EPISODE_PRIORS = {'medium': 2.0, 'high': 3.5, 'xhigh': 5.0}

@@ -75,7 +75,7 @@ def test_probe_metrics_failure_zero_and_best_of_all():
 def test_round_robin_order_projection_and_resume(tmp_path):
     from eval.run_eval import run_panel
     models = ['codex:gpt-6.1-sol', 'anthropic:claude-sonnet-5-5',
-              'anthropic:claude-opus-5-5', 'codex:gpt-6-astra']
+              'anthropic:claude-opus-5-5', 'codex:gpt-5.6-sol']
     tasks = [dict(task_id=t, split=s, station=t) for t, s in [('train', 'train'), ('eval', 'eval')]]
     calls = []
     def driver(model, task):
