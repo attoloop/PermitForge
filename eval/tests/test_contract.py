@@ -207,7 +207,7 @@ def test_no_submit_turn_limit_invalid_and_bad_request_are_not_retried():
 def test_resume_never_regrades_failures_or_force(tmp_path):
     def driver(model, task):
         r = episode(model, task['task_id'], feasible=False)
-        r['ended'], r['final'] = 'error', None
+        r['ended'], r['final'] = 'no_submit', None
         return r
     tasks = [{'task_id': 'a', 'split': 'eval', 'station': 'X'}]
     run_panel(tmp_path, tasks, ['codex:m'], driver)
@@ -272,8 +272,7 @@ def test_interrupted_attempt_is_checkpointed_and_not_restarted(tmp_path):
         r = episode(model, task['task_id'])
         checkpoint(r)
         raise RuntimeError('process interrupted after grade')
-    with pytest.raises(RuntimeError):
-        run_panel(tmp_path, tasks, ['codex:m'], interrupted)
+    run_panel(tmp_path, tasks, ['codex:m'], interrupted)
     r = json.loads(next((tmp_path/model_slug('codex:m')).glob('*.json')).read_text())
     assert r['final']['feasible']
     def no_retry(*a, **kw):

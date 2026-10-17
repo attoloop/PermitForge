@@ -3,7 +3,6 @@ import json
 from types import SimpleNamespace
 
 import httpx
-import pytest
 from fastapi.testclient import TestClient
 
 from eval.anthropic_driver import run_anthropic
@@ -196,6 +195,7 @@ def test_partial_provider_response_survives_read_failure(tmp_path):
         response = client.post('/responses', json={'input': [], 'tools': [
             {'type': 'function', 'name': 'mcp__permitforge__'+name} for name in TOOLS]})
     assert response.status_code == 502
+    assert gate.error == 'infrastructure' and 'ReadError' in gate.traceback
     assert 'partial text' in (capture.root/'raw/codex-0001-1-response.sse').read_text()
     assert (capture.root/'attempts/codex-0001-1/error.json').exists()
 
@@ -205,12 +205,12 @@ def test_interrupted_episode_keeps_cost_record_and_terminal_attempt(tmp_path):
         capture.raw_text('partial.txt', 'provider diagnostic')
         checkpoint({'usage': {'input_tokens': 9, 'output_tokens': 2, 'usd': None}})
         raise RuntimeError('harness interrupted')
-    with pytest.raises(RuntimeError):
-        run_panel(tmp_path, [{'task_id': 'task', 'split': 'train', 'station': 'X'}], ['codex:test'], driver)
+    run_panel(tmp_path, [{'task_id': 'task', 'split': 'train', 'station': 'X'}], ['codex:test'], driver)
     assert json.loads((tmp_path/'run.json').read_text())['finished_at']
     cost = json.loads((tmp_path/'costs.jsonl').read_text())
     assert cost['usage']['input_tokens'] == 9
-    assert (tmp_path/model_slug('codex:test')/'task/attempts/terminal/raw/partial.txt').exists()
+    assert (tmp_path/model_slug('codex:test')/'task/attempts/episode-0001/raw/partial.txt').exists()
+    assert records([tmp_path]) == []
 
 
 def test_resume_uses_canonical_episode_without_legacy_snapshot(tmp_path):

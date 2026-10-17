@@ -9,6 +9,7 @@ import subprocess
 import tempfile
 import threading
 import time
+import traceback
 from typing import Any
 
 from fastapi import Request
@@ -40,6 +41,7 @@ class CodexBoundary:
         self.allowed = {'mcp__permitforge__'+t for t in TOOLS}
         self.trace: list[dict] = []
         self.error: str | None = None
+        self.traceback: str | None = None
         self.retries: list[dict] = []
         self.capture = capture
 
@@ -112,6 +114,9 @@ def proxy_app(boundary: CodexBoundary, *, upstream: str = UPSTREAM, session: Any
         try:
             body = boundary.prepare(await request.json())
         except (IsolationError, TimeoutError) as exc:
+            if boundary.error != 'turn_limit':
+                boundary.error = 'infrastructure'
+            boundary.traceback = traceback.format_exc()
             return Response(str(exc), status_code=400)
         # No arbitrary destination or authorization material is exposed to the model/logs.
         headers = {k:v for k,v in request.headers.items() if k.lower() in (
@@ -170,10 +175,12 @@ def proxy_app(boundary: CodexBoundary, *, upstream: str = UPSTREAM, session: Any
                                         'retries': boundary.retries})
                 return Response(response.content, media_type='text/event-stream')
             except IsolationError as exc:
+                boundary.traceback = traceback.format_exc()
                 if capture:
                     capture.failed(prefix, str(exc))
                 return Response('isolation boundary rejected provider tool call', status_code=400)
             except (httpx.ConnectError, httpx.ConnectTimeout) as exc:
+                boundary.traceback = traceback.format_exc()
                 if capture:
                     capture.failed(prefix, {'type': type(exc).__name__, 'message': str(exc)})
                 boundary.retries.append({'turn': boundary.turns, 'attempt': attempt+1, 'at': now(), 'error': type(exc).__name__})
@@ -181,10 +188,11 @@ def proxy_app(boundary: CodexBoundary, *, upstream: str = UPSTREAM, session: Any
                     boundary.error = 'infrastructure'
                     return Response('provider connection failed', status_code=502)
             except (httpx.ReadTimeout, httpx.ReadError, httpx.RemoteProtocolError, ValueError) as exc:
+                boundary.traceback = traceback.format_exc()
                 if capture:
                     capture.failed(prefix, {'type': type(exc).__name__, 'message': str(exc)})
                 # A response may have been billed; never replay a partially sampled response.
-                boundary.error = 'timeout'
+                boundary.error = 'infrastructure'
                 return Response('provider response incomplete', status_code=502)
     return app
 
@@ -343,6 +351,7 @@ def run_codex(session: Any, model: str, *, max_turns: int = 40, max_tokens: int 
                   retries=boundary.retries, model_trace=boundary.trace, codex_events=events,
                   codex_exit_code=process.returncode, codex_stderr=stderr[-4000:],
                   error_type=boundary.error, submit_attempted=session.submit_attempted, retryable=False,
+                  traceback=boundary.traceback,
                   settings={'max_turns': max_turns, 'max_tokens': max_tokens, 'wall_clock': wall_clock,
                             'temperature': 'provider-default', 'evaluate_budget': 30,
                             'isolation': 'disabled host tools + filtered/validated subscription boundary'})

@@ -49,7 +49,7 @@ def write_json(path: Path, value: Any) -> None:
     write_text(path, json.dumps(redact(value), indent=2, allow_nan=False, ensure_ascii=False)+'\n')
 
 
-def records(runs: list[Path]) -> list[tuple[Path, dict]]:
+def records(runs: list[Path], *, include_incomplete: bool = False) -> list[tuple[Path, dict]]:
     found = []
     seen = set()
     for run in runs:
@@ -60,6 +60,8 @@ def records(runs: list[Path]) -> list[tuple[Path, dict]]:
                 continue
             seen.add(path.resolve())
             record = json.loads(path.read_text())
+            if not include_incomplete and record.get('attempt_complete') is False:
+                continue
             if record.get('schema_version') == 1 and 'task_id' in record and 'model' in record:
                 found.append((path, record))
     return found

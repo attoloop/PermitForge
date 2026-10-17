@@ -22,10 +22,12 @@ import signal
 import platform
 import subprocess
 import threading
+import traceback
 from typing import Any, Callable
 
 from .common import ROOT, component, finite, model_slug, now, records, write_json, write_text
 from .capture import EpisodeCapture, append_json, append_log
+from . import attempts, preflight
 
 
 def provenance(models: list[str], settings: dict, concurrency: int, budget: float) -> dict:
@@ -83,10 +85,12 @@ def write_index(run: Path, *, status: str | None = None) -> None:
     index = {'run': run.name, 'episodes': [{k:r.get(k) for k in (
         'model', 'task_id', 'split', 'station', 'ended', 'turns', 'evaluations_used', 'usage', 'final', 'error')}
         for r in items]}
+    index['infrastructure_attempts'] = attempts.infrastructure(run)
     if status:
         index['status'] = status
     write_json(run/'index.json', index)
     report = build_report(items)
+    report['infrastructure_attempts'] = index['infrastructure_attempts']
     write_json(run/'board.json', report)
     write_text(run/'board.md', markdown(report))
 
@@ -107,23 +111,7 @@ def run_lock(run: Path):
                 manifest.update(finished_at=now(), status='interrupted')
                 write_json(run/'run.json', manifest)
                 append_log(run/'harness.log', now()+f' run interrupted: {type(exc).__name__}')
-                charged = {(row['model'], row['task_id']) for row in
-                           (json.loads(line) for line in (run/'costs.jsonl').read_text().splitlines())}
-                for path, record in records([run]):
-                    if (record['model'], record['task_id']) in charged:
-                        continue
-                    record.update(finished_at=record.get('finished_at') or now(),
-                                  ended='submitted' if record.get('final') is not None else 'no_submit',
-                                  error=record.get('error') or 'harness terminated')
-                    write_json(path, record)
-                    if path.name == 'episode.json':
-                        write_json(path.parent.parent/(path.parent.name+'.json'), record)
-                        capture = EpisodeCapture(path.parent)
-                        capture.last_diagnostic = float('inf')
-                        capture.finish(record)
-                    append_json(run/'costs.jsonl', {'at': now(), 'model': record['model'],
-                                'task_id': record['task_id'], 'usage': record.get('usage'),
-                                'budget_charge_usd': record.get('budget_charge_usd')})
+                attempts.recover(run, error=str(exc), trace=traceback.format_exc())
                 write_index(run, status='interrupted')
             raise
 
@@ -138,8 +126,9 @@ def run_panel(run: Path, tasks: list[dict], models: list[str], driver: Callable,
     if len({t['task_id'] for t in tasks}) != len(tasks):
         raise ValueError('duplicate tasks')
     with run_lock(run):
+        attempts.recover(run)
         existing = [r for _,r in records([run])]
-        if force and existing:
+        if force and (existing or attempts.infrastructure(run)):
             raise ValueError('--force cannot rerun a recorded attempt; use a separately disclosed run')
         selection = {'models': models, 'tasks': tasks, 'settings': settings or {}}
         path = run/'run.json'
@@ -153,7 +142,10 @@ def run_panel(run: Path, tasks: list[dict], models: list[str], driver: Callable,
         write_json(path, manifest)
         append_log(run/'harness.log', now()+' run started/resumed')
         (run/'costs.jsonl').touch(exist_ok=True)
-        costs = [r.get('budget_charge_usd', r.get('usage', {}).get('usd')) for r in existing
+        # Count each paid attempt, including failed work, once on resume.
+        failed = attempts.infrastructure(run)
+        billed = existing + [r for r in failed if not r.get('submission_preserved')]
+        costs = [r.get('budget_charge_usd', (r.get('usage') or {}).get('usd')) for r in billed
                  if r['model'].startswith('anthropic:')]
         costs = [c if finite(c) else prior for c in costs]
         budget = Budget(budget_usd, concurrency=concurrency, prior=prior, spent=sum(costs), costs=costs)
@@ -165,29 +157,37 @@ def run_panel(run: Path, tasks: list[dict], models: list[str], driver: Callable,
                     destination = run/model_slug(model)/(component(task['task_id'])+'.json')
                     if destination.exists() or (destination.with_suffix('')/'episode.json').exists():
                         continue  # Includes no-submit, timeout, error, invalid and infeasible terminal records.
+                    root = destination.with_suffix('')
+                    history = attempts.history(root)
+                    if history and (len(history) >= attempts.MAX_ATTEMPTS or not history[-1].get('retryable')):
+                        continue
+                    # Drain before reserving the next slot, so finished costs inform the launch guard.
+                    if len(jobs) == concurrency:
+                        collect(jobs, run, budget)
+                        jobs.clear()
                     key = model+'|'+task['task_id']
                     if not budget.reserve(key, model.startswith('anthropic:')):
                         stop = True
                         continue
-                    # Never queue more episodes than the reservation's configured concurrency.
-                    if len(jobs) == concurrency:
-                        collect(jobs, run, budget)
-                        jobs.clear()
+                    number = len(history)+1
                     initial = {'schema_version': 1, **task, 'model': model, 'scenario': {}, 'geometry': {},
                                'steps': [], 'final': None, 'evaluations_used': 0, 'turns': 0,
                                'prompt_version': manifest['prompt_version'], 'started_at': now(), 'finished_at': None,
                                'ended': 'error', 'error_type': 'interrupted', 'attempt_complete': False,
+                               'attempt_number': number, 'run': run.name,
                                'usage': {'input_tokens': 0, 'output_tokens': 0, 'usd': None},
                                'budget_charge_usd': budget.active[key]}
-                    write_json(destination, initial)
-                    capture = EpisodeCapture(destination.with_suffix(''))
-                    write_json(capture.root/'episode.json', initial)
+                    capture = EpisodeCapture(root/'attempts'/f'episode-{number:04d}')
+                    checkpoint_path = capture.root/'checkpoint.json'
+                    write_json(checkpoint_path, initial)
+                    write_json(capture.root/'attempt.json', {
+                        'model': model, 'task_id': task['task_id'], 'attempt_number': number,
+                        'status': 'running', 'started_at': initial['started_at']})
                     append_log(run/'harness.log', now()+f' episode started {model} {task["task_id"]}')
-                    def checkpoint(partial, destination=destination, model=model, capture=capture):
+                    def checkpoint(partial, destination=checkpoint_path, model=model, capture=capture):
                         current = json.loads(destination.read_text())
                         updated = {**current, **partial, 'model': model, 'attempt_complete': False}
                         write_json(destination, updated)
-                        write_json(capture.root/'episode.json', updated)
                         capture.environment(updated)
                     kwargs = {'checkpoint': checkpoint} if 'checkpoint' in inspect.signature(driver).parameters else {}
                     if 'capture' in inspect.signature(driver).parameters:
@@ -196,8 +196,11 @@ def run_panel(run: Path, tasks: list[dict], models: list[str], driver: Callable,
                 collect(jobs, run, budget)
                 if stop:
                     break
-        write_index(run, status='budget_stopped' if stop else 'complete')
-        manifest.update(finished_at=now(), status='budget_stopped' if stop else 'complete')
+        completed = {(r['model'], r['task_id']) for _, r in records([run])}
+        missing = any((model, task['task_id']) not in completed for model in models for task in tasks)
+        status = 'budget_stopped' if stop else 'infrastructure_failed' if missing else 'complete'
+        write_index(run, status=status)
+        manifest.update(finished_at=now(), status=status)
         write_json(path, manifest)
         append_log(run/'harness.log', now()+' run '+manifest['status'])
 
@@ -206,32 +209,47 @@ def collect(jobs: list, run: Path, budget: Budget) -> None:
     mapping = {job[0]: job[1:] for job in jobs}
     for future in as_completed(mapping):
         key, path, model, task, capture = mapping[future]
-        # A driver bug is not an infrastructure retry; surface it instead of synthesizing a grade.
+        error, trace = None, ''
         try:
             record = future.result()
-        except BaseException as exc:
-            partial = json.loads(path.read_text())
-            partial.update(finished_at=partial.get('finished_at') or now(), error=str(exc),
-                           ended='submitted' if partial.get('final') is not None else 'error')
-            capture.finish(partial)
-            write_json(path, partial)
-            append_json(run/'costs.jsonl', {'at': now(), 'model': model, 'task_id': task['task_id'],
-                        'usage': partial.get('usage'), 'budget_charge_usd': partial.get('budget_charge_usd')})
-            append_log(run/'harness.log', now()+f' episode interrupted {model} {task["task_id"]}: {exc}')
-            manifest = json.loads((run/'run.json').read_text())
-            manifest.update(finished_at=now(), status='interrupted')
-            write_json(run/'run.json', manifest)
-            write_index(run, status='interrupted')
-            raise
-        record.update(run=run.name, attempt_complete=True)
+            if not isinstance(record, dict) or record.get('ended') not in ('submitted', 'no_submit', 'turn_limit', 'error'):
+                raise ValueError('driver did not return an episode record')
+            usage = record.get('usage', {})
+            if not isinstance(usage, dict) or (usage.get('usd') is not None and (
+                    not finite(usage['usd']) or usage['usd'] < 0)):
+                raise ValueError('driver returned invalid usage')
+            if record['ended'] == 'submitted' and not isinstance(record.get('final'), dict):
+                raise ValueError('submitted episode has no final grade')
+            json.dumps(record, allow_nan=False)
+        except Exception as exc:
+            error, trace = str(exc), traceback.format_exc()
+            record = {}
+        partial = json.loads((capture.root/'checkpoint.json').read_text())
+        record = {**partial, **record, 'model': model, **task}
+        if error is None and (record.get('infrastructure_error') or (
+                record.get('ended') == 'error' and record.get('error_type') != 'timeout')):
+            error = str(record.get('error') or record.get('error_type') or 'driver returned an infrastructure error')
+            trace = record.get('traceback') or 'No Python traceback: driver reported an external process/provider failure.'
         record['budget_charge_usd'] = budget.finish(key, record.get('usage', {}).get('usd'))
-        write_json(path, record)
-        capture.finish(record)
+        root = path.with_suffix('')
+        if error is not None:
+            attempts.fail(root, capture, record, error, trace)
+            ended = 'infrastructure'
+        else:
+            record.update(run=run.name, attempt_complete=True)
+            write_json(capture.root/'checkpoint.json', record)
+            capture.finish(record)
+            attempts.publish(root, record, capture)
+            write_json(capture.root/'attempt.json', {
+                'model': model, 'task_id': task['task_id'], 'attempt_number': record['attempt_number'],
+                'status': 'complete', 'finished_at': now(), 'retryable': False})
+            ended = record['ended']
         append_json(run/'costs.jsonl', {'at': now(), 'model': model, 'task_id': task['task_id'],
+                    'attempt_number': record['attempt_number'], 'status': ended,
                     'usage': record.get('usage'), 'budget_charge_usd': record['budget_charge_usd']})
-        append_log(run/'harness.log', now()+f' episode ended {model} {task["task_id"]}: {record["ended"]}')
+        append_log(run/'harness.log', now()+f' episode ended {model} {task["task_id"]}: {ended}')
         write_index(run)
-        print(f"{model} {task['task_id']}: {record['ended']}", flush=True)
+        print(f"{model} {task['task_id']}: {ended}", flush=True)
 
 
 def select_tasks(pack: Any, split: str, ids: list[str] | None, limit: int | None) -> list[dict]:
@@ -280,14 +298,19 @@ def main() -> None:
         if provider not in ('codex', 'anthropic') or not name:
             parser.error('supported drivers: anthropic:<model>, codex:<model>')
     paid = any(m.startswith('anthropic:') for m in args.models)
-    if paid and (args.budget_usd <= 0 or not os.environ.get('ANTHROPIC_API_KEY')):
-        parser.error('Anthropic requires ANTHROPIC_API_KEY and a positive --budget-usd')
+    if paid and args.budget_usd <= 0:
+        parser.error('Anthropic requires a positive --budget-usd')
+    try:
+        loaded_drivers = preflight.drivers(args.models)
+    except (preflight.PreflightError, ValueError) as exc:
+        parser.error('preflight: '+str(exc))
     from .transport import Session, load_eval_pack, recording_app, serve
-    from .anthropic_driver import run_anthropic
-    from .codex_driver import run_codex
     from permit_openenv.prompts import INSTRUCTIONS, PROMPT_VERSION
-    pack = load_eval_pack(args.tasks_root)
-    tasks = select_tasks(pack, args.split, args.tasks, args.limit)
+    try:
+        pack = load_eval_pack(args.tasks_root)
+        tasks = select_tasks(pack, args.split, args.tasks, args.limit)
+    except (OSError, ValueError) as exc:
+        parser.error('preflight: task loading/selection failed: '+str(exc))
     if not tasks:
         parser.error('no eligible tasks selected')
     token = os.environ.get('PERMIT_EVAL_TOKEN') if args.server else secrets.token_urlsafe(32)
@@ -295,9 +318,13 @@ def main() -> None:
         parser.error('--server requires PERMIT_EVAL_TOKEN and eval.transport recorder routes')
 
     def run(url):
+        try:
+            preflight.server(url, token, tasks)
+        except preflight.PreflightError as exc:
+            parser.error('preflight: '+str(exc))
         def driver(model, task, checkpoint, capture):
             with Session(url, token, task['task_id'], timeout=args.wall_clock, checkpoint=checkpoint, capture=capture) as session:
-                fn = run_anthropic if model.startswith('anthropic:') else run_codex
+                fn = loaded_drivers[model.partition(':')[0]]
                 return fn(session, model, max_turns=args.max_turns,
                           max_tokens=args.max_tokens, wall_clock=args.wall_clock)
         settings = {'prompt_version': PROMPT_VERSION, 'prompt_sha256': hashlib.sha256(INSTRUCTIONS.encode()).hexdigest(),

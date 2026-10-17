@@ -133,6 +133,12 @@ def markdown(report: dict) -> str:
         lines += ['', '| Pair (left − right) | Matched tasks | USD saved difference | Reward difference |', '|---|---:|---:|---:|']
         for p in report['paired']:
             lines.append(f"| {p['left']} − {p['right']} | {p['n']} | {fmt(p['mean_usd_saved_delta'])} | {fmt(p['mean_reward_delta'])} |")
+    if report.get('infrastructure_attempts'):
+        lines += ['', 'Infrastructure attempts (excluded from graded metrics):', '',
+                  '| Model | Task | Attempt | Retry on resume |', '|---|---|---:|---|']
+        for attempt in report['infrastructure_attempts']:
+            lines.append(f"| {attempt['model']} | {attempt['task_id']} | {attempt['attempt_number']} | "
+                         f"{'yes' if attempt['retryable'] else 'no'} |")
     return '\n'.join(lines)+'\n'
 
 
@@ -185,6 +191,8 @@ def main() -> None:
                 compute_cached(pack.get(tid), destination)
     baseline, missing = baseline_rows(items, baseline_root)
     report = build_report(items, baseline)
+    from .attempts import infrastructure
+    report['infrastructure_attempts'] = [r for run in args.runs for r in infrastructure(run_path(run))]
     report['missing_baselines'] = missing
     write_json(args.output.with_suffix('.json'), report)
     write_text(args.output, markdown(report) + ('\nBaseline coverage incomplete; see JSON missing_baselines.\n' if missing else ''))

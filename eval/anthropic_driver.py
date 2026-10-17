@@ -5,6 +5,7 @@ import json
 from pathlib import Path
 import time
 import tomllib
+import traceback
 from typing import Any, Callable
 
 from permit_openenv.prompts import INSTRUCTIONS, PROMPT_VERSION
@@ -75,6 +76,7 @@ def run_anthropic(session: Any, model: str, *, api: Any = None, max_turns: int =
     usage = {'input_tokens': 0, 'output_tokens': 0, 'usd': 0.0, 'requests': []}
     retries, model_trace = [], []
     ended, error, retryable, turn = 'no_submit', None, False, 0
+    trace, infrastructure_error = None, False
     try:
         for turn in range(1, max_turns+1):
             if capture:
@@ -152,6 +154,8 @@ def run_anthropic(session: Any, model: str, *, api: Any = None, max_turns: int =
             ended = 'turn_limit'
     except Exception as exc:
         ended, error = 'error', {'type': type(exc).__name__, 'message': str(exc)[:800]}
+        trace = traceback.format_exc()
+        infrastructure_error = not (isinstance(exc, TimeoutError) and str(exc) == 'episode wall clock exhausted')
         retryable = transient(exc) and not session.submit_attempted
         if type(exc).__name__ in ('APITimeoutError', 'APIConnectionError', 'ReadTimeout'):
             usage.update(known_usd=usage['usd'], usd=None, billing_incomplete=True)
@@ -163,7 +167,8 @@ def run_anthropic(session: Any, model: str, *, api: Any = None, max_turns: int =
     record.update(model=model, prompt_version=PROMPT_VERSION, started_at=started, finished_at=record.get('finished_at') or now(),
                   turns=turn, ended=ended, usage=usage, retries=retries, model_trace=model_trace,
                   error=error, retryable=retryable, submit_attempted=session.submit_attempted,
-                  error_type='timeout' if error and error['type'] in ('TimeoutError', 'APITimeoutError') else None,
+                  error_type='infrastructure' if infrastructure_error else 'timeout' if error else None,
+                  infrastructure_error=infrastructure_error, traceback=trace,
                   settings={'max_turns': max_turns, 'max_tokens': max_tokens, 'wall_clock': wall_clock,
                             'temperature': 'provider-default', 'evaluate_budget': 30, 'prices': prices()[model_id]})
     return record

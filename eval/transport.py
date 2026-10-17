@@ -58,6 +58,15 @@ def recording_app(token: str, *, pack: TaskPack | None = None, evaluator: Any = 
     os.environ['ENABLE_WEB_INTERFACE'] = 'false'
     app = create_server(pack=pack, evaluator=evaluator, verifier=verifier)
 
+    @app.get('/eval/preflight', include_in_schema=False)
+    def preflight(authorization: str = Header(default='')):
+        if not secrets.compare_digest(authorization, 'Bearer '+token):
+            raise HTTPException(status_code=403, detail='recording credentials required')
+        selected = pack if pack is not None else load_eval_pack()
+        return {'status': 'ok', 'tasks': [
+            {'task_id': t.task_id, 'split': t.split, 'station': t.record['station']}
+            for t in selected.tasks if t.record.get('eligible') is True]}
+
     @app.get('/eval/records/{episode_id}', include_in_schema=False)
     def record(episode_id: str, authorization: str = Header(default='')):
         if not secrets.compare_digest(authorization, 'Bearer '+token):
