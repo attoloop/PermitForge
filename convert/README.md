@@ -215,5 +215,5 @@ python3 convert/report_search.py
 ```
 
 Admission uses only native ARM2 draft feasibility; all source tasks are admitted.
-Search and baselines are diagnostics. Reward calibration on every task in both
-splits is TODO and must use model results, never search-derived anchors.
+Search and baselines are diagnostics. Reward is feasible savings divided by draft
+cost in both splits, with no anchors or calibration runs.

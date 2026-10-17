@@ -3,6 +3,7 @@ import json
 from types import SimpleNamespace
 
 import httpx
+import pytest
 from fastapi.testclient import TestClient
 
 from eval.anthropic_driver import run_anthropic
@@ -48,7 +49,7 @@ def test_fake_provider_capture_everything_and_secret_scan(tmp_path, monkeypatch)
                                      sleep=lambda _: None)
         run_panel(run, [{'task_id': task.task_id, 'split': 'train', 'station': task.scenario.station}],
                   ['anthropic:claude-sonnet-5-5'], driver, budget_usd=10)
-    episode_dir = run/model_slug('anthropic:claude-sonnet-5-5')/task.task_id
+    episode_dir = run/model_slug('anthropic:claude-sonnet-5-5')/task.task_id/'r1'
     for name in ('episode.json', 'transcript.jsonl', 'env.log'):
         assert (episode_dir/name).stat().st_size
     assert list((episode_dir/'raw').glob('*request.json'))
@@ -105,7 +106,9 @@ def test_redaction_covers_structures_headers_and_environment(monkeypatch):
         assert secret not in clean
 
 
-def test_codex_cli_captures_full_stream_command_and_returned_reasoning(tmp_path, monkeypatch):
+@pytest.mark.parametrize('effort', ['medium', 'high', 'xhigh'])
+@pytest.mark.parametrize('model', ['gpt-6.1-sol', 'gpt-6-astra'])
+def test_codex_cli_captures_full_stream_command_and_returned_reasoning(tmp_path, monkeypatch, effort, model):
     import eval.codex_driver as driver
     from eval.capture import EpisodeCapture
     pack = TaskPack([next(t for t in load_eval_pack().tasks if t.split == 'train')])
@@ -133,8 +136,13 @@ def test_codex_cli_captures_full_stream_command_and_returned_reasoning(tmp_path,
     app = recording_app('private-test-token', pack=pack, evaluator=Physics(), verifier=Physics())
     with serve(app) as base:
         with Session(base, 'private-test-token', task.task_id, capture=capture) as session:
-            result = driver.run_codex(session, 'codex:gpt-6.1-sol', wall_clock=45)
+            result = driver.run_codex(session, 'codex:'+model, wall_clock=45, effort=effort)
     assert result['final']['feasible']
+    assert calls and all(body['reasoning']['effort'] == effort for body in calls)
+    assert all(body['max_output_tokens'] == 32768 for body in calls)
+    assert result['settings']['effort'] == result['settings']['launch_effort'] == effort
+    config = json.loads((capture.root/'raw/config.json').read_text())
+    assert config['model_reasoning_effort'] == json.dumps(effort)
     for name in ('codex-events.jsonl', 'codex-stderr.log', 'command.json', 'config.json', 'model-catalog.json'):
         assert (capture.root/'raw'/name).exists()
     rows = [json.loads(line) for line in (capture.root/'transcript.jsonl').read_text().splitlines()]
@@ -209,7 +217,7 @@ def test_interrupted_episode_keeps_cost_record_and_terminal_attempt(tmp_path):
     assert json.loads((tmp_path/'run.json').read_text())['finished_at']
     cost = json.loads((tmp_path/'costs.jsonl').read_text())
     assert cost['usage']['input_tokens'] == 9
-    assert (tmp_path/model_slug('codex:test')/'task/attempts/episode-0001/raw/partial.txt').exists()
+    assert (tmp_path/model_slug('codex:test')/'task/r1/attempts/episode-0001/raw/partial.txt').exists()
     assert records([tmp_path]) == []
 
 
@@ -217,7 +225,7 @@ def test_resume_uses_canonical_episode_without_legacy_snapshot(tmp_path):
     from test_contract import episode
     tasks = [{'task_id': 'task', 'split': 'train', 'station': 'X'}]
     run_panel(tmp_path, tasks, ['codex:test'], lambda model, task: episode(model, task['task_id']))
-    (tmp_path/model_slug('codex:test')/'task.json').unlink()
+    (tmp_path/model_slug('codex:test')/'task/r1.json').unlink()
     def no_retry(model, task):
         raise AssertionError('canonical completed episode must never be replayed')
     run_panel(tmp_path, tasks, ['codex:test'], no_retry)

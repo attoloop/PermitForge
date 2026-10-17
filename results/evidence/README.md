@@ -1,8 +1,7 @@
 # PermitForge measurement evidence
 
 These receipts support the public design and provenance claims. Historical
-measurements remain historical: they are not model calibration or fresh runtime
-benchmarks. Files were relocated from the development archive; command and source
+measurements remain historical and are not fresh runtime benchmarks. Files were relocated from the development archive; command and source
 path strings were made repository-relative. Numerical measurements are preserved.
 
 | Artifact | Contents | Reproduce or inspect |
@@ -17,7 +16,9 @@ path strings were made repository-relative. Numerical measurements are preserved
 
 All commands run from the repository root. Native reruns require preserved inputs,
 converted task data and the pinned binaries. Search measurements are diagnostics;
-reward anchors will come only from model calibration on every train and eval task.
+current reward is the feasible saved fraction of draft cost. Historical receipts,
+including the old reward payload in `space-container-smoke.json`, remain unchanged
+and do not describe current grading. See [the reward contract](../../CONTRACT.md).
 
 `search/reference.py.txt` preserves the historical search implementation byte for
 byte; its hash matches the before-measurement receipts. Their commands use

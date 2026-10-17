@@ -58,6 +58,8 @@ def counts(rows: list[Row]) -> Row:
 
 
 def write_manifests(root: Path, rows: list[Row]) -> Row:
+    rows = [{k: v for k, v in row.items() if k not in
+             {'anchors', 'anchor_source', 'anchors_frozen_at', 'anchor_runs'}} for row in rows]
     failing = Counter(s for r in rows for s in r.get('failing_standards', []))
     summary = {'counts': counts(rows), 'failing_standards': dict(sorted(failing.items())),
                'eligibility_by_split': {s: counts([r for r in rows if r['split'] == s])['eligibility']

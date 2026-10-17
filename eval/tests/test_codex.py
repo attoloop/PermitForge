@@ -4,7 +4,7 @@ import subprocess
 
 import pytest
 
-from eval.codex_driver import CodexBoundary, IsolationError, codex_command, parse_usage
+from eval.codex_driver import CodexBoundary, IsolationError, codex_command, codex_env, parse_usage
 from eval.common import TOOLS
 
 
@@ -100,10 +100,11 @@ def test_installed_cli_isolation_episode(tmp_path, monkeypatch):
     with serve(mcp.http_app(path='/mcp', stateless_http=True)) as endpoint:
         with serve(proxy_app(gate, upstream='https://test.invalid/responses', transport=httpx.MockTransport(fake))) as proxy:
             argv = codex_command('gpt-6.1-sol', endpoint+'/mcp', proxy, tmp_path)
-            proc = subprocess.run(argv, input=prompt, text=True, capture_output=True, timeout=45)
+            proc = subprocess.run(argv, input=prompt, text=True, capture_output=True, timeout=45, env=codex_env(tmp_path))
     assert proc.returncode == 0, proc.stderr[-4000:]+proc.stdout[-4000:]
     assert len(seen) == 2 and len(seen[0]['tools'][0]['tools']) == 4
     assert tool_calls == [True], proc.stdout + json.dumps(seen[-1]['input'])
+    assert all(body['reasoning']['effort'] == 'xhigh' for body in seen)
     assert 'envs/permit/tasks' in seen[0]['input'][0]['content'][0]['text']
     assert seen[0]['tools'][0]['name'] == 'mcp__permitforge'
     events = [json.loads(line) for line in proc.stdout.splitlines()]

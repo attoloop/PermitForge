@@ -12,7 +12,7 @@ import json
 from pathlib import Path
 
 from .capture import append_json
-from .common import records, run_path, write_text
+from .common import records, run_path, saved_fraction, write_text
 
 
 def export_runs(runs: list[Path], output: Path) -> None:
@@ -24,9 +24,9 @@ def export_runs(runs: list[Path], output: Path) -> None:
         for path, record in records([run]):
             root = path.parent if path.name == 'episode.json' else path.with_suffix('')
             identity = {'run': run.name, 'model': record['model'], 'task_id': record['task_id'],
-                        'task_split': record.get('split')}
+                        'repeat': record.get('repeat', 1), 'task_split': record.get('split')}
             append_json(output/'episodes/train.jsonl', {**identity, 'ended': record.get('ended'),
-                        'reward': (record.get('final') or {}).get('reward'),
+                        'reward': saved_fraction(record),
                         'record_json': json.dumps(record, ensure_ascii=False)})
             transcript = root/'transcript.jsonl'
             if transcript.exists():
@@ -67,7 +67,7 @@ configs:
 # PermitForge rollout export
 
 Local export only; this command does not upload or publish.
-Join configs by run, model and task_id. `task_split` preserves the environment
+Join configs by run, model, task_id and repeat. `task_split` preserves the environment
 train/eval split; the dataset's train partition is a collection of recorded rows.
 Episodes retain the complete private Episode in record_json; transcripts retain
 full returned content (including provider-returned reasoning) and per-turn usage.

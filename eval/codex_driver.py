@@ -16,6 +16,7 @@ from fastapi import Request
 from permit_openenv.prompts import INSTRUCTIONS, PROMPT_VERSION
 
 from .common import TOOLS, now
+from .settings import MAX_TOKENS, model_settings
 from .transport import TERMINATING, gateway, serve
 
 UPSTREAM = 'https://chatgpt.com/backend-api/codex/responses'
@@ -35,7 +36,8 @@ class CodexBoundary:
     Filtering the request alone is insufficient: an unadvertised function call could
     still name a built-in tool. Buffer and validate the response before releasing it.
     """
-    def __init__(self, prompt: str, *, max_turns: int, max_tokens: int, capture: Any = None):
+    def __init__(self, prompt: str, *, max_turns: int, max_tokens: int, capture: Any = None,
+                 expected_effort: str | None = None):
         self.prompt, self.max_turns, self.max_tokens = prompt, max_turns, max_tokens
         self.turns = 0
         self.allowed = {'mcp__permitforge__'+t for t in TOOLS}
@@ -44,8 +46,11 @@ class CodexBoundary:
         self.traceback: str | None = None
         self.retries: list[dict] = []
         self.capture = capture
+        self.expected_effort = expected_effort
 
     def prepare(self, body: dict) -> dict:
+        if self.expected_effort and body.get('reasoning', {}).get('effort') != self.expected_effort:
+            raise IsolationError('CLI reasoning effort differs from the pinned setting')
         if self.turns >= self.max_turns:
             self.error = 'turn_limit'
             raise TimeoutError('turn limit reached')
@@ -197,7 +202,8 @@ def proxy_app(boundary: CodexBoundary, *, upstream: str = UPSTREAM, session: Any
     return app
 
 
-def codex_command(model: str, endpoint: str, proxy: str, workdir: Path) -> list[str]:
+def codex_command(model: str, endpoint: str, proxy: str, workdir: Path, *, effort: str = 'xhigh') -> list[str]:
+    sampling = model_settings('codex:'+model, effort)
     catalog_path = Path(os.environ.get('CODEX_HOME', str(Path.home()/'.codex')))/'models_cache.json'
     catalog = json.loads(catalog_path.read_text())
     models = [m.copy() for m in catalog['models'] if m['slug'] == model]
@@ -211,6 +217,9 @@ def codex_command(model: str, endpoint: str, proxy: str, workdir: Path) -> list[
     isolated_catalog = workdir/'model-catalog.json'
     isolated_catalog.write_text(json.dumps({'models': models}))
     config = {
+        'model_reasoning_effort': json.dumps(sampling['model_reasoning_effort']),
+        'log_dir': json.dumps(str(workdir/'logs')),
+        'sqlite_home': json.dumps(str(workdir/'state')),
         'model_catalog_json': json.dumps(str(isolated_catalog)),
         'approval_policy': '"never"', 'web_search': '"disabled"',
         'features.shell_tool': 'false', 'features.unified_exec': 'false',
@@ -270,8 +279,23 @@ def recorded_usage(events: list[dict], trace: list[dict]) -> dict:
     return usage
 
 
-def run_codex(session: Any, model: str, *, max_turns: int = 40, max_tokens: int = 4096,
-              wall_clock: float = 1800, prompt: str | None = None) -> dict:
+def codex_env(workdir: Path) -> dict[str, str]:
+    """Writable per-episode CLI state, with existing subscription auth read-only."""
+    original = Path(os.environ.get('CODEX_HOME', str(Path.home()/'.codex')))
+    state = workdir/'cli-home'
+    state.mkdir(mode=0o700, exist_ok=True)
+    auth = state/'auth.json'
+    if not auth.is_symlink() and (original/'auth.json').exists():
+        auth.symlink_to(original/'auth.json')
+    env = {k: v for k, v in os.environ.items() if not any(x in k.upper() for x in
+           ('API_KEY', 'ANTHROPIC', 'HF_TOKEN', 'PERMIT_EVAL_TOKEN', 'OPENAI_BASE_URL'))}
+    env['CODEX_HOME'] = str(state)
+    return env
+
+
+def run_codex(session: Any, model: str, *, max_turns: int = 40, max_tokens: int = MAX_TOKENS,
+              wall_clock: float = 1800, prompt: str | None = None, effort: str = 'xhigh') -> dict:
+    sampling = model_settings(model, effort)
     # This driver cannot fall back to API-key billing.
     login = subprocess.run(['codex', 'login', 'status'], capture_output=True, text=True, timeout=10)
     if login.returncode or 'ChatGPT' not in login.stdout+login.stderr:
@@ -281,19 +305,19 @@ def run_codex(session: Any, model: str, *, max_turns: int = 40, max_tokens: int 
     if capture:
         capture.event('system', INSTRUCTIONS)
         capture.event('user', prompt)
-    boundary = CodexBoundary(prompt, max_turns=max_turns, max_tokens=max_tokens, capture=capture)
+    boundary = CodexBoundary(prompt, max_turns=max_turns, max_tokens=max_tokens, capture=capture,
+                             expected_effort=sampling['effort'])
     started = now()
     with tempfile.TemporaryDirectory(prefix='permit-eval-codex-') as work:
         with serve(gateway(session)) as endpoint, serve(proxy_app(boundary, session=session, wall_clock=wall_clock)) as proxy:
-            argv = codex_command(model.removeprefix('codex:'), endpoint+'/mcp', proxy, Path(work))
+            argv = codex_command(model.removeprefix('codex:'), endpoint+'/mcp', proxy, Path(work), effort=effort)
             if capture:
                 capture.raw_json('command.json', {'argv': argv, 'cwd': work, 'stdin': prompt})
                 capture.raw_json('config.json', dict(argv[i+1].split('=', 1) for i, value in enumerate(argv) if value == '-c'))
                 capture.raw_text('model-catalog.json', (Path(work)/'model-catalog.json').read_text())
                 capture.raw_text('codex-events.jsonl', '')
                 capture.raw_text('codex-stderr.log', '')
-            env = {k:v for k,v in os.environ.items() if not any(x in k.upper() for x in
-                   ('API_KEY', 'ANTHROPIC', 'HF_TOKEN', 'PERMIT_EVAL_TOKEN', 'OPENAI_BASE_URL'))}
+            env = codex_env(Path(work))
             process = subprocess.Popen(argv, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
                                        stderr=subprocess.PIPE, text=True, env=env, start_new_session=True)
             output, errors = [], []
@@ -352,7 +376,7 @@ def run_codex(session: Any, model: str, *, max_turns: int = 40, max_tokens: int 
                   codex_exit_code=process.returncode, codex_stderr=stderr[-4000:],
                   error_type=boundary.error, submit_attempted=session.submit_attempted, retryable=False,
                   traceback=boundary.traceback,
-                  settings={'max_turns': max_turns, 'max_tokens': max_tokens, 'wall_clock': wall_clock,
+                  settings={**sampling, 'max_turns': max_turns, 'max_tokens': max_tokens, 'wall_clock': wall_clock,
                             'temperature': 'provider-default', 'evaluate_budget': 30,
                             'isolation': 'disabled host tools + filtered/validated subscription boundary'})
     return record

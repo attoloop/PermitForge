@@ -1,9 +1,8 @@
 import ast
-import inspect
 from pathlib import Path
 
 from conftest import EXTRACT
-from permit_core import cost, native, render, reward, validate
+from permit_core import cost, native, render, validate
 
 
 def definitions(path):
@@ -26,9 +25,3 @@ def test_published_functions_unchanged():
         lifted = definitions(Path(module.__file__))
         for name in names or original:
             assert ast.dump(lifted[name]) == ast.dump(original[name]), (module.__name__, name)
-
-
-def test_calibration_verbatim():
-    source = (Path(__file__).parent / "fixtures/calibration.py.txt").read_text()
-    function = inspect.getsource(reward.hyperbolic_calibration)
-    assert function in source

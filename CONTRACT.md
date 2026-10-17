@@ -141,17 +141,15 @@ message for exhaustion, failed evaluation or calls after termination. A failed
 evaluation may have an empty `standards` list.
 
 `submit_design()` returns the evaluation fields from full verification plus
-`reward`, `prescore_usd_saved`, `pct_saved` and `anchors`. Search/baseline data are
+`reward`, `prescore_usd_saved` and `pct_saved`. Search/baseline data are
 never returned through tools, reset or state. For example,
-an unchanged feasible draft without calibration adds:
+an unchanged feasible draft adds:
 
 ```json
-{"reward": 0.0, "prescore_usd_saved": 0, "pct_saved": 0.0,
- "anchors": {"worst": 0, "best": null, "saturation": null, "source": "none"}}
+{"reward": 0.0, "prescore_usd_saved": 0, "pct_saved": 0.0}
 ```
 
-With calibration, `anchors` holds numeric `worst`, `best`, `saturation` and a
-`source` identifying model calibration, such as `"panel"`. Invalid submission still returns terminal
+Invalid submission still returns terminal
 grade fields with `valid: false`, `feasible: false` and no standards. Public errors
 are stable messages; native exceptions and paths remain in private diagnostics.
 Live episodes retain at most 256 steps and 256 diagnostic entries, each diagnostic
@@ -230,34 +228,22 @@ in USD/year. An invalid, infeasible or absent submission has prescore sentinel
 zero for a failed submission. Best-known search cost is contextual, never a
 claim of a proven optimum.
 
-For prescore `x`, per-task anchors `w = worst = 0`, `b = best > w`, and
-`s = saturation = b + 3 * (b - w)`, the hyperbolic calibration is:
+For a feasible graded submission, `reward = prescore_usd_saved / cost(draft)`.
+It is the saved fraction, and `pct_saved = 100 * reward`. The draft cost must be
+finite and positive. Core maps missing/non-finite prescores and gate failures to
+zero and bounds numeric rewards to [0,1]. No anchors or calibration are used or
+returned. A score of 1.0 would mean zero annualized cost; the uncontrolled design
+fails a standard, so it cannot earn that grade.
 
-```text
-x <= w:       0
-w < x < b:    0.4 * (x - w) / (b - w)
-x >= b:       0.4 + 1.2 * (x - b) / (s - b + 2 * (x - b))
-```
+Repeat reports may compare a task's mean saved fraction with the best observed
+model saved fraction. This secondary ratio is undefined when no positive saving
+was observed, and never changes the reward. See [eval/REPEATS.md](eval/REPEATS.md).
 
-The best anchor scores 0.4, saturation scores 0.8, and reward tends toward 1.0 as
-savings grow; the formula has no attainable 1.0 target. Later improvements beyond
-the anchor still earn more. Core maps missing/non-finite prescores to zero and
-clips the numeric result to [0,1]. Missing anchors are exposed as null `best` and
-`saturation` with `source: "none"`: all rewards are then zero, while measured USD
-saved remains available. No unmeasured anchor is filled in.
-
-Both train and eval anchors come only from model calibration runs on each task.
-`best` is the highest feasible model savings; search and baselines never supply
-anchors. TODO: run calibration on every task, rescore and freeze anchors, and
-publish model results. A task without a positive model-calibration result remains
-uncalibrated with `source: "none"`; there is no search fallback.
-
-Reproduce the formula, sentinel and anchor handling:
+Reproduce the formula and sentinel handling:
 
 ```bash
-nl -ba envs/permit/core/permit_core/reward.py
-nl -ba envs/permit/openenv/permit_openenv/tasks.py | sed -n '66,76p'
-nl -ba envs/permit/openenv/permit_openenv/environment.py | sed -n '178,197p'
+cat envs/permit/core/permit_core/reward.py
+sed -n '180,200p' envs/permit/openenv/permit_openenv/environment.py
 ```
 
 ## What differs from v1
@@ -268,7 +254,7 @@ nl -ba envs/permit/openenv/permit_openenv/environment.py | sed -n '178,197p'
 | NO2 | Published mix of PVMRM and ARM2 | ARM2 throughout; feasible sets can differ and draft admission is rechecked |
 | Height choice | Continuous within physical/GEP bounds | Returned discrete menu |
 | Evaluation budget | 75 native launches, equivalent to 25 three-pollutant evaluations | 30 evaluations; checks free; submission separate |
-| Score | Raw USD/year saved; failure floor −1 | USD savings prescore plus per-task hyperbolic reward; failed grade and draft reward zero |
+| Score | Raw USD/year saved; failure floor −1 | USD savings prescore plus saved-fraction reward; failed grade and draft reward zero |
 
 Facilities, costs, backgrounds, weather and receptors are reused. Limitations:
 one control ladder per source, one stack price per facility, flat terrain,

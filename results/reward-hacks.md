@@ -62,8 +62,7 @@ report described an actual exploit or that every fix was independently replayed
 for this ledger. Some reports show false rejection, misleading diagnostics, weak
 reference policies, or inconsistent experimental claims. A feasible cheap design
 beating a weak reference is valid engineering, not evidence of bypassing physics.
-V1 paid raw annual savings and used a negative failure floor; v2 uses calibrated
-reward. Scores on those scales must not be compared directly.
+V1 paid raw annual savings and used a negative failure floor; v2 uses the feasible saved fraction of draft cost and zero for failures. Scores on those scales must not be compared directly.
 
 All defect IDs below refer to entries in the public evidence JSON, including
 first/last observation, discovery and repair stages, event history, closure
@@ -127,20 +126,20 @@ sed -n '186,201p' convert/v1-src/shared/tests/selfcheck.py
 
 | Finding | What could go wrong / how found | V1 closure or reason retained | Status | V2 status |
 |---|---|---|---|---|
-| `DEF-31d40c0d2e75803d` | Red-team constant policies beat a reference that returned the unchanged draft. The report did not establish that native feasibility was bypassed. | Archived closed after probe replay; no closure narrative recorded. The final reference performs trial-time search rather than treating draft cost as the frontier. | Closed | Still applies as a benchmark-strength question. Feasible constant designs may legitimately save money. [test_baselines.py](../envs/permit/core/tests/test_baselines.py) covers policies; it is not a proof that they score low after model calibration. |
-| `DEF-fe02a17df96e5338` | Red-team probe earned savings from a small change to a public starting design. The historical report called this leakage/reward shaping but supplied no proof of a physics bypass. | Archived closed after replay; no closure narrative recorded. Final v1 pays exact feasible savings, without normalizing to a claimed optimum. | Closed | Still applies as a headroom measurement, not an automatic exploit. [test_reward.py](../envs/permit/core/tests/test_reward.py) guards gating and calibration. |
+| `DEF-31d40c0d2e75803d` | Red-team constant policies beat a reference that returned the unchanged draft. The report did not establish that native feasibility was bypassed. | Archived closed after probe replay; no closure narrative recorded. The final reference performs trial-time search rather than treating draft cost as the frontier. | Closed | Still applies as a benchmark-strength question. Feasible constant designs may legitimately save money. [test_baselines.py](../envs/permit/core/tests/test_baselines.py) covers policies; it is not a proof that they save only a small fraction of draft cost. |
+| `DEF-fe02a17df96e5338` | Red-team probe earned savings from a small change to a public starting design. The historical report called this leakage/reward shaping but supplied no proof of a physics bypass. | Archived closed after replay; no closure narrative recorded. Final v1 pays exact feasible savings, without normalizing to a claimed optimum. | Closed | Still applies as a headroom measurement, not an automatic exploit. [test_reward.py](../envs/permit/core/tests/test_reward.py) guards failure gating and saved-fraction arithmetic. |
 | `DEF-805f428aad176769` | Full-bind replay found a fixed maximum-control/minimum-height policy beat a reference that omitted that starting corner. | Reference now evaluates both height corners independently before descent and fresh replay. | Closed | Still applies to reference quality. Search and baselines are diagnostics; they never define reward anchors. [test_baselines.py](../envs/permit/core/tests/test_baselines.py) covers the lifted search. |
-| `DEF-275e58939979b3ce`, `DEF-278f20c7716820dd` | Review and change audit found the nominal search reference silently fell back to the unchanged draft because a prepared ledger was absent. | Closure narratives record replacement with a trial-time search using the public metered service; the older prepared-ledger remedy was superseded. | Closed | Still applies to claims about reference quality. V2 uses full verification and model-derived anchors, with missing-anchor behavior guarded by [test_reward.py](../envs/permit/core/tests/test_reward.py). |
+| `DEF-275e58939979b3ce`, `DEF-278f20c7716820dd` | Review and change audit found the nominal search reference silently fell back to the unchanged draft because a prepared ledger was absent. | Closure narratives record replacement with a trial-time search using the public metered service; the older prepared-ledger remedy was superseded. | Closed | Still applies to claims about reference quality. V2 uses full native verification and saved fraction, with failure gating and arithmetic guarded by [test_reward.py](../envs/permit/core/tests/test_reward.py). |
 | `DEF-9e35581212cb8e94`, `DEF-bd91d5719db4a484` | Mechanical tests found the reference and no-op both failed; reference materialization expected an absent prepared ledger. A broken reference erased meaningful comparisons. | Archived closed; no individual closure narrative recorded. Final reference entrypoint performs trial-time search. | Closed | Still applies to baseline reliability; [test_baselines.py](../envs/permit/core/tests/test_baselines.py) exercises policy behavior, not all historical trial infrastructure. |
 | `DEF-a921d60239a00356` | Review found unreachable models reduced an ostensibly interactive task to blind edits of an expensive draft. | Packaged local transport restored model access and persistent accounting. | Closed | Guarded for ordinary tool flow by [test_integration_records.py](../envs/permit/openenv/tests/test_integration_records.py); deployment availability still matters. |
 | `DEF-0edaac74fa140fa7` | Repair/review found a valid corner policy conflicted with requirements that the fixed reference dominate probes. This was a reference-definition conflict, not evidence of invalid physics admission. | Archived closed at specification review; no closure narrative recorded. | Closed | Still applies when interpreting model and naive-policy comparisons. V2 promises no optimum or dominance ceiling. |
-| `DEF-a818ae726243895d` | Review found a proposed draft-headroom threshold missing from the acceptance checks. A near-optimal draft could make the task trivial. | Waiver treats richness as a diagnostic rather than a gate, citing strong savings in the recorded pilot matrix. The waiver is evidence of the decision, not a newly reproduced result. | Waived | Still applies as a diagnostic limitation. Current admission and calibration must not be described as a richness guarantee. |
+| `DEF-a818ae726243895d` | Review found a proposed draft-headroom threshold missing from the acceptance checks. A near-optimal draft could make the task trivial. | Waiver treats richness as a diagnostic rather than a gate, citing strong savings in the recorded pilot matrix. The waiver is evidence of the decision, not a newly reproduced result. | Waived | Still applies as a diagnostic limitation. Current admission and saved-fraction grading must not be described as a richness guarantee. |
 | `DEF-262add11c7d465cd` | Later review repeated the missing headroom-threshold concern. | Deferred to discovery/review; no specific reason recorded. It remains deferred even though the related earlier finding was waived. | Deferred | Still applies; no new headroom gate was added by this ledger. |
 | `DEF-81845201ffc2bbdc` | Review found the search assumed source-specific none/moderate/maximum IDs that the generic control schema did not guarantee. | Waiver says the actual trial search requires these IDs and fails loudly if absent, with pilot and full-bind checks as protection. It does not generalize the search to arbitrary menus. | Waived | Still applies to reuse beyond the fixed control ladder. [test_baselines.py](../envs/permit/core/tests/test_baselines.py) covers this dataset's policies. |
 | `DEF-2f2c931ca743cb23` | Later review repeated the named-control/schema mismatch. | Deferred to discovery/review; no specific reason recorded. Kept separately from the earlier waiver. | Deferred | Still applies as a generic-menu limitation; the current benchmark discloses its single control ladder. |
-| `DEF-6a726d396d400830` | Review found incompatible requirements for a trial-time reference versus an author-time prepared ledger and comparator dominance. | Deferred to discovery/review; no specific reason recorded. Final implementation uses trial-time search, but the archived specification conflict was not closed. | Deferred | Still applies as historical specification debt. V2's documented model calibration is separate from search diagnostics. |
+| `DEF-6a726d396d400830` | Review found incompatible requirements for a trial-time reference versus an author-time prepared ledger and comparator dominance. | Deferred to discovery/review; no specific reason recorded. Final implementation uses trial-time search, but the archived specification conflict was not closed. | Deferred | Still applies as historical specification debt. V2's saved-fraction grading is independent of search diagnostics. |
 | `DEF-356400b8b8ee5b28` | Review found pilot saturation could pool models and budgets, overstating what one agent achieved under the normal allowance. | Waived because no grade or reward depends on that pilot statistic; the reason requires reporting a single-model panel at the normal budget when analysis is written. | Waived | Still applies to evaluation reporting. Pending model results cannot be replaced by pooled best-case diagnostic claims. |
-| `DEF-6fbe8d6498c3bc6c` | Review found fixed dollar diagnostic thresholds changed meaning with facility cost. | Archived closed; no closure narrative recorded. No numerical threshold repair is inferred here. | Closed | Still applies when comparing diagnostics; calibrated per-task reward and raw savings must both be disclosed. |
+| `DEF-6fbe8d6498c3bc6c` | Review found fixed dollar diagnostic thresholds changed meaning with facility cost. | Archived closed; no closure narrative recorded. No numerical threshold repair is inferred here. | Closed | Still applies when comparing diagnostics; saved fraction and raw USD savings must both be disclosed. |
 | `DEF-8306c051a5edc8f5`, `DEF-c7c56f27aff2b515` | Review found diagnostic metrics and thresholds drifted from the proposed excess-cost and budget-sensitivity tests. This could make a weak benchmark look informative. | Both archived closed; no closure narratives recorded. | Closed | Still applies to honest evaluation claims; no new model panel or diagnostic measurement is supplied here. |
 | `DEF-cc775ee04bc049a7` | Review found a coarse response-library search was compared against a much finer search, making the proposed nonadditivity check too weak. | Archived closed; no closure narrative recorded. | Closed | Still applies to numerical/search claims. V2 explicitly changes NO2 to ARM2; it does not claim v1 PVMRM is separable. See [DESIGN.md](../DESIGN.md). |
 
@@ -148,7 +147,7 @@ sed -n '186,201p' convert/v1-src/shared/tests/selfcheck.py
 
 | Finding | What could go wrong / how found | V1 closure | Status | V2 status |
 |---|---|---|---|---|
-| `DEF-380ccb063bc68770` | Review found withheld complete native draft input/output copied into public provenance files, bypassing the intended reconstruction work. | Archived closed without a narrative. Final preserved public instance omits that provenance directory and exposes draft statistics instead. | Closed | Closed by the tool interface for native-file reconstruction. Confidentiality of actual search results, calibration and backend paths remains a separate v2 audit concern. |
+| `DEF-380ccb063bc68770` | Review found withheld complete native draft input/output copied into public provenance files, bypassing the intended reconstruction work. | Archived closed without a narrative. Final preserved public instance omits that provenance directory and exposes draft statistics instead. | Closed | Closed by the tool interface for native-file reconstruction. Confidentiality of actual search results and backend paths remains a separate v2 audit concern. |
 | `DEF-8bb3ff5f9aee2263` | Review found complete public draft files and mutable values allowed a verbatim copy to pass despite an explicit reconstruction requirement. Passing the unchanged draft earned no savings. | Archived closed without a narrative. Final v1 public templates omit stack/source/downwash records; verifier copies remain complete. | Closed | Closed by the tool interface: draft reconstruction is intentionally no longer an agent obligation. V2's unchanged feasible draft earns zero; [test_environment.py](../envs/permit/openenv/tests/test_environment.py), `test_budget_exhaustion_and_submit_once`. |
 | `DEF-204672c5b5edb08b` | Review found a global withholding rule would hide necessary scenario inputs, making the task impossible rather than protecting a solution. | Archived closed; no closure narrative recorded. | Closed | Still applies as an input-visibility requirement. The public scenario allowlist is in [tasks.py](../envs/permit/openenv/permit_openenv/tasks.py); reset geometry currently exceeds the narrower review boundary described below. |
 
@@ -198,31 +197,38 @@ The completed coherence review found ordinary tool-based optimization working in
 its saved sample, including native submission, invalid-is-free checks, budget
 exhaustion and terminal submission behavior. It did **not** certify adversarial
 transport or deployment safety. This ledger records its conclusions; it does not
-rerun native models or claim the findings were repaired.
+rerun native models or claim the findings were repaired. The reward row is
+updated to the current saved-fraction contract; the other rows remain historical.
 
 | Surface | Review finding | Disposition recorded by that review |
 |---|---|---|
 | Reset disclosure | Reset returns full geometry, including receptor coordinates, beyond the review's narrower allowed initial view. Coordinates are not concentration fields or a hidden best design. | Open boundary finding; explicit decision or regression-backed fix is needed. |
-| Ordinary successful tool results | No observed pre-submit baseline/search/anchor or private field-array disclosure. | Limited observation and static allowlist review; populated calibration was not exercised. |
+| Ordinary successful tool results | No observed pre-submit baseline/search or private field-array disclosure. | Limited historical observation and static allowlist review; not a fresh boundary audit. |
 | Error details | Raw native/exception details may reveal backend paths or implementation information. | Open static risk; not dynamically induced. |
 | Sessions and shared playground | Ordinary independent MCP sessions worked; that did not establish shared playground isolation or resistance to hostile session access. | Untested deployment boundary. |
 | Request/history size | No application-level bound was established for request/record retention. | Open defensive resource risk; no exhaustion probe was run. |
 | Reset and disconnect | Reset starts a new budget as documented; scored-attempt harnesses must own reset. Disconnect did not finalize the private no-submit record. | Ordinary reset behavior observed; disconnect accounting remains open. |
 | Native authority | Sampled submitted fast/native standard summaries agreed; final grades used native verification. | Sample evidence, not a proof over all designs or a new fidelity measurement. |
-| Reward/calibration | Improved feasible sample designs retained zero reward because anchors were absent. | Model calibration pending; no comparative reward claim or search-anchor substitution. |
+| Reward (current saved-fraction rule) | A feasible graded submission earns `(draft_cost - submitted_cost) / draft_cost`; invalid, infeasible and missing submissions earn zero. Raw savings retain the failure sentinel. | The old coherence receipts predate this rule. Current arithmetic and failure gating are covered by [test_reward.py](../envs/permit/core/tests/test_reward.py) and [repeat/report tests](../eval/tests/test_saved_fraction_repeats.py); no new model results are claimed. |
 
 The review source is the local coherence report and its saved tool receipts.
 This is a review snapshot. Concurrent application changes and newly added
 regressions have not been revalidated here; this table must not be read as a
-fresh audit of those changes.
+fresh audit of those changes. Current reward checks (no model episodes):
+
+```sh
+uv run --directory envs/permit/core --no-sync pytest tests/test_reward.py -q
+uv run --project envs/permit/openenv --no-sync python -m pytest eval/tests/test_saved_fraction_repeats.py -q
+```
+
 Reproduce the source review without new physics runs:
 
 ```sh
 sed -n '1,27p;147,211p' internal/reports/*-coherence.md
 ```
 
-**Evaluation audit — pending.** Fill this section after model calibration and the
-frozen evaluation panel: measured lazy-policy rewards, invalid/infeasible/no-submit
+**Evaluation audit — pending.** Fill this section after the frozen evaluation
+panel: measured lazy-policy rewards, invalid/infeasible/no-submit
 failure categories, new attempted reward shortcuts, per-finding closure evidence,
 and any remaining loopholes. No model evaluation results are supplied here.
 

@@ -9,7 +9,7 @@ from train.cloud.storage import sync_command
 
 def test_cloud_training_never_loads_a_second_generator():
     cfg = CloudConfig(hourly_usd=2.75)
-    opts = training_options(cfg, 'grpo', Path('/tmp/output'), smoke=True)
+    opts = training_options(cfg, 'grpo', Path('runs/output'), smoke=True)
     assert opts['max_steps'] == 2
     assert opts['use_vllm'] is False
     assert opts['num_generations'] == 4
@@ -29,13 +29,13 @@ def test_missing_text_weights_fail_closed():
 
 
 def test_storage_paths_are_explicit_and_scoped():
-    assert sync_command(Path('/tmp/run'), 'hf://buckets/org/run/experiment') == [
-        'hf','sync','/tmp/run','hf://buckets/org/run/experiment']
-    command = sync_command(Path('/tmp/run'), 'hf://datasets/org/run/experiment')
-    assert command[:6] == ['hf','upload','org/run','/tmp/run','experiment','--repo-type']
+    assert sync_command(Path('runs/run'), 'hf://buckets/org/run/experiment') == [
+        'hf','sync','runs/run','hf://buckets/org/run/experiment']
+    command = sync_command(Path('runs/run'), 'hf://datasets/org/run/experiment')
+    assert command[:6] == ['hf','upload','org/run','runs/run','experiment','--repo-type']
     for uri in ['org/run','hf://datasets/org/run','hf://buckets/org/run/../root']:
         with pytest.raises(ValueError):
-            sync_command(Path('/tmp/run'), uri)
+            sync_command(Path('runs/run'), uri)
 
 
 def test_text_backbone_mapping_matches_multimodal_checkpoint_on_cpu(tmp_path):

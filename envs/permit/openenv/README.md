@@ -48,10 +48,10 @@ Use `{ "S1": { "control": "S1_moderate", "height_m": 45.0 }, ... }` with the act
 menus returned for the task. Public costs are JSON numbers; core cost arithmetic
 and savings are Decimal. Rubric children are `feasible` and `cost_quality`.
 
-The reward calls `permit_core.reward` with task anchors; missing anchors are
-reported as `{worst: 0, best: null, saturation: null, source: "none"}` and give zero
-reward while preserving actual USD saved. No anchors are invented. Invalid or
-infeasible submission has prescore −1. A feasible unchanged draft has prescore 0.
+The reward calls `permit_core.reward` with exact savings and draft cost, returning
+the saved fraction. Invalid or infeasible submissions have prescore −1 and reward
+zero; a feasible unchanged draft has prescore and reward zero. No anchors are
+returned or required. USD/year savings and `pct_saved` remain available.
 
 Run the complete suite, including the native smoke (no key or model):
 

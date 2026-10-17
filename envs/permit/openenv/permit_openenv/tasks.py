@@ -47,15 +47,6 @@ class Task:
         return replace(scenario, height_menu=menu)
 
     @property
-    def anchors(self) -> dict:
-        anchors = self.record.get('anchors') or self.scenario.task.get('anchors')
-        if not anchors or anchors.get('best') is None:
-            return {'worst': 0, 'best': None, 'saturation': None, 'source': 'none'}
-        from permit_core.reward import Anchors
-        result = Anchors.from_dict(anchors).to_dict()
-        return {k: float(v) if k != 'source' else v or 'none' for k, v in result.items()}
-
-    @property
     def draft_cost(self) -> Decimal:
         return cost(self.scenario.draft_design, self.scenario.task)
 

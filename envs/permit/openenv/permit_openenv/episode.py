@@ -16,14 +16,14 @@ MAX_STEPS = 256
 MAX_DIAGNOSTICS = 256
 MAX_DIAGNOSTIC_CHARS = 8192
 PUBLIC_KEYS = {'valid', 'errors', 'error', 'feasible', 'cost', 'standards', 'backend', 'note',
-               'evaluations_left', 'reward', 'prescore_usd_saved', 'pct_saved', 'anchors'}
+               'evaluations_left', 'reward', 'prescore_usd_saved', 'pct_saved'}
 
 
 def public_result(result: dict) -> dict:
     # Scenario is constructed by Task.view; backend result dictionaries are allowlisted.
     if 'draft_design' in result:
         return result
-    return {k: v for k, v in result.items() if k in PUBLIC_KEYS and (k != 'anchors' or 'reward' in result)}
+    return {k: v for k, v in result.items() if k in PUBLIC_KEYS}
 
 
 def utc_now() -> str:

@@ -215,13 +215,12 @@ def run_tasks(tasks: Path, cache: Path, *, jobs: int = 1, only: list[str] | None
 def report(rows: list[dict], cache: Path, output: Path) -> None:
     lines = ['# PermitForge baselines', '',
              'Best-known search cost uses the supplied fast fields and a final ARM2 native check. '
-             'Search and baselines are diagnostics, independent of admission and reward calibration.', '',
+             'Search and baselines are diagnostics, independent of admission.', '',
              'Means cover completed tasks only; missing tasks are excluded and counted. '
              'Infeasible/no-submit savings use sentinel -1 in JSON and contribute zero USD and zero % to means. '
              'Mean % saved is the mean of per-task percentages, not a ratio of sums. '
              'Evaluation counts exclude final native verification. Search seconds include it.', '',
-             'Reward anchors come only from model calibration on each task in both splits; '
-             'rewards remain pending until those anchors exist. Reward means require anchors for every included task.', '',
+             'Reward is the feasible fraction of draft cost saved; failed submissions score zero.', '',
              'Reproduce: `uv run --project envs/permit/core python convert/run_baselines.py '
              '--tasks envs/permit/tasks --report`.', '']
     for split in ('train', 'eval'):
@@ -242,16 +241,14 @@ def report(rows: list[dict], cache: Path, output: Path) -> None:
                 percentages.append(100*saved/data['draft_cost'])
                 if feasible:
                     feasible_costs.append(result['cost'])
-                anchors = row.get('anchors')
-                if anchors and anchors.get('source') in {'panel', 'calibration'}:
-                    rewards.append(reward(result['usd_saved'] if feasible else -1, anchors))
+                rewards.append(reward(result['usd_saved'] if feasible else -1, data['draft_cost']))
             def mean(values: list) -> str:
                 return f'{sum(values)/len(values):.4f}' if values else 'pending'
             label = 'best-known search' if name == 'search' else name
             rate = f'{len(feasible_costs)/len(available):.4f}' if available else 'pending'
-            calibrated = mean(rewards) if len(rewards) == len(available) else 'pending'
+            mean_reward = mean(rewards) if len(rewards) == len(available) else 'pending'
             lines.append(f'| {label} | {mean(savings)} | {mean(percentages)} | {rate} | '
-                         f'{calibrated} | {mean(feasible_costs)} |')
+                         f'{mean_reward} | {mean(feasible_costs)} |')
         closed = sum(d['search']['closed'] for _, d in available)
         lines += ['', f'Search trees closed: {closed} / {len(available)}. '
                   'Closed describes the fast-field search; final feasibility is checked by the native verifier.', '']

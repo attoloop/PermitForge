@@ -16,9 +16,9 @@ MCPToolClient WebSocket session. Native work runs in a thread without blocking
 the ASGI loop and retains terminal state even if submission fails.
 
 A valid evaluation spends its budget, including on infrastructure failure;
-malformed designs do not. Missing calibration yields zero reward and preserves
-measured savings with anchor source `none`. Model calibration on both splits
-remains TODO; search and baseline results never supply reward anchors.
+malformed designs do not. Reward is the feasible saved fraction of draft cost;
+failed submissions and no submission score zero. Search and baseline results
+remain diagnostics, with no calibration prerequisites.
 
 Fast evaluation acquires an on-demand float64 field-pack lease and releases it
 after each call. Shared locks prevent duplicate builds and eviction of active

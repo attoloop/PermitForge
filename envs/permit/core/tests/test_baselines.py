@@ -95,9 +95,8 @@ def test_v1_final_disagreement_is_not_a_result():
         v1_coordinate_descent(view, tool)
 
 
-def test_gate_failures_and_calibrated_monotonicity():
-    anchors = {'worst': 0, 'best': 10, 'saturation': 40}
-    scores = [reward(x, anchors) for x in (-1, 0, 1, 5, 10, 20, 40, 100)]
+def test_gate_failures_and_saved_fraction_monotonicity():
+    scores = [reward(x, 100) for x in (-1, 0, 1, 5, 10, 20, 40, 100)]
     assert scores == sorted(scores)
     assert scores[:2] == [0, 0]
 

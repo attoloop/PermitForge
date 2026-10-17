@@ -431,7 +431,9 @@ The OpenEnv adapter follows PortSim's structure in the FineEnvs repository
 order. Physical grading comes from the published PermitForge v1 grader; exact
 function origins are listed in [the core README](envs/permit/core/README.md).
 
-The reward function originates in `club-mix/clubmix/calibration.py`; a preserved
-function snapshot is in `envs/permit/core/tests/fixtures/calibration.py.txt`.
-The faithful-source test compares the implementation with that snapshot.
-Reproduce with `uv run --directory envs/permit/core pytest tests/test_source_lift.py -q`.
+The v2 reward is the saved fraction: feasible annual USD saved divided by the
+native-verified draft cost, with zero for a failed or missing submission. It is
+implemented in `envs/permit/core/permit_core/reward.py`; raw savings and exact
+cost retain the published v1 grader's provenance. This normalization is local
+PermitForge code, with no external reward helper or source snapshot.
+Reproduce with `uv run --directory envs/permit/core --no-sync pytest tests/test_reward.py -q`.

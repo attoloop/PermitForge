@@ -55,7 +55,7 @@ def test_recording_sessions_and_mcp_only_gateway(pack, monkeypatch):
                 usage=SimpleNamespace(input_tokens=1, output_tokens=1))
             result = run_anthropic(first, 'anthropic:claude-sonnet-5-5',
                 api=SimpleNamespace(messages=SimpleNamespace(create=lambda **kw: response)))
-            assert result['final']['feasible'] and result['final']['anchors']['source'] == 'none'
+            assert result['final']['feasible'] and 'anchors' not in result['final']
             assert result['steps'][-1]['receptor_values']
 
 

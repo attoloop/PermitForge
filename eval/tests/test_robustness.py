@@ -108,11 +108,11 @@ def test_failed_future_does_not_hide_later_submission_or_abort_panel(tmp_path, m
     index = json.loads((tmp_path/'index.json').read_text())
     assert all(r['ended'] == 'submitted' for r in index['episodes'])
     assert len(index['infrastructure_attempts']) == 2
-    failures = list(tmp_path.glob('*/a/attempts/episode-*/attempt.json'))
+    failures = list(tmp_path.glob('*/a/r1/attempts/episode-*/attempt.json'))
     failed = next(json.loads(p.read_text()) for p in failures if 'bad' in str(p))
     assert failed['status'] == 'infrastructure' and 'RuntimeError: driver broke' in failed['traceback']
     assert not (tmp_path/model_slug('codex:bad')/'a.json').exists()
-    assert (tmp_path/model_slug('codex:bad')/'a/attempts/episode-0001/raw/partial.txt').exists()
+    assert (tmp_path/model_slug('codex:bad') /'a/r1/attempts/episode-0001/raw/partial.txt').exists()
 
 
 def test_resume_retries_infrastructure_at_most_twice(tmp_path):
@@ -124,7 +124,7 @@ def test_resume_retries_infrastructure_at_most_twice(tmp_path):
         run_panel(tmp_path, TASKS, ['codex:bad'], broken)
     assert calls == ['a', 'a', 'a']
     assert records([tmp_path]) == []
-    assert len(list(tmp_path.glob('*/*/attempts/episode-*/attempt.json'))) == 3
+    assert len(list(tmp_path.glob('*/*/r1/attempts/episode-*/attempt.json'))) == 3
     assert json.loads((tmp_path/'index.json').read_text())['infrastructure_attempts'][-1]['retryable'] is False
 
 
@@ -145,7 +145,7 @@ def test_checkpoint_after_submission_survives_driver_exception(tmp_path):
     run_panel(tmp_path, TASKS, ['codex:m'], interrupted)
     run_panel(tmp_path, TASKS, ['codex:m'], lambda *a: pytest.fail('repeated submission'))
     assert records([tmp_path])[0][1]['final']['feasible']
-    assert 'after grade' in next(tmp_path.glob('*/*/attempts/episode-*/attempt.json')).read_text()
+    assert 'after grade' in next(tmp_path.glob('*/*/r1/attempts/episode-*/attempt.json')).read_text()
 
 
 def test_records_ignore_incomplete_cleanup_no_submit(tmp_path):
@@ -181,7 +181,7 @@ def test_repair_pilot_ordering_preserves_grade_and_archives_failures(tmp_path):
 
 def test_hard_crash_checkpoint_is_not_a_grade_and_resume_recovers(tmp_path):
     from eval.attempts import recover
-    root = tmp_path/model_slug('codex:m')/'a/attempts/episode-0001'
+    root = tmp_path/model_slug('codex:m') /'a/r1/attempts/episode-0001'
     value = episode()
     value.update(final=None, ended='no_submit', attempt_complete=False)
     write_json(root/'checkpoint.json', value)
@@ -213,7 +213,7 @@ def test_anthropic_caught_exception_is_infrastructure_with_traceback(tmp_path):
             api=SimpleNamespace(messages=SimpleNamespace(create=crash)))
     run_panel(tmp_path, TASKS, ['anthropic:claude-sonnet-5-5'], driver, budget_usd=10)
     assert records([tmp_path]) == []
-    failure = json.loads(next(tmp_path.glob('*/*/attempts/episode-*/attempt.json')).read_text())
+    failure = json.loads(next(tmp_path.glob('*/*/r1/attempts/episode-*/attempt.json')).read_text())
     assert 'ValueError: provider driver bug' in failure['traceback']
 
 
@@ -243,7 +243,7 @@ def test_cli_bad_server_and_missing_tasks_never_launch(monkeypatch, tmp_path, ca
     monkeypatch.setattr(preflight, 'drivers', lambda models: {})
     monkeypatch.setenv('PERMIT_EVAL_TOKEN', 'private-test-token')
     monkeypatch.setattr(run_eval, 'run_panel', lambda *a, **kw: pytest.fail('episode launched'))
-    arguments = ['run_eval', '--run', 'test', '--models', 'codex:m', '--server', 'http://test.invalid',
+    arguments = ['run_eval', '--run', 'test', '--models', 'codex:gpt-6.1-sol', '--server', 'http://test.invalid',
                  '--output-root', str(tmp_path)]
     monkeypatch.setattr('sys.argv', arguments + ['--tasks', 'missing-task'])
     with pytest.raises(SystemExit) as exc:
@@ -267,7 +267,7 @@ def test_malformed_driver_results_are_infrastructure_and_other_tasks_continue(tm
         return result if task['task_id'] == 'a' else episode(model, task['task_id'])
     run_panel(tmp_path, tasks, ['codex:m'], driver)
     assert [r['task_id'] for _, r in records([tmp_path])] == ['b']
-    attempt = json.loads(next(tmp_path.glob('*/a/attempts/episode-*/attempt.json')).read_text())
+    attempt = json.loads(next(tmp_path.glob('*/a/r1/attempts/episode-*/attempt.json')).read_text())
     assert attempt['status'] == 'infrastructure' and 'Traceback' in attempt['traceback']
 
 
@@ -277,7 +277,7 @@ def test_harness_interruption_saves_traceback_and_all_completed_checkpoints(tmp_
         raise KeyboardInterrupt('harness stopped')
     with pytest.raises(KeyboardInterrupt):
         run_panel(tmp_path, TASKS, ['codex:m'], interrupted)
-    attempt = json.loads(next(tmp_path.glob('*/*/attempts/episode-*/attempt.json')).read_text())
+    attempt = json.loads(next(tmp_path.glob('*/*/r1/attempts/episode-*/attempt.json')).read_text())
     assert 'KeyboardInterrupt: harness stopped' in attempt['traceback']
     assert records([tmp_path])[0][1]['ended'] == 'submitted'
 
@@ -285,7 +285,7 @@ def test_harness_interruption_saves_traceback_and_all_completed_checkpoints(tmp_
 @pytest.mark.parametrize('status,finalized', [('running', True), ('infrastructure', False)])
 def test_recovery_finishes_interrupted_publication_without_retry(tmp_path, status, finalized):
     from eval.attempts import recover
-    root = tmp_path/model_slug('codex:m')/'a/attempts/episode-0001'
+    root = tmp_path/model_slug('codex:m') /'a/r1/attempts/episode-0001'
     value = episode()
     if finalized:
         value.update(final=None, ended='no_submit')

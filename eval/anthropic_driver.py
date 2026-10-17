@@ -11,6 +11,8 @@ from typing import Any, Callable
 from permit_openenv.prompts import INSTRUCTIONS, PROMPT_VERSION
 
 from .common import TOOLS, now
+from .settings import MAX_TOKENS, model_settings
+from .budget import BudgetExhausted, request_bound
 
 
 def prices() -> dict:
@@ -56,10 +58,11 @@ def transient(exc: Exception) -> bool:
 
 
 def run_anthropic(session: Any, model: str, *, api: Any = None, max_turns: int = 40,
-                  max_tokens: int = 4096, wall_clock: float = 1800,
-                  sleep: Callable[[float], None] = time.sleep) -> dict:
+                  max_tokens: int = MAX_TOKENS, wall_clock: float = 1800, effort: str = 'xhigh',
+                  sleep: Callable[[float], None] = time.sleep, hard_budget: Any = None) -> dict:
     model_id = model.removeprefix('anthropic:')
     request_cost(model_id, {})
+    sampling = model_settings(model, effort)
     if api is None:
         import anthropic
         api = anthropic.Anthropic(max_retries=0, timeout=min(1800, wall_clock))
@@ -94,9 +97,13 @@ def run_anthropic(session: Any, model: str, *, api: Any = None, max_turns: int =
                     raise TimeoutError('episode wall clock exhausted')
                 prefix = f'anthropic-{turn:04d}-{attempt+1}'
                 request = dict(model=model_id, system=INSTRUCTIONS, tools=tools,
-                               messages=messages, max_tokens=max_tokens, timeout=min(1800, remaining))
+                               messages=messages, max_tokens=max_tokens, timeout=min(1800, remaining),
+                               output_config=sampling['output_config'], thinking=sampling['thinking'])
                 if capture:
                     capture.raw_json(prefix+'-request.json', request)
+                budget_key = str(capture.root) + '/' + prefix if capture else model+'/'+started+'/'+prefix
+                if hard_budget is not None:
+                    hard_budget.reserve(budget_key, request_bound(model_id, max_tokens))
                 try:
                     if capture and hasattr(api.messages, 'with_raw_response'):
                         wire = api.messages.with_raw_response.create(**request)
@@ -120,6 +127,8 @@ def run_anthropic(session: Any, model: str, *, api: Any = None, max_turns: int =
                     sleep(min(2**attempt, max(0, deadline-time.monotonic())))
             u = plain(response.usage)
             usd = request_cost(model_id, u)
+            if hard_budget is not None:
+                hard_budget.settle(budget_key, usd)
             usage['requests'].append({**u, 'usd': usd})
             usage['input_tokens'] += u.get('input_tokens', 0)+(u.get('cache_read_input_tokens', 0) or 0)+(u.get('cache_creation_input_tokens', 0) or 0)
             usage['output_tokens'] += u.get('output_tokens', 0)
@@ -155,7 +164,10 @@ def run_anthropic(session: Any, model: str, *, api: Any = None, max_turns: int =
     except Exception as exc:
         ended, error = 'error', {'type': type(exc).__name__, 'message': str(exc)[:800]}
         trace = traceback.format_exc()
-        infrastructure_error = not (isinstance(exc, TimeoutError) and str(exc) == 'episode wall clock exhausted')
+        infrastructure_error = not (isinstance(exc, BudgetExhausted) or
+                                    isinstance(exc, TimeoutError) and str(exc) == 'episode wall clock exhausted')
+        if isinstance(exc, BudgetExhausted):
+            ended = 'no_submit'
         retryable = transient(exc) and not session.submit_attempted
         if type(exc).__name__ in ('APITimeoutError', 'APIConnectionError', 'ReadTimeout'):
             usage.update(known_usd=usage['usd'], usd=None, billing_incomplete=True)
@@ -167,8 +179,9 @@ def run_anthropic(session: Any, model: str, *, api: Any = None, max_turns: int =
     record.update(model=model, prompt_version=PROMPT_VERSION, started_at=started, finished_at=record.get('finished_at') or now(),
                   turns=turn, ended=ended, usage=usage, retries=retries, model_trace=model_trace,
                   error=error, retryable=retryable, submit_attempted=session.submit_attempted,
-                  error_type='infrastructure' if infrastructure_error else 'timeout' if error else None,
+                  error_type='budget' if error and error['type'] == 'BudgetExhausted' else
+                             'infrastructure' if infrastructure_error else 'timeout' if error else None,
                   infrastructure_error=infrastructure_error, traceback=trace,
-                  settings={'max_turns': max_turns, 'max_tokens': max_tokens, 'wall_clock': wall_clock,
+                  settings={**sampling, 'max_turns': max_turns, 'max_tokens': max_tokens, 'wall_clock': wall_clock,
                             'temperature': 'provider-default', 'evaluate_budget': 30, 'prices': prices()[model_id]})
     return record

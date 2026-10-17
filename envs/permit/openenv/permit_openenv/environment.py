@@ -190,11 +190,9 @@ class PermitForgeEnvironment(MCPEnvironment):
         exact_cost = cost(to_ledger(design), task.scenario.task) if checked['valid'] else None
         verified = Verification(feasible=bool(result.get('feasible')), cost=exact_cost)
         saved = prescore(verified, task.scenario)
-        anchors = task.anchors
-        score = reward(saved, anchors) if anchors['best'] is not None else 0.0
+        score = reward(saved, task.draft_cost)
         result.update(reward=score, prescore_usd_saved=float(saved),
                       pct_saved=float(100 * saved / task.draft_cost) if verified.feasible else 0.0,
-                      anchors=anchors,
                       evaluations_left=EVALUATE_BUDGET-self._state.evaluations_used)
         return result
 

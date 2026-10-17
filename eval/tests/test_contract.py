@@ -9,7 +9,8 @@ from eval.common import model_slug, write_json
 from eval.anthropic_driver import run_anthropic, prices, request_cost
 from eval.run_eval import Budget, run_panel
 from eval.report import summarize, cluster_ci, paired
-from eval.calibrate import calibrate
+from eval.best_observed import best_observed
+from eval.common import records
 from eval.rescore import rescore_record
 
 
@@ -126,42 +127,34 @@ def episode(model='codex:m', task='a', saved=20, station='X', feasible=True):
             'started_at': 'start', 'finished_at': 'end', 'steps': [{'tool': 'submit_design', 'args': {'design': {}}}],
             'ended': 'submitted', 'turns': 2, 'evaluations_used': 1,
             'final': {'valid': True, 'feasible': feasible, 'prescore_usd_saved': saved if feasible else -1,
-                      'pct_saved': saved if feasible else 0, 'reward': .4,
-                      'anchors': {'worst': 0, 'best': 20, 'saturation': 80, 'source': 'panel'}},
+                      'pct_saved': saved if feasible else 0, 'reward': saved/100 if feasible else 0},
             'usage': {'input_tokens': 1, 'output_tokens': 2, 'usd': None}}
 
 
-def test_cluster_report_paired_and_missing_anchors():
+def test_cluster_report_paired_and_ignores_legacy_anchors():
     records = [episode(task='a'), episode(task='b', saved=0, station='Y', feasible=False)]
     records[1]['final']['reward'] = 0
     row = summarize(records)
     assert row['mean_usd_saved'] == 9.5  # raw infeasible sentinel is retained
-    assert row['feasible'] == .5 and row['mean'] == .2
-    assert row['ci95'] == [0, .4] and row['station_clusters'] == 2
+    assert row['feasible'] == .5 and row['mean'] == .1
+    assert row['ci95'] == [0, .2] and row['station_clusters'] == 2
     assert row['failure_categories']['infeasible'] == 1
     records[0]['final']['anchors'] = {'source': 'none', 'best': None}
-    assert summarize(records)['mean'] is None
+    assert summarize(records)['mean'] == .1
     assert cluster_ci([1, 3], ['X', 'X']) is None
     assert paired([episode()], [episode(model='codex:n', saved=10)])['mean_usd_saved_delta'] == 10
 
 
-def test_calibration_model_only_frozen_and_no_search_fallback(tmp_path):
+def test_best_observed_never_changes_task_files(tmp_path):
     run = tmp_path/'run'
     write_json(run/'m'/'a.json', episode())
     write_json(run/'n'/'a.json', episode(model='codex:n', saved=40))
     tasks = tmp_path/'tasks.jsonl'
-    tasks.write_text('\n'.join(json.dumps({'task_id': t, 'search': {'usd_saved': 999}}) for t in ['a', 'b'])+'\n')
-    calibrate([run], [tasks], frozen_at='2026-10-17T00:00:00Z')
-    a,b = [json.loads(x) for x in tasks.read_text().splitlines()]
-    assert a['anchors']['best'] == 40 and a['anchors']['saturation'] == 160
-    assert a['anchors']['source'] == 'panel' and a['anchors']['frozen_at']
-    assert b['anchors'] == {'worst': 0, 'best': None, 'saturation': None, 'source': 'none'}
+    tasks.write_text(json.dumps({'task_id': 'a', 'search': {'usd_saved': 999}})+'\n')
     before = tasks.read_bytes()
-    calibrate([run], [tasks], frozen_at='later')
+    result = best_observed([r for _,r in records([run])])
+    assert result['a']['saved_fraction'] == .4
     assert tasks.read_bytes() == before
-    write_json(run/'n'/'a.json', episode(model='codex:n', saved=50))
-    with pytest.raises(ValueError, match='frozen'):
-        calibrate([run], [tasks])
 
 
 def test_rescore_uses_saved_submission_and_preserves_trace():
@@ -171,9 +164,9 @@ def test_rescore_uses_saved_submission_and_preserves_trace():
         calls.append(design)
         return {'valid': True, 'feasible': True, 'cost': 90, 'standards': [],
                 'receptor_values': {'x': [1]}, 'receptor_margins': {'x': [2]}}
-    task = SimpleNamespace(draft_cost=100, record={'anchors': {'worst': 0, 'best': 20, 'saturation': 80, 'source': 'panel'}})
+    task = SimpleNamespace(draft_cost=100, record={})
     out = rescore_record(rec, task, verify_fn=verify)
-    assert calls == [{}] and out['final']['reward'] == .2 and out['final']['prescore_usd_saved'] == 10
+    assert calls == [{}] and out['final']['reward'] == .1 and out['final']['prescore_usd_saved'] == 10
     assert out['steps'][0]['result'] == out['final']
     assert out['steps'][0]['receptor_values'] == {'x': [1]}
     assert out['rescore_history'][0]['final'] == rec['final']
@@ -218,14 +211,10 @@ def test_resume_never_regrades_failures_or_force(tmp_path):
         run_panel(tmp_path, tasks, ['codex:m'], fail, force=True)
 
 
-def test_calibration_excludes_baselines_drafts_and_infeasible(tmp_path):
-    write_json(tmp_path/'run'/'baseline'/'a.json', episode(model='baseline:draft', saved=999))
-    write_json(tmp_path/'run'/'m'/'a.json', episode(saved=0))
-    write_json(tmp_path/'run'/'n'/'a.json', episode(model='codex:n', saved=999, feasible=False))
-    p = tmp_path/'tasks.jsonl'
-    p.write_text(json.dumps({'id':'a'})+'\n')
-    calibrate([tmp_path/'run'], [p])
-    assert json.loads(p.read_text())['anchors']['source'] == 'none'
+def test_best_observed_excludes_baselines_and_infeasible():
+    result = best_observed([episode(model='baseline:draft', saved=999), episode(saved=0),
+                            episode(model='codex:n', saved=999, feasible=False)])
+    assert result['a']['saved_fraction'] == 0
 
 
 def test_rescore_infrastructure_failure_keeps_original():
@@ -255,17 +244,6 @@ def test_budget_rejects_nonfinite_and_resume_charges_unknown_spend(tmp_path):
     assert calls == ['a']
 
 
-def test_calibration_provenance_is_per_task(tmp_path):
-    for tid in ('a', 'b'):
-        write_json(tmp_path/'run'/'m'/(tid+'.json'), episode(task=tid))
-    p = tmp_path/'tasks.jsonl'
-    p.write_text(''.join(json.dumps({'id':tid})+'\n' for tid in ['a','b']))
-    calibrate([tmp_path/'run'], [p])
-    for row in map(json.loads, p.read_text().splitlines()):
-        assert len(row['anchor_runs']) == 1
-        assert row['anchor_runs'][0]['path'].endswith(row['id']+'.json')
-
-
 def test_interrupted_attempt_is_checkpointed_and_not_restarted(tmp_path):
     tasks = [{'task_id':'a','split':'eval','station':'X'}]
     def interrupted(model, task, checkpoint):
@@ -273,7 +251,7 @@ def test_interrupted_attempt_is_checkpointed_and_not_restarted(tmp_path):
         checkpoint(r)
         raise RuntimeError('process interrupted after grade')
     run_panel(tmp_path, tasks, ['codex:m'], interrupted)
-    r = json.loads(next((tmp_path/model_slug('codex:m')).glob('*.json')).read_text())
+    r = json.loads(next((tmp_path/model_slug('codex:m')).glob('*/r1/episode.json')).read_text())
     assert r['final']['feasible']
     def no_retry(*a, **kw):
         raise AssertionError('must not re-grade interrupted submitted attempt')

@@ -1,10 +1,10 @@
 # PermitForge baselines
 
-Best-known search cost uses the supplied fast fields and a final ARM2 native check. Search and baselines are diagnostics, independent of admission and reward calibration.
+Best-known search cost uses the supplied fast fields and a final ARM2 native check. Search and baselines are diagnostics, independent of admission.
 
 Means cover completed tasks only; missing tasks are excluded and counted. Infeasible/no-submit savings use sentinel -1 in JSON and contribute zero USD and zero % to means. Mean % saved is the mean of per-task percentages, not a ratio of sums. Evaluation counts exclude final native verification. Search seconds include it.
 
-Reward anchors come only from model calibration on each task in both splits; rewards remain pending until those anchors exist. Reward means require anchors for every included task.
+Reward is the feasible fraction of draft cost saved; failed submissions score zero.
 
 Reproduce: `uv run --project envs/permit/core python convert/run_baselines.py --tasks envs/permit/tasks --report`.
 

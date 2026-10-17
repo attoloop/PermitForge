@@ -1,190 +1,202 @@
-# PermitForge evaluation protocol
+# PermitForge final evaluation protocol
 
-Protocol version: WP2.0b / 2026-10-17. Freeze this file and each run's `run.json` before model sampling.
+Version WP2.8b, updated 2026-10-17. Freeze this file and `run.json` before sampling.
+This supersedes the earlier cohort, effort, output limit and scheduling decisions.
+The byte-identical pilot protocol is preserved as [PROTOCOL-pilot.md](PROTOCOL-pilot.md).
+Existing pilot rollouts remain untouched and cannot be imported into this protocol:
+the protocol hash and sampling settings differ. The operator launches all model work.
 
-## Cohort and attempts
+## Models and launch effort
 
-Use every eligible converted `permit-v2-eval` task, station-disjoint from train, with one attempt per model and task.
-The plan's upper bound is 130 eval tasks at five stations; actual coverage comes from the selected task records and is
-saved in `run.json` and the board. Train calibration uses the same rules. `--tasks` must name eligible members of the
-requested split. `--limit` selects a deterministic prefix, not a representative subset; explicitly record a
-station-stratified selection for a pilot or reduced panel. Report paired comparisons only on intersecting task IDs,
-and disclose each model's full coverage. Do not pool repeated model/task attempts across run names.
+| Launch flag (one value for all models) | Codex request | Anthropic request |
+|---|---|---|
+| `--effort medium` | `model_reasoning_effort="medium"`; wire `reasoning.effort="medium"` | `output_config={"effort":"medium"}` |
+| `--effort high` | `model_reasoning_effort="high"`; wire `reasoning.effort="high"` | `output_config={"effort":"high"}` |
+| `--effort xhigh` (default) | `model_reasoning_effort="xhigh"`; wire `reasoning.effort="xhigh"` | `output_config={"effort":"max"}` |
 
-The requested Anthropic models are `claude-opus-5-5`, `claude-sonnet-5-5`, and `claude-haiku-5-5`.
-The subscription driver accepts locally catalogued Codex models, including `gpt-6.1-sol` and `gpt-6-astra`.
-HF router execution is outside this work package. No API calls, paid pilots, or publication are authorized by this file.
-The operator must authorize spending before invoking a paid driver, including the plan's five-task cost pilot.
+The Codex models are `codex:gpt-6.1-sol` and `codex:gpt-6-astra`; Claude models are
+`anthropic:claude-opus-5-5` and `anthropic:claude-sonnet-5-5`. Anthropic names its
+highest level `max`; the launch value `xhigh` maps to `max` on Claude. At every
+effort level both Claude requests use
+`thinking={"type":"adaptive","display":"summarized"}`. Manual `enabled` thinking
+with `budget_tokens` is unsupported for these models. No beta header is needed.
+Effort is fixed across every request and repeat; temperature is provider-default.
+Sources checked 2026-10-17: [effort parameter and levels](https://platform.claude.com/docs/en/build-with-claude/effort),
+[manual-thinking migration](https://platform.claude.com/docs/en/build-with-claude/extended-thinking).
 
-## Locked interaction
+Keep the entire returned assistant content array unchanged when appending tool
+results, including thinking signatures and `redacted_thinking` blocks. Capture
+all returned summaries and opaque blocks; unreturned internal reasoning is not
+inferred. Explicit summarized display is necessary because these models otherwise
+omit readable thinking. Sources checked 2026-10-17:
+[thinking/display](https://platform.claude.com/docs/en/build-with-claude/thinking),
+[tool-use round trips](https://platform.claude.com/docs/en/build-with-claude/thinking-tool-workflows).
 
-The task is v2; `permit_openenv.prompts.INSTRUCTIONS` currently has `PROMPT_VERSION = 2`.
-Every run records that integer and the SHA-256 of the exact text. Both drivers use that text as the system instruction.
-Both expose exactly `get_scenario`, `check_design`, `evaluate_design`, and `submit_design`.
-The environment owns the evaluation budget (30), validity, costs, and terminal native verification.
-The harness does not approximate a grade. There are at most 40 model responses, provider-default temperature,
-and a default cap of 4096 output tokens per response. Overrides below the turn ceiling are diagnostic runs and must
-be disclosed; token caps, wall-clock seconds, provider price snapshot and concurrency are recorded.
-The default wall-clock allowance is 1800 seconds (30 minutes). A timeout never becomes a fresh graded attempt.
+Each provider response is capped at **32,768 output tokens**, **40 responses per
+episode**, **30 valid evaluations**, and **1,800 seconds wall clock**. Anthropic
+thinking counts inside `max_tokens`, including thinking not displayed; there is
+no separate thinking budget. Both Claude models support 128K output and a 1M
+context window; the evaluation deliberately sets the smaller common output cap.
+Sources checked 2026-10-17: [Opus specifications](https://platform.claude.com/docs/en/models/opus-5-5/overview),
+[Sonnet specifications](https://platform.claude.com/docs/en/models/sonnet-5-5/overview),
+[thinking token accounting](https://platform.claude.com/docs/en/build-with-claude/thinking-steering-and-cost).
+Reproduce settings: `uv run --no-sync python -c 'from eval.settings import EFFORTS,MODELS,model_settings,MAX_TOKENS; print(MAX_TOKENS,{e:{m:model_settings(m,e) for m in MODELS} for e in EFFORTS})'`.
+The final launcher rejects output-token limits other than 32,768.
 
-Anthropic uses the synchronous Messages API, with no requested caching, batch mode, fast mode or regional surcharge.
-SDK retries are disabled. Input, cached input, output and per-response cost are retained; aggregate input tokens include
-cache reads and writes. `prices.toml` records standard prices, their source and verification date, including Haiku's
-prompt-length tier and cache TTL categories. Sources: [Anthropic pricing](https://platform.claude.com/docs/en/about-claude/pricing)
-and the [Haiku pricing description](https://www.anthropic.com/claude/haiku), checked 2026-10-17.
-Unknown models are rejected before a request. Re-verify prices before a later panel.
+The Codex driver sets effort through CLI config and checks the outgoing request
+before forwarding it. Installed-CLI tests capture `reasoning.effort` against a
+local fake provider. Per-episode temporary CLI state avoids writes to the host's
+user-state directory; subscription authentication is a read-only symlink to the
+existing auth file. No model is used by those tests. Effort appears in raw
+requests/config, episode settings, manifest sampling, the protocol hash, and
+board labels (`gpt-6.1-sol@high`, `claude-opus-5-5@high`, or
+`claude-opus-5-5@max` for launch effort `xhigh`). `launch_effort` records the
+shared flag and `effort` records the provider's name in episode settings.
+`run.json` records the flag and per-model mapping in settings and sampling.
+`protocol_sha256` hashes these protocol bytes, a newline, and the sorted-key JSON
+sampling settings; `protocol_document_sha256` separately hashes this file alone.
+Changing effort changes the protocol hash and prevents resume/import pooling.
 
-## Isolation and recording
+## Model-free cohort
 
-Run the OpenEnv server in-process by default. The harness adds an authenticated `/eval/records/{episode_id}` sidecar
-for full Episode records. It requires a private bearer token and is never registered as a model tool.
-An external `--server` must run `python -m eval.transport` with `PERMIT_EVAL_TOKEN`; an ordinary server without the
-recording route is rejected before sampling. This avoids silently omitting SCHEMAS' record-only receptor arrays.
-Before opening any episode, startup imports every requested driver (including the Anthropic SDK), checks the
-Anthropic key's presence, checks Codex CLI availability and ChatGPT login, resolves eligible tasks, and verifies
-server health plus its authenticated `/eval/preflight` task inventory. Failures exit before creating run artifacts
-or resetting an environment; credentials and login output are never printed.
-Each episode gets its own OpenEnv session. A separate streamable HTTP MCP gateway exposes only that session's four tools;
-there is no reset, task-selection, filesystem, record-reading, or arbitrary HTTP tool on that gateway.
-The recording server forces `ENABLE_WEB_INTERFACE=false`, including when the caller sets it true. Scored runs
-never serve the shared Gradio playground. The public Space may keep `/web/` as a demo; it is not a scored endpoint.
-Reset carries the same public scenario as `get_scenario`; geometry and full receptor arrays remain private.
+`eval/select_tasks.py` writes `results/subsets.json`: 10 eval and 10 train tasks,
+with four independent repeats per model/task. It shortlists 30 tasks per split,
+stratified by station, using source count, native-draft standards near their
+limit, and an uncontrolled-at-GEP exceedance bound. The preserved manifest has
+no binding/exceedance metadata. The bound scales the uniform control ladder;
+NO2 uses the conservative ARM2 ratio range, rather than claiming linearity.
+Every structural feature, source file hash, candidate probe and selection group
+is retained. The exact rule and a card-ready paragraph are in `subsets.json`.
 
-Codex runs `codex exec -m MODEL --json` in a fresh temporary working directory, with user configuration ignored,
-project instructions disabled, shell/file-image tools and apps/plugins/browser/agents disabled. Authentication must
-be ChatGPT subscription login; API-key billing is rejected. The installed CLI's local model metadata is copied to a
-temporary catalog to select explicit function tools rather than Code Mode, deferred tool discovery, or Responses Lite.
-Model identity and reasoning defaults are retained. This is a disclosed harness adaptation, not a stock Codex coding session.
+For each candidate, on-demand float64 fields feed draft, cheapest-first greedy,
+v1 coordinate descent, search with a 60-second traversal allowance, and random_30
+with seeds 0 through 7. These are fast-field selection diagnostics, not native
+submission grades. The search reuses fast evaluations for its final candidate;
+its output is explicitly marked unverified. No model results or pilot membership
+are read. Failure savings are zero when computing hardness and variance.
 
-Disabling shell alone does not remove every built-in tool. Therefore the local subscription boundary also removes all
-non-PermitForge tool schemas, strips host/system/developer/skill context, installs the locked prompt, and forwards only
-the episode's assistant/tool conversation. It buffers each provider response and rejects unadvertised function calls
-before Codex can execute them. It counts model requests for the turn ceiling and sets the output-token cap.
-Only the fixed ChatGPT subscription endpoint is reachable through this boundary. Authorization headers are forwarded
-in memory and never saved. No general-purpose network tool is available to the evaluated model.
-Unsupported protocol/tool shapes fail closed. A changed CLI must pass the isolation suite again.
-
-The implementation is grounded in the installed `codex features list`, `codex exec --help`, its cached model metadata,
-and the [official configuration reference](https://learn.chatgpt.com/docs/config-file/config-reference).
-CLI event capture follows the [official non-interactive output documentation](https://learn.chatgpt.com/docs/non-interactive-mode)
-and [CLI reference](https://learn.chatgpt.com/docs/cli/reference), checked 2026-10-17.
-The tests run the installed CLI against a fake provider with a prompt requesting local file listing and
-`envs/permit/tasks` access, exercise an actual MCP tool, inspect the outgoing tool inventory, and separately inject
-forbidden file/shell calls to prove they never reach execution. No external model is used in those tests.
-
-Each episode directory is `results/rollouts/<run>/<model_slug>/<task_id>/`:
-
-- `episode.json`: SCHEMAS record with private geometry, retained tool steps, receptor arrays, grade and usage.
-- `transcript.jsonl`: ordered system/user/assistant messages, tool calls/results, timestamps and per-response usage.
-  Text and provider-returned thinking/reasoning blocks or summaries are retained in full; nothing unreturned is inferred.
-- `raw/`: Anthropic wire request/response JSON; Codex provider request/SSE responses, full CLI JSONL and stderr,
-  exact argv/config, stdin and the temporary model catalog. Request options are also retained before dispatch.
-- `env.log`: episode-specific receipt, field-preparation, evaluation timing and native-verification diagnostic lines.
-- `attempts/episode-NNNN/`: each infrastructure attempt's checkpoint, raw capture, transcript and environment log.
-  `attempt.json` records status, attempt number, error/traceback, usage, budget charge and whether resume may retry.
-  Request-level failures live inside that attempt's `attempts/` directory. Successful attempts retain their capture too.
-
-The live environment bounds retained steps/diagnostics; the append-only harness transcript is the complete conversation.
-Assistant text on each Episode step remains capped at 2000 characters; transcript and raw content are not truncated.
-The flat `<task_id>.json` remains a compatibility snapshot; readers prefer the canonical `episode.json` and never double count.
-Active checkpoints exist only inside an attempt directory. The collector publishes a canonical episode only when the
-driver completes normally or a checkpoint already contains an authoritative submission. Reports and calibration ignore
-unfinished legacy checkpoints (`attempt_complete:false`). Infrastructure attempts appear separately on the board and
-in the index; they do not count as failed designs or no-submissions. Every future is collected even if another driver fails.
-Per run, `run.json` records git commit/dirty status, prompt version/hash, protocol hash, models, sampling settings,
-concurrency, budget, host and start/end timestamps. `harness.log`, `costs.jsonl`, `index.json` and boards are retained.
-Writes redact credential keys, known credential environment values and token/header patterns. Authentication headers
-are never captured. Redacted wire text otherwise preserves original content. Capture tests scan every generated file.
-
-Session close and graceful SIGINT/SIGTERM finalize unfinished private environment records as `no_submit`, zero reward,
-with a fixed terminal timestamp. That cleanup alone does not establish a model outcome: a driver/harness exception
-is archived as infrastructure, with its traceback. An in-flight native submission keeps its authority to finish the grade.
-SIGKILL or host loss cannot execute cleanup; resume archives abandoned checkpoints as infrastructure (explicitly noting
-that no traceback was available). Recovery preserves an existing native grade and never resubmits it. A saved submission
-intent without a returned grade is held for investigation and cannot be retried automatically.
-`ended` stays within `submitted|no_submit|turn_limit|error`; timeout and infrastructure detail use `error_type`.
-
-Both the environment Task and eval's `EvalTask` accept SCHEMAS' `source:none, best:null` anchor shape.
-Native evaluation and reward logic remain in the existing core package.
-
-## Retries, resume and budget
-
-Retry only transient transport/provider infrastructure errors, up to two retries of the same request, logged with
-attempt number and timestamp. Never restart the environment to get a better grade. Invalid, infeasible, no-submit,
-turn-limit, and timed-out episodes are retained. A submit is marked attempted before dispatch; a lost grade response
-cannot trigger another submit. A partially streamed Codex response is not replayed because it may already be billed.
-Resume skips every graded terminal episode. A driver/harness infrastructure failure may start one new attempt per
-resume, up to two retries (three total attempts), unless a submission was attempted. All attempts and costs are retained;
-the original failed attempt never becomes a graded `no_submit`. Exhausted retries remain explicitly ungraded.
-Provider connection/read failures are infrastructure; exhausting the episode's own wall-clock budget remains a
-terminal timeout. `--force` refuses to overwrite any recorded attempt. A separate diagnostic run must be disclosed
-and cannot be silently pooled into the panel.
-Atomic record/index writes and a per-run process lock protect resume. Task/model selection and settings cannot change
-under the same run name. Scheduling is task-major, with at most four simultaneous episodes and the native pool's own limit.
-
-Paid runs require `ANTHROPIC_API_KEY` and positive `--budget-usd`. Before launching an episode, require:
-
-`spent + max(concurrency × estimated_episode_cost, outstanding_reservations + estimated_episode_cost) <= budget`.
-
-The estimate is the observed nearest-rank p95 episode cost, or a conservative USD 5 prior before observations
-(`--prior-episode-usd` is recorded). Persisted episode costs are included on resume. This is a launch guard, not a hard
-invoice cap: an already-running episode can exceed the estimate. Use the measured pilot to set panel size and prior.
-Unknown billed usage must be investigated before resuming a paid run. Subscription USD remains null, not a fabricated zero.
-
-## Calibration, reports and regrading
-
-`calibrate.py` uses only feasible submitted model episodes from the declared runs, for both splits. Per task:
-`worst = 0`, `best = maximum positive feasible USD saved`, `saturation = 4 × best`, `source = panel`, `frozen_at = UTC`.
-No positive saving means `worst:0, best:null, saturation:null, source:none`: an all-draft panel cannot define a nonzero
-calibration span. Search and naive policies never supply anchors. Existing frozen anchors cannot change; identical
-replays are idempotent. The operator's model-only decision supersedes the older search fallback in the plan.
-Calibration writes only the explicitly selected task record files (or both converted v2 files by default).
-
-`rescore.py` re-verifies the first stored submission using the full ARM2 verifier and current panel anchors. It preserves
-the old grade and submission in `rescore_history`, updates final/submission results and arrays, and rebuilds indices
-and run boards. No-submit remains no-submit. Infrastructure failure leaves the previous grade intact and exits with
-an error; it is not an infeasible design. Regrading is sequential and may take minutes per submission.
-
-`report.py` regenerates Markdown and JSON with the FineEnvs card's `models[]` fields, per-station panels, paired task
-differences, feasible rate, raw USD and percent savings, calibrated reward, evaluation/turn counts, end categories,
-and measured USD/episode. Raw USD means retain the -1 failure sentinel; percent savings are zero for failures.
-A missing anchor makes the overall reward mean unavailable, rather than treating uncalibrated tasks as zero or dropping
-them. Coverage and available anchors are explicit. Bootstrap whole stations with replacement, retain all tasks in each
-sampled station, and take the task-weighted mean: 2000 replicates, seed 0, percentile 95% CI. Report the cluster count
-(five for the full eval cohort); fewer than two clusters yields no CI. Paired CIs bootstrap the matched stations.
-
-Naive rows call the policies in `permit_core.baselines` on exactly the reported task cohort and independently verify
-submitted designs. `report.py --compute-baselines` uses already cached fields under a shared lease; it refuses to build
-missing packs. Records are saved under the run's `baselines/`. Later reports reuse them. Missing artifacts are explicitly
-listed; partial baseline cohorts are not presented as comparable. Search is never included as a model or reward anchor.
-
-## Commands
-
-Run from the repository root, using the existing OpenEnv uv project with its locked `agents` extra. No new dependency is introduced.
+Hardness is `1 - greedy_saved/best_saved`, with zero when best_saved is zero.
+Best includes all policies, search and all random seeds. Variance is population
+standard deviation of random_30 saved fractions. Reserve two easiest tasks from
+distinct stations; select eight hard tasks using the product of hardness and
+variance midrank percentiles, then hardness, variance and task ID as tie breaks.
+Quotas are two per eval station and one per train station. Selection from frozen
+probe artifacts is deterministic and independent of input order. Fresh timed
+searches may visit different node counts under different host load; retained
+probe artifacts are the reproducible selection inputs. No search is called an optimum.
+Only `eval.select_tasks --report-only` reproduces the active selection from the
+frozen probes. The historical `eval.subsets` defaults to
+`results/subsets-wp2.7.json` and refuses the active destination. The launcher
+checks the WP2.8 cohort marker, quotas and frozen-probe selection before any
+provider preflight, including during a dry run.
 
 ```sh
-# Full WP suite, all offline (includes local sockets and installed CLI with fake provider).
-uv sync --project envs/permit/openenv --extra agents --locked
-uv run --project envs/permit/openenv --no-sync pytest eval/tests -q
-uv run --project envs/permit/openenv --no-sync ruff check eval
-
-# Subscription smoke: one eligible TRAIN task; never the eval panel.
-uv run --project envs/permit/openenv --extra agents --locked python eval/run_eval.py --run wp2.1-smoke \
-  --models codex:gpt-6.1-sol --split train --tasks 003bd328a392-s47 --concurrency 1 --max-turns 40
-
-# Only after the operator authorizes paid use; install the existing agents extra first.
-uv run --project envs/permit/openenv --extra agents --locked python eval/run_eval.py --run approved-pilot \
-  --models anthropic:claude-sonnet-5-5 --split eval --tasks TASK_IDS --budget-usd 25
-
-# Offline recovery of a crashed/legacy run and its index/board; never launches an episode.
-uv run --project envs/permit/openenv --no-sync python -m eval.attempts RUN
-
-uv run --project envs/permit/openenv --no-sync python eval/report.py RUN --compute-baselines
-uv run --project envs/permit/openenv --no-sync python eval/calibrate.py --runs RUN
-uv run --project envs/permit/openenv --no-sync python eval/rescore.py RUN
-uv run --project envs/permit/openenv --no-sync python eval/report.py RUN
-
-# Local, redacted HF dataset configs; does not upload. Use an empty destination.
-uv run --project envs/permit/openenv --no-sync python eval/export_hf.py RUN \
-  --out results/rollouts/RUN/hf-export
+uv run --no-sync python -m eval.select_tasks --jobs 4 --field-jobs 3 \
+  --cache internal/reports/WP2.8-evidence/difficulty-probes --output results/subsets.json
+# Rebuild selection from frozen probes, without native work:
+uv run --no-sync python -m eval.select_tasks --report-only \
+  --cache internal/reports/WP2.8-evidence/difficulty-probes --output results/subsets.json
+PERMIT_FIELDS_CACHE_GB=72 uv run --no-sync python -m eval.warm_fields \
+  --subsets results/subsets.json --field-jobs 12
 ```
+
+To cancel a probe cleanly, create `internal/reports/WP2.8-evidence/difficulty-probes/.stop`
+and wait for its workers to release their leases. Resume with the same command;
+it clears the marker only after acquiring the exclusive probe-run lock.
+
+The probe has at most four task workers and twelve native processes, and evicts
+packs after use. Warming uses the same twelve-native-process ceiling. Warming retains all
+selected packs and verifies the final inventory; use the same sufficiently large
+cache cap when launching the panel. Startup refuses missing/stale selected packs and pins all selected local packs for the run.
+
+## Scheduling, repeats and spend
+
+`--repeats 4 --order round-robin` finishes repeat r of the cohort before repeat
+r+1. Each round finishes eval before train. Paid dispatch order is Opus-eval,
+Sonnet-eval, Sonnet-train, Opus-train, preserving eval and Sonnet training coverage
+when the cap trims the tail. Codex and Anthropic have separate concurrency flags,
+with combined episode concurrency at most four. Codex continues if paid launches
+are denied. After round one, `projection.json` and `harness.log` record measured
+USD/episode per model multiplied by its remaining episodes; subscription USD is
+unknown. Before sampling, `--dry-run` prints the full schedule, per-model settings
+and an explicit prior projection without provider login, server startup or episodes.
+
+The unmeasured paid cost prior is $2.00/episode at `medium`, $3.50 at `high`,
+and $5.00 at `xhigh`, for both Claude models. This planning assumption uses
+40%, 70%, and 100% of the earlier $5.00 prior; it is not a measured effort-cost
+relationship or a provider quote. `--prior-episode-usd` overrides it. The dry
+run prints the assumption, and round-one measurements replace it per model.
+Reproduce the prior: `uv run --no-sync python -c 'from eval.settings import EPISODE_PRIORS,PRIOR_ASSUMPTION; print(EPISODE_PRIORS,PRIOR_ASSUMPTION)'`.
+
+Anthropic has a **hard $190 maximum**, optionally lowered by `--budget-usd`.
+The existing p95/prior episode launch guard remains conservative, but is not the
+hard cap. A shared request ledger atomically persists a worst-case reservation
+before each dispatch: a full context (rounded up to 2^20 input tokens) plus the
+entire output limit at the pinned standard prices. Successful responses settle
+to measured cost. Missing responses, interrupted requests and request retries
+retain the full reservation unless usage is known. These charges survive resume.
+A request is never dispatched if committed charges plus its reservation exceed
+the cap. This may stop early with unused credit. A budget stop during an episode
+is recorded explicitly as `no_submit` with `error_type: budget`, never rerun for
+an improved score. The cap covers this harness/run, not unrelated account usage.
+
+No caching, batch, fast mode, server tools or regional premium is requested.
+`prices.toml` pins standard prices and cache-accounting categories; Sonnet's
+cache-read rate is corrected to $0.10/MTok. Source checked 2026-10-17:
+[Anthropic pricing](https://platform.claude.com/docs/en/about-claude/pricing).
+Provider SDK retries are disabled. Transient failures have at most two explicit
+request retries, each reserved separately; unknown usage remains conservatively
+charged. Infrastructure episode retries and all attempts stay visible.
+
+## Isolation, capture and grades
+
+The system prompt text/version remains unchanged. Both drivers expose exactly
+`get_scenario`, `check_design`, `evaluate_design`, `submit_design`. OpenEnv owns
+validity, evaluation accounting and final BPIP/AERMOD verification. The model
+cannot reset/select tasks, read files/private records, or access arbitrary HTTP.
+The Codex boundary retains only the public tool conversation and rejects
+unadvertised tool calls before execution. Subscription login is mandatory;
+API-key fallback is prohibited. The authenticated recording sidecar is never a
+model tool, and the scored server disables the shared web playground.
+
+Canonical records live at `<run>/<model_slug>/<task_id>/r<repeat>/episode.json`.
+Each repeat retains `transcript.jsonl`, `raw/` request/response bodies, Codex
+JSONL/stderr/argv/config/catalog, `env.log`, and every infrastructure attempt.
+Credential keys and known secrets are redacted; authorization headers are never
+captured. Captured provider-returned thinking summaries are complete. The
+append-only transcript is authoritative when the live step view is bounded.
+`run.json`, `schedule.json`, `request-budget.json`, `costs.jsonl`, `index.json`,
+boards and projections record provenance. Resume checks cohort, order, concurrency,
+prompt, protocol and sampling; terminal repeats are skipped. No selective reruns.
+A pending submission without an authoritative grade remains held for investigation.
+Imports refuse every occupied repeat, including legacy snapshots, pending
+submissions and attempts. Only an identical previously completed import may be
+resumed, without writing its evidence again.
+
+Reward is feasible `(draft_cost - submitted_cost)/draft_cost`, otherwise zero;
+prescore keeps the -1 failure sentinel. No calibration or reward anchors exist.
+Reports separate eval/train; task means average repeats before station-clustered
+confidence intervals. Within-task spread and task-weighted CIs follow
+[REPEATS.md](REPEATS.md). Efforts cannot be silently pooled. Full regrading uses
+`eval/rescore.py` and the native verifier, and is not part of this preparation WP.
+
+## Operator launch
+
+The following command spends model credit and is for the operator only. Add
+`--dry-run` to inspect it without any model episodes.
+
+```sh
+PERMIT_FIELDS_CACHE_GB=72 uv run --project envs/permit/openenv --no-sync python -m eval.run_eval \
+  --run final-xhigh --models anthropic:claude-opus-5-5 anthropic:claude-sonnet-5-5 \
+  codex:gpt-6.1-sol codex:gpt-6-astra --subsets results/subsets.json --split both \
+  --effort xhigh --repeats 4 --order round-robin --codex-concurrency 2 --anthropic-concurrency 1 \
+  --max-tokens 32768 --max-turns 40 --wall-clock 1800 --budget-usd 190
+```
+
+Regenerate the combined panel's separate boards with `python -m eval.report final-xhigh
+--split eval --output results/final-eval.md` and the corresponding `--split train`
+command, using the OpenEnv uv project. The runner also writes these split boards
+automatically. For an external recorder, warm its host separately; local cache
+pins do not protect a different host's files.
+
+Offline suite: `uv run --project envs/permit/openenv --no-sync python -m pytest eval/tests -q`.

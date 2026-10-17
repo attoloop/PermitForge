@@ -123,7 +123,7 @@ def test_resume_refuses_changed_task_files(tmp_path, monkeypatch):
         run_baselines.run_one(tmp_path, row, pack, tmp_path / 'cache')
 
 
-def test_report_both_splits_gate_failure_and_panel_anchor(tmp_path):
+def test_report_both_splits_gate_failure_and_saved_fraction(tmp_path):
     rows = [record('a', 'train'), record('b', 'eval')]
     cache = tmp_path / 'cache'
     for row in rows:
@@ -137,8 +137,8 @@ def test_report_both_splits_gate_failure_and_panel_anchor(tmp_path):
     assert 'train' in text and 'eval' in text
     assert 'mean USD saved' in text and '% saved' in text and 'feasible rate' in text
     assert 'best-known search' in text and 'sentinel' in text
-    assert '0.36' not in text and '0.18' in text  # Only measured model calibration.
-    assert '| cheapest_first_greedy | 18.0000 | 18.0000 | 1.0000 | pending |' in text
+    assert '0.18' in text  # Reward is independent of the stale anchor fixture.
+    assert '| cheapest_first_greedy | 18.0000 | 18.0000 | 1.0000 | 0.1800 |' in text
     assert 'optimum' not in text.lower()
 
 
@@ -201,3 +201,12 @@ def test_jobs_and_missing_fields(tmp_path):
     assert summary['completed'] == 0 and summary['missing_fields'] == ['eval', 'train']
     with pytest.raises(ValueError, match='unknown'):
         run_baselines.run_tasks(tmp_path, tmp_path / 'cache', jobs=1, only=['unknown'])
+
+
+def test_record_writer_drops_legacy_reward_metadata(tmp_path):
+    from convert.v1_to_v2 import write_manifests, read_rows
+    row = record('a', 'train')
+    row.update(anchors={'worst': 0, 'best': 40}, anchors_frozen_at='old',
+               anchor_source='panel', anchor_runs=['old'])
+    write_manifests(tmp_path, [row])
+    assert not any('anchor' in k for k in read_rows(tmp_path)[0])

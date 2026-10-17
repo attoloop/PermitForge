@@ -13,7 +13,9 @@ from decimal import Decimal
 from pathlib import Path
 from typing import Any, Callable
 
-from .common import ROOT, anchors_for, grade, now, records, run_path, write_json
+from permit_core.reward import reward
+
+from .common import ROOT, now, records, run_path, write_json
 
 
 def native_verify(task: Any, design: dict) -> dict:
@@ -27,13 +29,13 @@ def native_verify(task: Any, design: dict) -> dict:
 
 def rescore_record(record: dict, task: Any, *, verify_fn: Callable = native_verify) -> dict:
     out = copy.deepcopy(record)
-    anchors = anchors_for(task)
-    out['anchors'] = anchors
+    out.pop('anchors', None)
     submission = next((s for s in out['steps'] if s['tool'] == 'submit_design'), None)
     if submission is None:
         out['final'] = None
+        out['reward'] = 0.0
         return out
-    previous = {'rescored_at': now(), 'final': copy.deepcopy(out.get('final')),
+    previous = {'rescored_at': now(), 'reward': out.get('reward'), 'final': copy.deepcopy(out.get('final')),
                 'submission': copy.deepcopy(submission)}
     evaluation = verify_fn(task, submission['args'].get('design'))
     errors = evaluation.get('errors', [])
@@ -46,10 +48,10 @@ def rescore_record(record: dict, task: Any, *, verify_fn: Callable = native_veri
     final = {k:v for k,v in evaluation.items() if k not in ('receptor_values', 'receptor_margins')}
     final.update(prescore_usd_saved=float(saved),
                  pct_saved=float(100*saved/Decimal(str(task.draft_cost))) if feasible else 0.0,
-                 reward=grade(float(saved), anchors) or 0.0, anchors=anchors,
+                 reward=reward(saved, task.draft_cost),
                  evaluations_left=30-out.get('evaluations_used', 0))
     out.setdefault('rescore_history', []).append(previous)
-    out.update(final=final, ended='submitted')
+    out.update(final=final, reward=final['reward'], ended='submitted')
     submission['result'] = final
     for key in ('receptor_values', 'receptor_margins'):
         submission.pop(key, None)

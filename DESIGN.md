@@ -2,7 +2,7 @@
 
 The details behind the [README](README.md): task data, physics, rules, reward,
 search and tests. [CONTRACT.md](CONTRACT.md) defines the public
-interface; [SOURCES.md](SOURCES.md) records input provenance. Model results and calibration remain **TODO**.
+interface; [SOURCES.md](SOURCES.md) records input provenance. Model results remain **TODO**.
 All tasks are admitted after native ARM2 draft verification; baseline/search
 scores do not filter the release.
 
@@ -241,40 +241,40 @@ current image remains TODO; the source-copy and native-stage contracts are teste
 
 ## The reward
 
-Prescore is exact `cost(draft) - cost(submission)` in USD/year for a feasible
-submission; gate failure uses sentinel **−1**. With `w=0`, `b>0` and
-`s=b+3*(b-w)`, hyperbolic calibration is:
+A feasible graded submission earns the fraction of draft cost saved:
+`reward = (cost(draft) - cost(submission)) / cost(draft)`.
+Prescore retains exact USD/year savings; gate failure uses sentinel −1 and
+reward zero. The draft, invalid/infeasible submissions and no submission earn
+zero. A score of 1.0 means zero annualized cost: the all-uncontrolled minimum-height
+design, which fails a standard in the admitted tasks. It is therefore unreachable.
+Every non-submission action has zero reward.
 
-```text
-x <= w:  0
-w < x < b:  0.4 * (x-w)/(b-w)
-x >= b:  0.4 + 1.2 * (x-b)/(s-b + 2*(x-b))
-```
+Saved fraction is directly interpretable and comparable across different plant
+costs. It needs no model calibration, frozen anchors or train-split calibration
+runs. Search and baselines remain diagnostics. The old hyperbolic helper and
+anchor-writing command have been removed; no dependency was added.
 
-The draft scores **0**, the best anchor **0.4**, the saturation point **0.8**,
-and **1.0** is an unreachable asymptote of the mathematical curve. Invalid,
-infeasible, no-submit and non-finite inputs score **0**. Missing anchors also
-produce zero reward with `source: "none"` and null best/saturation, while raw
-savings remain visible. Every non-submission action has zero reward.
+For GRPO with per-task group normalization, dividing all rewards in a group by
+the same positive draft cost leaves `(reward - group_mean) / group_std` unchanged
+apart from numerical stabilizers. Thus per-task cost scale is irrelevant to the
+normalized training advantage; within-task variation supplies the learning signal.
+Zero-variance groups still provide no relative signal. Training uses fast grading;
+the evaluation harness independently verifies submissions with native models.
 
-On every train and eval task, `best` is the highest feasible USD saved by a model
-in that task's calibration runs. Search and baseline results are diagnostics and
-never supply reward anchors. Calibration, rescoring and freezing anchors remain
-**TODO**. The anchor model scores 0.4 on its best tasks by construction; later
-models can exceed it. A task without a positive model-calibration result remains
-uncalibrated, with no search fallback.
+Repeat selection and reporting are defined in [eval/REPEATS.md](eval/REPEATS.md).
+Within each task, report mean, sample standard deviation, minimum, maximum,
+feasible rate and mean absolute pairwise difference across repeats. Average task
+means with equal task weight before station-clustered bootstrap. The secondary
+fraction of best observed divides a task's mean savings fraction by its best
+observed feasible model fraction in the reported cohort. Zero-best tasks have
+no ratio and coverage is explicit; this comparison never changes the reward.
 
-Formula, sentinel and numerical handling are in `permit_core/reward.py`; missing
-anchor handling is in `permit_openenv/{tasks,environment}.py`. Reproduce the
-constants and reference points:
+Reproduce the formula and subset selection without model/native computation:
 
 ```sh
 cat envs/permit/core/permit_core/reward.py
-uv run --project envs/permit/core python - <<'PY'
-from permit_core.reward import hyperbolic_calibration
-f = hyperbolic_calibration(0, 1)
-print([(x, f(x)) for x in (-1, 0, 1, 4)])
-PY
+uv run --no-sync python -m eval.select_tasks --report-only --output results/subsets.json
+uv run --project envs/permit/core python -c 'from permit_core.reward import reward; print([reward(x, 100) for x in (-1, 0, 20, 100)])'
 ```
 
 ## Baselines and search
@@ -340,8 +340,8 @@ search savings and naive-policy performance do not filter tasks.
 Reproduce from `eligible` in the task indices with
 `python3 envs/permit/openenv/space_root/report_evidence.py`.
 `convert/reverify_drafts.py --finalize` applies cached native checks;
-`convert/admit.py` uses those same draft checks without assigning reward anchors.
-The release's model and calibrated-baseline results remain **TODO**.
+`convert/admit.py` uses those same draft checks without model-dependent grading.
+The release's model and baseline results remain **TODO**.
 
 ## How it is kept honest
 
@@ -371,7 +371,7 @@ Run all suites, including native tests, using the commands in the root README.
 | Heights | Continuous within native precision/bounds | Explicit menu |
 | Interface | Agent-authored native files and CLI launches | Four tools; environment renders native inputs |
 | Evaluation budget | 75 launches, equivalent to 25 complete pollutant evaluations | 30 valid evaluations, invalid checks free |
-| Reward | Raw USD saved, gate-failure floor −1 | Same savings prescore, calibrated reward; gate failure zero |
+| Reward | Raw USD saved, gate-failure floor −1 | Same savings prescore, reward = saved fraction; gate failure zero |
 | Evaluation | Native physics calls | Cached float64 fields; full native submission |
 
 Budget and historical score sources: `convert/v1-src/family/bind.py`,

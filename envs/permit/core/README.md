@@ -20,13 +20,13 @@ No tests download data or invoke a model API.
 from pathlib import Path
 from permit_core.model import load_v1_instance
 from permit_core.verify import verify
-from permit_core.reward import Anchors, prescore, reward
+from permit_core.reward import prescore, reward
+from permit_core.cost import cost
 
 scenario = load_v1_instance("003bd328a392-s47")
 result = verify(scenario, scenario.draft_design, Path("scratch/permit-check"))
 saved = prescore(result, scenario)
-# Supply the task's independently established anchors; this package does not invent them.
-# score = reward(saved, Anchors.from_dict(task_anchors))
+score = reward(saved, cost(scenario.draft_design, scenario.task))
 ```
 
 Designs retain v1's `{source_id: {control, stack_height_m}}` schema. Heights
@@ -71,7 +71,6 @@ extraction by `tests/test_source_lift.py`.
 | `render.py` | `render` | `environment/render.py` | Explicit root and dictionary input; optional copied task grammar; native BPIP callback |
 | `render.py` | `design_text` | `solution/materialize.py` | Decimal import alias only |
 | `verify.py` | physical flow of `grade` | `tests/grade.py` | Function interface, internally rendered inputs, local met symlink, optional tier switch, result dataclasses |
-| `reward.py` | `hyperbolic_calibration` | `club-mix/clubmix/calibration.py` | Verbatim function |
 | `native_build/instrument.py` | patch script | `tests/instrument.py` | Supplied build input; no rebuild |
 | `native_build/build-models.sh` | compiler script | `environment/build-models.sh` | Supplied build input; no rebuild |
 

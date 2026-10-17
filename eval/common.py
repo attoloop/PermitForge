@@ -53,7 +53,7 @@ def records(runs: list[Path], *, include_incomplete: bool = False) -> list[tuple
     found = []
     seen = set()
     for run in runs:
-        canonical = sorted(run.glob('*/*/episode.json'))
+        canonical = sorted(run.glob('*/*/episode.json')) + sorted(run.glob('*/*/r*/episode.json'))
         legacy = [p for p in sorted(run.glob('*/*.json')) if not (p.parent/p.stem/'episode.json').exists()]
         for path in canonical + legacy:
             if path.resolve() in seen:
@@ -63,8 +63,19 @@ def records(runs: list[Path], *, include_incomplete: bool = False) -> list[tuple
             if not include_incomplete and record.get('attempt_complete') is False:
                 continue
             if record.get('schema_version') == 1 and 'task_id' in record and 'model' in record:
+                record.setdefault('repeat', 1)
                 found.append((path, record))
     return found
+
+
+def report_records(runs: list[Path]) -> list[tuple[Path, dict]]:
+    """Pooling completed runs requires the same frozen episode protocol."""
+    if len({p.resolve() for p in runs}) > 1:
+        manifests = [json.loads((p/'run.json').read_text()) for p in runs]
+        for key in ('protocol_sha256', 'prompt_sha256', 'prompt_version', 'sampling'):
+            if any(m.get(key) is None or m.get(key) != manifests[0].get(key) for m in manifests):
+                raise ValueError(f'report protocol mismatch: {key}')
+    return records(runs)
 
 
 def run_path(value: str) -> Path:
@@ -74,24 +85,6 @@ def run_path(value: str) -> Path:
 
 def finite(value: Any) -> bool:
     return isinstance(value, (float, int)) and not isinstance(value, bool) and math.isfinite(value)
-
-
-def anchors_for(task: Any) -> dict:
-    value = task.record.get('anchors')
-    if not value or value.get('best') is None:
-        return {'worst': 0, 'best': None, 'saturation': None, 'source': 'none'}
-    if value.get('source') != 'panel':
-        raise ValueError('Only panel anchors are permitted')
-    from permit_core.reward import Anchors
-    Anchors.from_dict(value)
-    return value
-
-
-def grade(saved: float, anchors: dict) -> float | None:
-    if anchors.get('best') is None:
-        return None
-    from permit_core.reward import reward
-    return reward(saved, anchors)
 
 
 def failure_category(record: dict) -> str:
@@ -106,3 +99,14 @@ def failure_category(record: dict) -> str:
     if record.get('ended') == 'error':
         return 'timeout' if record.get('error_type') == 'timeout' else 'error'
     return record.get('ended', 'no_submit')
+
+
+def saved_fraction(record: dict) -> float:
+    """Recompute current grading from raw savings, including historical episodes."""
+    from permit_core.reward import reward
+    final = record.get('final') or {}
+    if record.get('ended') != 'submitted' or not final.get('valid', True) or not final.get('feasible'):
+        return 0.0
+    if not finite(final.get('prescore_usd_saved')):
+        raise ValueError('nonfinite prescore in episode')
+    return reward(final['prescore_usd_saved'], record.get('scenario', {}).get('draft_cost'))

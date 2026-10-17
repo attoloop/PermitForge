@@ -20,15 +20,16 @@ The draft uses maximum controls at GEP height.
 | `evaluate_design(design)` | Air-quality values, margins and binding receptors; 30 valid evaluations per episode |
 | `submit_design(design)` | Ends the episode and grades once with full BPIP/AERMOD verification |
 
-Reward calibrates USD/year saved against the draft: the draft, infeasible designs
-and no submission score zero. Each task's best feasible model-calibration result
-anchors 0.4, with further savings approaching 1.0; missing calibration yields
-zero reward while preserving measured savings.
+Reward is the feasible fraction of draft cost saved:
+`(cost(draft) - cost(design)) / cost(draft)`. The unchanged draft, invalid,
+infeasible and absent submissions score zero. USD/year saved is also reported.
+A score of 1.0 means zero annualized cost, unreachable because the uncontrolled
+design fails an air-quality standard. No calibration or anchors are needed.
 
 All **360 tasks are admitted: 230 train and 130 eval**, separated by weather
 station, with every draft verified feasible under ARM2. V2 uses ARM2 for all NO2
 cases and discrete heights, so its feasible set differs from published v1.
-Search and baselines are diagnostics, independent of admission and calibration.
+Search and baselines are diagnostics, independent of admission and reward.
 
 Reproduce inventory and admission counts from the task records and
 [conversion evidence](results/evidence/conversion.json):
@@ -40,8 +41,12 @@ rg -n 'EVALUATE_BUDGET|evaluations_left' envs/permit/openenv/permit_openenv/envi
 
 ## Results
 
-**Pending — TODO.** Model-calibration runs on both splits, frozen anchors,
-model scores, confidence intervals and calibrated baselines are pending.
+**Pending — TODO.** The selected repeat cohorts are in
+[results/subsets.json](results/subsets.json): eval and train are reported separately.
+The board reports mean saved fraction, station-clustered confidence intervals,
+feasible rate, fraction of best observed, and USD/episode. Per-task repeat spread
+is exported as JSON and CSV. [Repeat evaluation](eval/REPEATS.md) gives commands,
+coverage and metric definitions; no model episodes were run to select the cohorts.
 Measured physics agreement is in [DESIGN.md](DESIGN.md#fidelity).
 
 ## Start here

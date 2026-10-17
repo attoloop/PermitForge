@@ -35,7 +35,7 @@ def test_disclosure_boundary_reset_tools_state_and_errors(env):
                 assert forbidden not in text
         env.verifier = Broken()
         final, _ = call(env, 'submit_design', design=scenario['draft_design'])
-        assert final['anchors']['best'] == 1234567
+        assert 'anchors' not in final
         assert 'best_known_search_cost' not in final
         assert '/private/' not in json.dumps([final, env.state.model_dump()])
         assert env.episode.record()['geometry']['receptors']

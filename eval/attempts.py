@@ -12,12 +12,16 @@ from .common import now, records, run_path, write_json
 MAX_ATTEMPTS = 3  # Initial attempt and at most two infrastructure retries, on resume.
 
 
+def attempt_paths(run: Path) -> list[Path]:
+    return sorted(run.glob('*/*/attempts/episode-*/attempt.json')) + sorted(run.glob('*/*/r*/attempts/episode-*/attempt.json'))
+
+
 def history(root: Path) -> list[dict]:
     return [json.loads(p.read_text()) for p in sorted(root.glob('attempts/episode-*/attempt.json'))]
 
 
 def infrastructure(run: Path) -> list[dict]:
-    rows = [json.loads(p.read_text()) for p in sorted(run.glob('*/*/attempts/episode-*/attempt.json'))]
+    rows = [json.loads(p.read_text()) for p in attempt_paths(run)]
     return [row for row in rows if row.get('status') == 'infrastructure']
 
 
@@ -40,7 +44,7 @@ def publish(root: Path, record: dict, capture: EpisodeCapture) -> None:
 def fail(root: Path, capture: EpisodeCapture, record: dict, error: str, trace: str) -> dict:
     number = record['attempt_number']
     submitted = record.get('final') is not None
-    row = {'model': record['model'], 'task_id': record['task_id'], 'attempt_number': number,
+    row = {'model': record['model'], 'task_id': record['task_id'], 'repeat': record.get('repeat', 1), 'attempt_number': number,
            'status': 'infrastructure', 'started_at': record.get('started_at'), 'finished_at': now(),
            'error': error, 'traceback': trace, 'usage': record.get('usage'),
            'budget_charge_usd': record.get('budget_charge_usd'),
@@ -78,7 +82,7 @@ def recover(run: Path, *, error: str | None = None, trace: str | None = None) ->
         if record.get('final') is None:
             (root/'episode.json').unlink(missing_ok=True)
             (root.parent/(root.name+'.json')).unlink(missing_ok=True)
-    for path in sorted(run.glob('*/*/attempts/episode-*/attempt.json')):
+    for path in attempt_paths(run):
         attempt = json.loads(path.read_text())
         if attempt.get('status') not in ('running', 'infrastructure'):
             continue

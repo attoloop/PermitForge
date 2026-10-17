@@ -14,7 +14,7 @@ input = 2.0
 output = 10.0
 cache_write_5m = 2.50
 cache_write_1h = 4.0
-cache_read = 0.20
+cache_read = 0.10
 source = "https://platform.claude.com/docs/en/about-claude/pricing"
 verified_at = "2026-10-17"
 

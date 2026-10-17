@@ -30,7 +30,11 @@ source's `height_menu_m`.
                 "binding_receptor": {"index": 17, "x_m": 250.0, "y_m": -100.0}}]}
 ```
 `submit_design()` = the same shape (verified by full AERMOD) plus
-`{"reward": 0.31, "prescore_usd_saved": 812345.0, "pct_saved": 26.0, "anchors": {"worst": 0, "best": 1.0e6, "saturation": 4.0e6, "source": "panel|none"}}`.
+`{"reward": 0.26, "prescore_usd_saved": 26.0, "pct_saved": 26.0}` for an illustrative draft cost of 100.
+`reward` is feasible USD saved divided by draft cost; failed/absent submissions score zero.
+There is no `anchors` field. Task records also omit `anchors`, `anchor_source`,
+`anchors_frozen_at` and `anchor_runs`. Historical records may retain old fields;
+reporting recomputes saved fraction from the recorded savings and draft cost.
 Invalid designs: `{"valid": false, "errors": ["E_MENU: use every source exactly once with a compatible control and listed height"], "evaluations_left": <unchanged>}`.
 The first fast evaluation of a task may also return a `note` explaining on-demand field preparation.
 Subsequent evaluations reuse the disk cache. Field preparation spends no additional evaluation tokens.
@@ -45,9 +49,9 @@ Geometry is private record data; reset and the four public tools never return it
  "wind_rose": {"sectors": 16, "speed_bins_m_s": [0.5, 2, 4, 6, 8, 10], "counts": [[...16 sectors × 6 bins...]], "calm_hours": 123}}
 ```
 
-## Episode record — `results/rollouts/<run>/<model_slug>/<task_id>/episode.json`
+## Episode record — `results/rollouts/<run>/<model_slug>/<task_id>/r<k>/episode.json`
 ```json
-{"schema_version": 1, "task_id": "...", "split": "eval", "station": "KTOP", "model": "anthropic:claude-sonnet-5-5",
+{"schema_version": 1, "repeat": 1, "task_id": "...", "split": "eval", "station": "KTOP", "model": "anthropic:claude-sonnet-5-5",
  "prompt_version": 2, "started_at": "ISO-8601", "finished_at": "ISO-8601 or null while active",
  "scenario": {<scenario view>}, "geometry": {<geometry>},
  "steps": [{"i": 0, "tool": "get_scenario|check_design|evaluate_design|submit_design", "args": {...}, "result": {...},
@@ -67,8 +71,14 @@ final grade exclude them. Invalid designs and infrastructure failures have no co
 Legacy records may omit arrays; unrecorded values must not be inferred. Native binding-receptor indices are one-based.
 Live retention is bounded and records `steps_dropped` and `diagnostics_dropped`.
 The eval harness also writes full `transcript.jsonl`, provider `raw/`, private `env.log`
-and failed `attempts/`; see `eval/PROTOCOL.md`. The flat `<task_id>.json` is a compatibility snapshot.
+and failed `attempts/`; see `eval/PROTOCOL.md`. The repeat-local `r<k>.json` is a compatibility snapshot. Older `<task_id>/episode.json`
+and flat `<task_id>.json` records count as repeat 1; readers prefer canonical records.
 
-`source: "none"` anchors use `worst: 0, best: null, saturation: null`. Calibration comes from model runs on each train and eval task, never search or baselines.
+Repeat identities are `(model, task_id, repeat)`, with positive one-based integers.
+Run manifests record the requested repeats and the immutable protocol hash.
+Import requires the same protocol hash, prompt version/hash and sampling settings.
+Reports expose per-task repeat statistics in `variance.json` and `variance.csv`,
+and task-weighted model metrics in the board. See [eval/REPEATS.md](../eval/REPEATS.md).
+
 Wind speed bins are lower edges: `[0.5,2)`, `[2,4)`, `[4,6)`, `[6,8)`, `[8,10)`, `[10,∞)` m/s;
 valid speeds below 0.5 m/s count as calm, and missing observations are excluded.

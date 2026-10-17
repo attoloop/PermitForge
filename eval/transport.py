@@ -20,9 +20,9 @@ from typing import Any, Iterator
 
 from permit_openenv.episode import STORE
 from permit_openenv.protocol import tool_result
-from permit_openenv.tasks import Task, TaskPack, load_pack
+from permit_openenv.tasks import TaskPack, load_pack
 
-from .common import TOOLS, anchors_for
+from .common import TOOLS
 
 TERMINATING = threading.Event()
 _SESSIONS: set = set()
@@ -38,17 +38,9 @@ def terminate_sessions() -> None:
         session.finalize()
 
 
-class EvalTask(Task):
-    @property
-    def anchors(self) -> dict:
-        # The core Task property rejects SCHEMAS' explicit null-best / source:none shape.
-        # Keep this compatibility adapter inside eval; no environment code is changed.
-        return anchors_for(self)
-
-
 def load_eval_pack(root: Path | None = None) -> TaskPack:
     pack = load_pack(root)
-    return TaskPack([EvalTask(t.task_id, t.split, t.record, t.root) for t in pack.tasks
+    return TaskPack([t for t in pack.tasks
                      if t.record.get('eligible') is True])
 
 

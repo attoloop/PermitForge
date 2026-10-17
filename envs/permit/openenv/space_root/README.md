@@ -31,10 +31,11 @@ and may also take minutes. Use a local server for heavy evaluation runs.
 
 All source tasks are admitted after native ARM2 draft verification. Reproduce
 counts with `python3 envs/permit/openenv/space_root/report_evidence.py` from the
-repository root. Model results and calibration on both splits remain **TODO**.
-The draft and failed or absent submissions score zero. Feasible savings use
-per-task model-calibration anchors; missing anchors preserve savings with zero
-reward. Search and baselines do not define reward anchors.
+repository root. Model results remain **TODO**.
+Reward is feasible USD/year saved divided by draft cost. The draft and failed or
+absent submissions score zero. A score of 1.0 means zero annualized cost, which
+is unreachable because the uncontrolled design fails an air-quality standard.
+Raw USD/year and percentage savings are also returned. No calibration is needed.
 
 Facilities are synthetic; weather comes from the selected NOAA station.
 Concentrations are NAAQS design values across the task years. Code is Apache-2.0;

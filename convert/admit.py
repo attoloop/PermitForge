@@ -29,7 +29,7 @@ def decision(draft: dict | None, result: dict | None = None) -> tuple[bool | Non
 
 
 def apply(tasks: Path, drafts: Path = DRAFT_CACHE, baselines: Path = BASELINE_CACHE) -> dict:
-    """Validate draft evidence before writing; preserve data and existing calibration."""
+    """Validate draft evidence before writing; preserve physical data and omit retired reward anchors."""
     import json
     rows = read_rows(tasks)
     decisions = []

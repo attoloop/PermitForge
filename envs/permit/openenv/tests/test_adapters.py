@@ -10,7 +10,7 @@ from permit_openenv.tasks import load_pack, height_menu
 def test_v1_fallback_and_menu(tmp_path):
     pack = load_pack(tmp_path)
     task = pack.get('003bd328a392-s47')
-    assert task.split == 'train' and task.anchors['source'] == 'none'
+    assert task.split == 'train' and not hasattr(task, 'anchors')
     source = task.scenario.sources[0]
     menu = height_menu(source.height_min_m, source.gep_height_m)
     assert menu[0] == source.height_min_m and menu[-1] == source.gep_height_m
@@ -60,7 +60,7 @@ def test_wind_rose_bins_missing_calm_and_north(tmp_path):
     assert rose['counts'][4][2] == 1
 
 
-def test_pack_filters_ineligible_and_preserves_anchors(pack):
+def test_pack_filters_ineligible(pack):
     from permit_openenv.tasks import TaskPack
     task = pack.get('003bd328a392-s47')
     excluded = replace(task, record=dict(task.record, eligible=False))

@@ -76,7 +76,7 @@ def test_budget_exhaustion_and_submit_once(env):
     final, obs = call(env, 'submit_design', design=design)
     assert obs.done and obs.reward == 0.0
     assert final['prescore_usd_saved'] == 0 and final['reward'] == 0.0
-    assert final['anchors']['source'] == 'none'
+    assert 'anchors' not in final
     again, obs = call(env, 'submit_design', design=design)
     assert 'error' in again and obs.reward == 0
     assert len(env.verifier.calls) == 1
@@ -92,7 +92,7 @@ def test_reward_and_rubric_match_core(env):
         design = call(instance, 'get_scenario')[0]['draft_design']
         design['S1']['control'] = 'S1_moderate'
         final, obs = call(instance, 'submit_design', design=design)
-        assert final['reward'] == reward(final['prescore_usd_saved'], task.record['anchors'])
+        assert final['reward'] == reward(final['prescore_usd_saved'], task.draft_cost)
         assert obs.reward == final['reward'] > 0
         assert instance.rubric.feasible.last_score == 1
         assert instance.rubric.cost_quality.last_score == final['reward']
