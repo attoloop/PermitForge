@@ -59,8 +59,8 @@ class Budget:
     """Launch guard; reservations cover concurrent in-flight episodes, not a hard invoice cap."""
     def __init__(self, limit: float, *, concurrency: int, prior: float = 5.0, spent: float = 0,
                  costs: list[float] | None = None):
-        if not finite(limit) or limit < 0 or not finite(prior) or prior <= 0 or not 1 <= concurrency <= 4:
-            raise ValueError('budget and prior must be finite and nonnegative; prior positive; concurrency 1..4')
+        if not finite(limit) or limit < 0 or not finite(prior) or prior <= 0 or not 1 <= concurrency <= 12:
+            raise ValueError('budget and prior must be finite and nonnegative; prior positive; concurrency 1..12')
         self.limit, self.concurrency, self.prior, self.spent = limit, concurrency, prior, spent
         self.costs = list(costs or [])
         self.active: dict[str, float] = {}
