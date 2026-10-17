@@ -159,12 +159,12 @@ def run_panel(run: Path, tasks: list[dict], models: list[str], driver: Callable,
     if len({t['task_id'] for t in tasks}) != len(tasks):
         raise ValueError('duplicate tasks')
     limits = {'codex': codex_concurrency or concurrency, 'anthropic': anthropic_concurrency or concurrency}
-    if any(not 1 <= v <= 4 for v in limits.values()):
-        raise ValueError('provider concurrency must be 1..4')
+    if any(not 1 <= v <= 8 for v in limits.values()):
+        raise ValueError('provider concurrency must be 1..8')
     if codex_concurrency is not None or anthropic_concurrency is not None:
         concurrency = sum(limits[p] for p in limits if any(m.startswith(p+':') for m in models))
-        if concurrency > 4:
-            raise ValueError('combined concurrency must be at most 4')
+        if concurrency > 12:  # episodes mostly wait on provider APIs; native submits are single-core
+            raise ValueError('combined concurrency must be at most 12')
     schedule_phases = phases(tasks, models, repeats, order)
     schedule = [job for phase in schedule_phases for job in phase]
     with run_lock(run):
@@ -385,12 +385,12 @@ def main() -> None:
         parser.error('invalid concurrency, turn, token, or wall-clock limit')
     if args.repeats < 1:
         parser.error('--repeats must be positive')
-    if any(not 1 <= c <= 4 for c in (args.codex_concurrency, args.anthropic_concurrency)):
-        parser.error('provider concurrency must be 1..4')
+    if any(not 1 <= c <= 8 for c in (args.codex_concurrency, args.anthropic_concurrency)):
+        parser.error('provider concurrency must be 1..8')
     used_concurrency = sum(c for p, c in [('codex', args.codex_concurrency), ('anthropic', args.anthropic_concurrency)]
                            if any(m.startswith(p+':') for m in args.models))
-    if used_concurrency > 4:
-        parser.error('combined provider concurrency must be at most 4')
+    if used_concurrency > 12:
+        parser.error('combined provider concurrency must be at most 12')
     if args.budget_usd > 190:
         parser.error('Anthropic hard cap is 190 USD')
     Budget(args.budget_usd, concurrency=args.concurrency, prior=args.prior_episode_usd)
