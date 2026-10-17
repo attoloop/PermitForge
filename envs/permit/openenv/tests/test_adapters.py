@@ -20,6 +20,23 @@ def test_v1_fallback_and_menu(tmp_path):
 
 def test_verify_adapter_forces_arm2(pack, monkeypatch):
     import permit_core.verify as module
+    import permit_openenv.evaluator as evaluator
+    from concurrent.futures import Future
+    contexts = []
+    class Inline:
+        # Runs in this process so the patched verifier is seen; records how a real run would start.
+        def __init__(self, max_workers, mp_context):
+            contexts.append(mp_context.get_start_method())
+        def __enter__(self):
+            return self
+        def __exit__(self, *exc):
+            return False
+        def submit(self, fn, *args):
+            future = Future()
+            future.set_result(fn(*args))
+            return future
+    # The published verifier counts its own process RSS, so it must not run inside a long-lived server.
+    monkeypatch.setattr(evaluator, 'ProcessPoolExecutor', Inline)
     calls = []
     def verify(scenario, design, workdir, *, no2_tier):
         calls.append((scenario, design, no2_tier))
@@ -29,6 +46,7 @@ def test_verify_adapter_forces_arm2(pack, monkeypatch):
     monkeypatch.setattr(module, 'verify', verify)
     task = pack.get('003bd328a392-s47')
     result = VerifyEvaluator().evaluate(task, task.view()['draft_design'])
+    assert contexts == ['spawn']
     assert calls[0][2] == 'ARM2'
     assert 'stack_height_m' in calls[0][1]['S1']
     assert result['cost'] == 100.12 and result['feasible']

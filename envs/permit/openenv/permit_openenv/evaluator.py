@@ -1,6 +1,8 @@
 """Interchangeable evaluation, with the full native verifier reserved for grading."""
+from concurrent.futures import ProcessPoolExecutor
 import importlib
 from contextlib import nullcontext
+import multiprocessing
 import os
 from pathlib import Path
 import tempfile
@@ -21,12 +23,19 @@ class Evaluator(Protocol):
     def evaluate(self, task: Task, design: dict) -> dict: ...
 
 
+def _verify(scenario, ledger: dict, work: str):
+    from permit_core.verify import verify
+    return verify(scenario, ledger, work, no2_tier='ARM2')
+
+
 class VerifyEvaluator:
     def evaluate(self, task: Task, design: dict) -> dict:
-        from permit_core.verify import verify
         log('native verification queued')
         with _NATIVE_SLOTS, native_slot(), tempfile.TemporaryDirectory(prefix='permit-openenv-') as work:
-            result = verify(task.scenario, to_ledger(design), work, no2_tier='ARM2')
+            # The published verifier counts its own process RSS; a fresh process keeps a
+            # long-lived server's memory (e.g. memory-mapped fields) out of that guard.
+            with ProcessPoolExecutor(max_workers=1, mp_context=multiprocessing.get_context('spawn')) as pool:
+                result = pool.submit(_verify, task.scenario, to_ledger(design), work).result()
         log(f'native verification: feasible={result.feasible}; errors={result.errors}; standards={result.design_values}')
         return json_value({
             'valid': True, 'errors': [f"{e['code']}: {e['detail']}" for e in result.errors],

@@ -111,11 +111,11 @@ cache cap when launching the panel. Startup refuses missing/stale selected packs
 
 ## Scheduling, repeats and spend
 
-`--repeats 4 --order round-robin` finishes repeat r of the cohort before repeat
+`--repeats 3 --order round-robin` finishes repeat r of the cohort before repeat
 r+1. Each round finishes eval before train. Paid dispatch order is Opus-eval,
 Sonnet-eval, Sonnet-train, Opus-train, preserving eval and Sonnet training coverage
 when the cap trims the tail. Codex and Anthropic have separate concurrency flags,
-with combined episode concurrency at most four. Codex continues if paid launches
+with combined episode concurrency at most twelve. Codex continues if paid launches
 are denied. After round one, `projection.json` and `harness.log` record measured
 USD/episode per model multiplied by its remaining episodes; subscription USD is
 unknown. Before sampling, `--dry-run` prints the full schedule, per-model settings
@@ -186,14 +186,15 @@ The following command spends model credit and is for the operator only. Add
 `--dry-run` to inspect it without any model episodes.
 
 ```sh
-PERMIT_FIELDS_CACHE_GB=72 uv run --project envs/permit/openenv --no-sync python -m eval.run_eval \
-  --run final-xhigh --models anthropic:claude-opus-5-5 anthropic:claude-sonnet-5-5 \
-  codex:gpt-6.1-sol codex:gpt-5.6-sol --subsets results/subsets.json --split both \
-  --effort xhigh --repeats 4 --order round-robin --codex-concurrency 2 --anthropic-concurrency 1 \
-  --max-tokens 32768 --max-turns 40 --wall-clock 1800 --budget-usd 190
+ENABLE_WEB_INTERFACE=false PERMIT_FIELDS_JOBS=4 PERMIT_FIELDS_CACHE_GB=64 MAX_CONCURRENT_ENVS=12 \
+PERMIT_NATIVE_VERIFY_SLOTS=8 uv run --project envs/permit/openenv --no-sync python eval/run_eval.py \
+  --run final-medium3 --models codex:gpt-6.1-sol codex:gpt-5.6-sol \
+  anthropic:claude-opus-5-5 anthropic:claude-sonnet-5-5 --subsets results/subsets.json --split both \
+  --effort medium --repeats 3 --order round-robin --codex-concurrency 6 --anthropic-concurrency 4 \
+  --max-tokens 32768 --max-turns 40 --wall-clock 1800 --budget-usd 150
 ```
 
-Regenerate the combined panel's separate boards with `python -m eval.report final-xhigh
+Regenerate the combined panel's separate boards with `python -m eval.report final-medium3
 --split eval --output results/final-eval.md` and the corresponding `--split train`
 command, using the OpenEnv uv project. The runner also writes these split boards
 automatically. For an external recorder, warm its host separately; local cache
