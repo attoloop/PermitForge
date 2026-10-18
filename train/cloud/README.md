@@ -114,7 +114,7 @@ by the job. Large archives remain ignored by git.
 WP2.16 rebuilt and verified the retained archive against the working tree. Its
 SHA256 (`sha256sum train/cloud/data/cloud-bundle.tar.gz`):
 
-`50a82ebaa400a68f10641a77bd9d610cde2cc5f56c51fa4108b262a1c8ddacf9`
+`143db93d085f53b7eb7c3af0161678c6b25fad389325eac4de21bca9d69a2cef`
 
 Run from the repository root (the existing `train` environment can run CPU checks
 without installing a second CUDA stack):

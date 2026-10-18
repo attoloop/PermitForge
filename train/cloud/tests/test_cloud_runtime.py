@@ -66,3 +66,15 @@ def test_recorded_tokenizer_masks_and_trl_parser():
     assert result['template_prefix_preserving'] is True
     assert result['episodes'][0]['trl_roundtrips'] == 10
     assert result['episodes'][0]['assistant_tokens'] < result['episodes'][0]['episode_tokens']
+
+
+def test_gpu_guard_reports_a_missing_gpu_without_nvidia_smi(tmp_path, monkeypatch):
+    import torch
+    from train.cloud.worker import gpu_guard
+    monkeypatch.setattr(torch.cuda, 'is_available', lambda: False)
+    monkeypatch.setattr(torch.cuda, 'device_count', lambda: 0)
+    monkeypatch.setattr('ctypes.util.find_library', lambda name: None)
+    monkeypatch.setenv('PATH', str(tmp_path))  # no nvidia-smi anywhere on PATH
+    with pytest.raises(RuntimeError, match=r'devices 0, libcuda not found, nvidia-smi: unavailable'):
+        with gpu_guard(CloudConfig(hourly_usd=2.75), tmp_path):
+            pass
