@@ -12,7 +12,6 @@ class CloudConfig:
     flavor: str = 'h200'
     precision: str = 'bf16'
     recipe: str = 'smoke'
-    kernels: str = 'auto'
     trackio_space: str | None = None
     trackio_bucket: str | None = None
     model: str = 'Qwen/Qwen3.8-27B'
@@ -46,13 +45,13 @@ class CloudConfig:
             raise ValueError('Use at most four native workers, HF generation and thinking off')
         if self.flavor != 'h200' or self.precision not in ('bf16', 'nf4'):
             raise ValueError('Use H200 with bf16 LoRA or explicit NF4')
-        if self.recipe not in ('smoke', 'grpo') or self.kernels not in ('auto', 'required', 'off'):
-            raise ValueError('Unknown recipe or kernel policy')
+        if self.recipe not in ('smoke', 'grpo'):
+            raise ValueError('Unknown recipe')
         if self.trackio_bucket and not self.trackio_space:
             raise ValueError('Trackio bucket requires an explicitly named Space')
         for destination in (self.trackio_space, self.trackio_bucket):
-            if destination and (not destination.startswith('attoloop/') or destination.count('/') != 1):
-                raise ValueError('Name Trackio resources under attoloop')
+            if destination and (destination.split('/')[0].lower() != 'attoloop' or destination.count('/') != 1):
+                raise ValueError('Name Trackio resources under Attoloop')
         if not 0 < self.max_vram_bytes <= 135_000_000_000:
             raise ValueError('VRAM abort threshold cannot exceed 135 decimal GB')
         for key in ('sft_steps', 'grpo_steps', 'max_length', 'max_completion_length',
@@ -84,7 +83,7 @@ def stage_plan(config: CloudConfig, train_count: int = 30,
     # Explicit unmeasured priors. Native work includes eval fields. No speed claim.
     steps = stop_after_step or config.grpo_steps
     estimates = {'fields': (train_count+10)*300/config.field_jobs, 'base-eval': 30*180,
-        'smoke': 5*300/config.field_jobs+3*180+2*180+180+60+2400,
+        'smoke': 5*300/config.field_jobs+3*180+2*180+180+60,
         'grpo': steps*180, 'eval':30*180, 'export':300}
     walls = {'fields':5400, 'base-eval':10800, 'smoke':10200,
              'grpo':config.grpo_steps*360+1800, 'eval':10800, 'export':900}

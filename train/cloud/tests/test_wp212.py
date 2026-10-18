@@ -8,13 +8,6 @@ from train.cloud.config import CloudConfig, stage_plan
 ROOT = Path(__file__).resolve().parents[3]
 
 
-def passed_qualification():
-    from train.cloud.qualification import BASELINE
-    selected = dict(name='baseline',status='passed',settings=BASELINE,
-                    generation_seconds=1.,training_seconds=1.)
-    return dict(status='passed',selected=selected,candidates=[selected])
-
-
 def test_h200_bf16_direct_grpo_and_smoke_envelope():
     cfg = CloudConfig(hourly_usd=5)
     assert cfg.flavor == 'h200' and cfg.precision == 'bf16'
@@ -63,7 +56,7 @@ def test_smoke_report_gates_on_model_behavior_and_gradients():
     training = dict(status='passed', weights_changed=True, adapter_reload_equal=True,
         optimizer_steps=2, seconds_per_step=100, groups=[{'reward_std':.1}])
     result = smoke_summary(rows, training, {'peak_device_bytes':90}, elapsed_seconds=600, hourly_usd=5,
-                           qualification=passed_qualification())
+                           kernels={'status':'passed'})
     assert result['ready_for_grpo'] is True
     assert result['projections']['20']['grpo_compute_usd'] == pytest.approx(20*100/3600*5)
     assert set(result['projections']) == {'20','50','100'}
@@ -135,8 +128,8 @@ def test_qualification_rejects_changed_model_or_failed_smoke(tmp_path):
     with pytest.raises(ValueError,match='passed smoke'):
         smoke_gate(tmp_path,current)
     path.write_text(json.dumps(dict(status='passed',ready_for_grpo=True,supervisor_status='complete')))
-    (tmp_path/'smoke/grpo').mkdir()
-    (tmp_path/'smoke/grpo/qualification.json').write_text(json.dumps(passed_qualification()))
+    for name in ('kernels','gpu'):
+        (tmp_path/f'smoke/{name}.json').write_text(json.dumps({'status':'passed'}))
     smoke_gate(tmp_path,current)
     changed = json.loads(json.dumps(current))
     changed['config']['precision'] = 'nf4'
@@ -181,11 +174,11 @@ def test_smoke_sequence_uses_only_five_tasks_untrained_base_then_direct_grpo(tmp
         order.append('grpo')
         assert kind == 'grpo' and kwargs['smoke'] is True and kwargs.get('adapter') is None
         assert len(kwargs['tasks']) == 2
-        write_json(output/'qualification.json',passed_qualification())
         return dict(status='passed',weights_changed=True,adapter_reload_equal=True,
                     optimizer_steps=2,seconds_per_step=100,groups=[{'reward_std':.1}],
                     tasks_seen=chosen['smoke_train'])
     monkeypatch.setattr(training,'train',train)
+    write_json(tmp_path/'kernels.json',{'status':'passed'})
     run_smoke(CloudConfig(),record,pack,tmp_path)
     assert order == ['fields','base-load','base-eval','grpo']
     assert json.loads((tmp_path/'metrics.json').read_text())['ready_for_grpo'] is True
@@ -225,7 +218,9 @@ def test_timed_out_smoke_still_has_a_failed_report(tmp_path):
     assert (tmp_path/'REPORT.md').is_file()
 
 
-def test_bootstrap_falls_back_to_frozen_base_and_keeps_trackio_opt_in(tmp_path,monkeypatch):
+@pytest.mark.parametrize('trackio', [False, True])
+@pytest.mark.parametrize('install_fails', [False, True])
+def test_bootstrap_installs_one_frozen_stack_and_keeps_trackio_opt_in(tmp_path,monkeypatch,trackio,install_fails):
     import subprocess
     import sys
     import train.cloud.hf_job as launcher
@@ -239,7 +234,7 @@ def test_bootstrap_falls_back_to_frozen_base_and_keeps_trackio_opt_in(tmp_path,m
     def run(command, **kwargs):
         calls.append(command)
         assert kwargs['timeout'] <= 900
-        if 'fast-kernels' in command:
+        if install_fails:
             raise subprocess.CalledProcessError(1,command)
     monkeypatch.setattr(launcher.subprocess,'run',run)
     class Finished(Exception):
@@ -248,10 +243,17 @@ def test_bootstrap_falls_back_to_frozen_base_and_keeps_trackio_opt_in(tmp_path,m
         raise Finished()
     monkeypatch.setattr(launcher.os,'execvp',execute)
     monkeypatch.setattr(sys,'argv',['hf_job.py','--bundle','unused','--bundle-sha256','unused',
-        '--','--execute','--recipe=smoke','--trackio-space=attoloop/named'])
+        '--','--execute','--recipe=smoke'] + (['--trackio-space=Attoloop/named'] if trackio else []))
+    if install_fails:
+        with pytest.raises(subprocess.CalledProcessError):
+            launcher.main()
+        assert len(calls) == 1
+        assert not (root/'train/cloud/bootstrap.json').exists()
+        return
     with pytest.raises(Finished):
         launcher.main()
-    assert calls[0] == calls[2]  # Restore the exact base/metrics extras after failed kernel installation.
-    assert 'metrics' in calls[0] and 'fast-kernels' not in calls[0]
-    assert json.loads((root/'train/cloud/bootstrap.json').read_text())['kernel_install'] == 'failed'
+    assert len(calls) == 2  # Frozen install, then bundle validation.
+    assert calls[0] == ['uv','sync','--project','train/cloud','--frozen','--no-dev'] + (
+        ['--extra','metrics'] if trackio else [])
+    assert json.loads((root/'train/cloud/bootstrap.json').read_text())['stack_install'] == 'installed'
     assert float(launcher.os.environ['PERMIT_JOB_DEADLINE_UNIX']) > 0

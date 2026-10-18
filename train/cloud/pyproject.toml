@@ -3,26 +3,14 @@ name = "permit-cloud-training"
 version = "0.1.0"
 requires-python = ">=3.12,<3.13"
 dependencies = [
-  "permit-core", "permit-openenv", "torch==2.10.0+cu128", "trl==1.12.0",
+  "permit-core", "permit-openenv", "torch==2.12.1", "triton==3.7.1", "trl==1.12.0",
   "transformers==5.17.0", "peft==0.19.0", "bitsandbytes==0.49.2",
   "accelerate==1.12.0", "datasets==4.7.0", "huggingface-hub==1.33.0",
   "tokenizers==0.23.3", "psutil==7.2.2", "nvidia-ml-py==13.580.82",
+  "flash-linear-attention==0.5.2",
 ]
 
 [project.optional-dependencies]
-attention = ["kernels==0.16.2"]
-loss = ["liger-kernel==0.8.2"]
-fast-kernels = [
-  "flash-linear-attention==0.5.2",
-  "tilelang[nvcc]==0.1.15",
-  "apache-tvm-ffi==0.1.12",
-  "nvidia-cuda-nvcc==13.2.86",
-  "nvidia-cuda-cccl==13.2.86",
-  "nvidia-cuda-crt==13.2.86",
-  "nvidia-cuda-runtime==13.2.86",
-  "nvidia-nvvm==13.2.86",
-  "causal-conv1d @ https://github.com/Dao-AILab/causal-conv1d/releases/download/v1.7.0/causal_conv1d-1.7.0%2Bcu12torch2.10cxx11abiTRUE-cp312-cp312-linux_x86_64.whl#sha256=8e81f8c76435ad31aa41edc6c0c9d26de971a293b190183d2816da71547614d7",
-]
 metrics = ["trackio==0.42.0"]
 
 [dependency-groups]
@@ -31,12 +19,6 @@ dev = ["pytest==8.4.2", "ruff==0.14.1"]
 [tool.uv.sources]
 permit-core = {path = "../../envs/permit/core", editable = true}
 permit-openenv = {path = "../../envs/permit/openenv", editable = true}
-torch = {index = "pytorch-cu128"}
-
-[[tool.uv.index]]
-name = "pytorch-cu128"
-url = "https://download.pytorch.org/whl/cu128"
-explicit = true
 
 [tool.pytest.ini_options]
 testpaths = ["tests", "../tests"]

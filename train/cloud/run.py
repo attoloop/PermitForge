@@ -100,8 +100,7 @@ def parser() -> argparse.ArgumentParser:
     p.add_argument('--hourly-usd', type=float, default=5.00)
     p.add_argument('--recipe', choices=('smoke','grpo'), default='smoke')
     p.add_argument('--precision', choices=('bf16','nf4'), default='bf16')
-    p.add_argument('--kernels', choices=('auto','required','off'), default='auto')
-    p.add_argument('--trackio-space', help='Explicit attoloop/Space; omitted means no Trackio writes')
+    p.add_argument('--trackio-space', help='Explicit Attoloop/Space; omitted means no Trackio writes')
     p.add_argument('--trackio-bucket')
     p.add_argument('--qualification-run', type=Path, help='Previously passed smoke run (local or mounted read-only)')
     p.add_argument('--stop-after-step',type=int,help='Stop and save at this step, keeping --grpo-steps scheduler target')
@@ -126,7 +125,7 @@ def main(argv: list[str] | None = None) -> None:
     args = parser().parse_args(argv)
     config = CloudConfig(hourly_usd=args.hourly_usd, field_jobs=args.field_jobs,
                          sft_steps=args.sft_steps, grpo_steps=args.grpo_steps,recipe=args.recipe,
-                         precision=args.precision,kernels=args.kernels,
+                         precision=args.precision,
                          trackio_space=args.trackio_space,trackio_bucket=args.trackio_bucket)
     if args.stop_after_step is not None and (config.recipe != 'grpo' or not 0 < args.stop_after_step <= config.grpo_steps):
         raise ValueError('stop-after-step must be within the fixed GRPO scheduler target')
@@ -148,7 +147,7 @@ def main(argv: list[str] | None = None) -> None:
             cap_total_usd=sum(s['effective_seconds']*config.hourly_usd/3600 for s in plan),
             setup_prior_seconds=900, setup_prior_usd=900*config.hourly_usd/3600,
             priors='Unmeasured: 300 CPU-s/task / workers; 180 s/eval episode; '
-                   '180 s/GRPO step; smoke reload 180 s; qualification 2400 s; setup 900 s. No storage/tax/idle costs.',
+                   '180 s/GRPO step; smoke reload 180 s; kernel sanity 60 s; setup 900 s. No storage/tax/idle costs.',
             eval_difference='WP2.9 requires three repeats; final panel uses four. Thinking disabled for this model.'), indent=2))
         return
     if not args.execute or not args.artifact_uri:
@@ -211,7 +210,6 @@ def run(args, config: CloudConfig, plan: list[dict], sync) -> None:
     os.environ.update(PERMIT_FIELDS_CACHE_GB=str(args.field_cache_gb),
                       PERMIT_FIELDS_JOBS=str(config.field_jobs),
                       OMP_NUM_THREADS='4', TOKENIZERS_PARALLELISM='false',
-                      USE_HUB_KERNELS='NO',
                       PYTORCH_CUDA_ALLOC_CONF='expandable_segments:True')
     for spec in plan:
         stage = spec['stage']

@@ -9,7 +9,7 @@ from .run import write_json
 
 
 def smoke_summary(records: list[dict], training: dict, gpu: dict, *,
-                  elapsed_seconds: float, hourly_usd: float, qualification: dict | None = None) -> dict:
+                  elapsed_seconds: float, hourly_usd: float, kernels: dict | None = None) -> dict:
     valid_calls = sum(not (step.get('result') or {}).get('errors') and
         (step.get('result') or {}).get('valid') is not False
         for row in records for step in row.get('steps', row.get('history', [])))
@@ -20,13 +20,12 @@ def smoke_summary(records: list[dict], training: dict, gpu: dict, *,
     ready = (len(records) == 3 and not infrastructure and valid_calls > 0 and submitted > 0 and positive > 0
         and training.get('status') == 'passed' and training.get('optimizer_steps') == 2
         and training.get('weights_changed') is True and training.get('adapter_reload_equal') is True and spread
-        and qualification is not None and qualification.get('status') == 'passed'
-        and qualification.get('selected',{}).get('status') == 'passed')
+        and kernels is not None and kernels.get('status') == 'passed')
     seconds = training.get('seconds_per_step')
     return dict(status='passed' if ready else 'failed', ready_for_grpo=bool(ready),
         base=dict(episodes=len(records), valid_tool_calls=valid_calls, submitted=submitted,
                   positive_reward=positive, infrastructure_failure=infrastructure),
-        training=training, gpu=gpu, qualification=qualification, elapsed_seconds=elapsed_seconds,
+        training=training, gpu=gpu, kernels=kernels, elapsed_seconds=elapsed_seconds,
         hourly_usd=hourly_usd,
         measured_compute_usd=elapsed_seconds/3600*hourly_usd,
         seconds_per_grpo_step=seconds, projections={str(n):dict(
@@ -37,17 +36,18 @@ def smoke_summary(records: list[dict], training: dict, gpu: dict, *,
 
 
 def smoke_gate(path: Path, current: dict) -> None:
-    from .qualification import load_selection
     report = json.loads((path/'smoke/metrics.json').read_text())
     previous = json.loads((path/'run.json').read_text())
-    keys = ('model','revision','precision','kernels','num_generations','accum','max_length',
+    keys = ('model','revision','precision','num_generations','accum','max_length',
             'max_completion_length','max_prompt_length','train_turns','lora_rank','lora_alpha')
     if (not report.get('ready_for_grpo') or report.get('status') != 'passed' or
             report.get('supervisor_status') != 'complete' or
             any(previous['config'][k] != current['config'][k] for k in keys) or
             previous['hashes'] != current['hashes'] or previous['selection'] != current['selection']):
         raise ValueError('A passed smoke with identical code, data, model and training settings is required')
-    load_selection(path/'smoke/grpo/qualification.json')
+    for name in ('kernels', 'gpu'):
+        if json.loads((path/f'smoke/{name}.json').read_text()).get('status') != 'passed':
+            raise ValueError('A passed smoke requires successful kernel sanity and GPU checks')
 
 
 def run_smoke(config, record: dict, pack, output: Path) -> None:
@@ -81,10 +81,10 @@ def run_smoke(config, record: dict, pack, output: Path) -> None:
         records = [json.loads(p.read_text()) for p in sorted((output/'base-eval').rglob('episode.json'))]
         if (output/'grpo/metrics.json').exists():
             training = json.loads((output/'grpo/metrics.json').read_text())
-        qualification_path = output/'grpo/qualification.json'
-        qualification = json.loads(qualification_path.read_text()) if qualification_path.exists() else None
+        kernel_path = output/'kernels.json'
+        kernels = json.loads(kernel_path.read_text()) if kernel_path.exists() else None
         report = smoke_summary(records,training,{},elapsed_seconds=time.monotonic()-started,
-                               hourly_usd=config.hourly_usd,qualification=qualification)
+                               hourly_usd=config.hourly_usd,kernels=kernels)
         write_json(output/'metrics.json',report)
         write_report(output)
     if not report['ready_for_grpo']:
@@ -119,11 +119,7 @@ def write_report(output: Path) -> None:
     kernels = output/'kernels.json'
     if kernels.exists():
         report['kernels'] = json.loads(kernels.read_text())
-    qualification_path = output/'grpo/qualification.json'
-    if qualification_path.exists():
-        report['qualification'] = json.loads(qualification_path.read_text())
-    qualification = report.get('qualification') or {}
-    if qualification.get('status') != 'passed' or qualification.get('selected',{}).get('status') != 'passed':
+    if (report.get('kernels') or {}).get('status') != 'passed':
         report.update(status='failed',ready_for_grpo=False)
     gpu = output/'gpu.json'
     if gpu.exists():
@@ -134,17 +130,11 @@ def write_report(output: Path) -> None:
     text = ['# Qwen3.8 H200 smoke', '', f"Ready for GRPO: {report['ready_for_grpo']}", '',
         'Base behavior: '+json.dumps(report['base']), '',
         'Memory: '+json.dumps(report['gpu']), '',
-        'Selected stack: '+json.dumps(qualification.get('selected',{}).get('settings')), '',
-        'Qualification gates: '+json.dumps(qualification.get('gates',{})), '',
-        'Kernel qualification/fallback: '+json.dumps({k:v for k,v in report.get('kernels',{}).items()
-            if k in ('status','dispatch','fallback_dispatch')}), '',
-        'Kernel candidate error: '+str(report.get('kernels',{}).get('failed_candidate',{}).get('error')), '',
+        'Linear-attention sanity: '+json.dumps(report.get('kernels',{})), '',
         f"Seconds per GRPO step: {report['seconds_per_grpo_step']}", '',
         '| Steps | Projected GRPO seconds | Projected GRPO USD |', '|---|---|---|']
     for n, row in report['projections'].items():
         text.append(f"| {n} | {row['grpo_seconds']} | {row['grpo_compute_usd']} |")
     text.extend(['', report['projection_note'], '',
-        'Per-turn generation timing: smoke/grpo/generation-timings.json. Fixed replay comparison: '
-        'smoke/grpo/qualification.json; failed gates include the error and fallback.', '',
         'Reproduce: read smoke/metrics.json, smoke/grpo/metrics.json and smoke/base-eval/**/episode.json.', ''])
     (output/'REPORT.md').write_text('\n'.join(text))

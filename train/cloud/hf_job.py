@@ -40,7 +40,6 @@ def main() -> None:
         remaining = remaining[1:]
     runtime_parser = argparse.ArgumentParser(add_help=False)
     runtime_parser.add_argument('--recipe',default='smoke')
-    runtime_parser.add_argument('--kernels',default='auto')
     runtime_parser.add_argument('--trackio-space')
     runtime_parser.add_argument('--hourly-usd',type=float,default=5.)
     runtime, _ = runtime_parser.parse_known_args(remaining)
@@ -53,31 +52,10 @@ def main() -> None:
     root = unpack(args.bundle,args.workspace,args.bundle_sha256)
     os.chdir(root)
     os.environ['PERMIT_JOB_DEADLINE_UNIX'] = str(started+args.job_seconds-120)
-    os.environ['USE_HUB_KERNELS'] = 'NO'
-    policy = runtime.kernels
     metrics = ['--extra','metrics'] if runtime.trackio_space else []
     command = ['uv','sync','--project','train/cloud','--frozen','--no-dev']
     subprocess.run(command+metrics,check=True,timeout=min(900,args.job_seconds-240))
-    setup = dict(started_unix=started,kernel_policy=policy,kernel_install='off')
-    if policy != 'off':
-        try:
-            subprocess.run(command+metrics+['--extra','fast-kernels'],check=True,timeout=300)
-            setup['kernel_install'] = 'installed'
-        except (subprocess.CalledProcessError,subprocess.TimeoutExpired) as exc:
-            setup.update(kernel_install='failed',kernel_error=type(exc).__name__)
-            if policy == 'required':
-                raise
-            subprocess.run(command+metrics,check=True,timeout=120)
-    # The loss and attention packages qualify independently of local GDN installation.
-    installed = metrics+(['--extra','fast-kernels'] if setup['kernel_install'] == 'installed' else [])
-    for extra in ('attention','loss'):
-        try:
-            subprocess.run(command+installed+['--extra',extra],check=True,timeout=180)
-            installed += ['--extra',extra]
-            setup[extra+'_install'] = 'installed'
-        except (subprocess.CalledProcessError,subprocess.TimeoutExpired) as exc:
-            setup[extra+'_install'] = type(exc).__name__
-            subprocess.run(command+installed,check=True,timeout=120)
+    setup = dict(started_unix=started,stack_install='installed')
     setup_path = root/'train/cloud/bootstrap.json'
     subprocess.run(['train/cloud/.venv/bin/python','-c',
         'from pathlib import Path; from train.cloud.bundle import verify_tree; verify_tree(Path("."), strict=False)'],

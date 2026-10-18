@@ -5,7 +5,6 @@ import math
 from pathlib import Path
 import statistics
 import time
-from types import SimpleNamespace
 
 from .config import CloudConfig
 from .formatting import encode_row, load_tokenizer
@@ -25,7 +24,7 @@ def validate_loading_info(info: dict) -> None:
 def model_load_kwargs(config: CloudConfig) -> dict:
     import torch
     from transformers import BitsAndBytesConfig
-    options = dict(dtype=torch.bfloat16, device_map={'':0}, attn_implementation='sdpa')
+    options = dict(dtype=torch.bfloat16, device_map={'':0})
     if config.precision == 'nf4':
         options['quantization_config'] = BitsAndBytesConfig(load_in_4bit=True,
             bnb_4bit_quant_type='nf4', bnb_4bit_use_double_quant=True,
@@ -41,8 +40,6 @@ def load_model(config: CloudConfig, adapter: Path | None = None, *, trainable: b
     original = AutoConfig.from_pretrained(config.model, revision=config.revision)
     if original.model_type != 'qwen3_5':
         raise ValueError('Unexpected checkpoint architecture')
-    from .kernel_cases import check_model_geometry
-    check_model_geometry(original.text_config)
     # Transformers 5.17's qwen3_5_text PrefixChange removes language_model.
     # CPU test compares every tensor with a tiny conditional-generation checkpoint.
     model, info = Qwen3_5ForCausalLM.from_pretrained(config.model, revision=config.revision,
@@ -111,7 +108,7 @@ def stop_callback(step: int):
 
 def train(config: CloudConfig, kind: str, output: Path, *, data: Path, pack,
           tasks: list, fields_loader, adapter: Path | None = None, smoke: bool = False,
-          stop_after_step: int | None = None, qualification_run: Path | None = None) -> dict:
+          stop_after_step: int | None = None) -> dict:
     import torch
     from datasets import Dataset
     from peft import get_peft_model_state_dict
@@ -119,7 +116,6 @@ def train(config: CloudConfig, kind: str, output: Path, *, data: Path, pack,
     from transformers import TrainerCallback
     from trl import GRPOConfig, GRPOTrainer, SFTConfig, SFTTrainer
     from trl.chat_template_utils import add_response_schema
-    from train.memory import memory_trainer_class
     from train.permit_env import PermitTrainingEnv, scenario_text, training_instructions, tool_schemas
     from train.runtime import reward_groups
     from .make_sft import validate_catalog
@@ -183,30 +179,11 @@ def train(config: CloudConfig, kind: str, output: Path, *, data: Path, pack,
             traces.append(record)
             trace.write(json.dumps(record, allow_nan=False)+'\n')
             trace.flush()
-        # The local chunked loss is Qwen3-specific and deliberately disabled here.
-        cls = memory_trainer_class(GRPOTrainer, SimpleNamespace(generation_microbatch_size=1,
-                                    empty_cache_after_generation=True, loss_chunk_size=0))
-        from .generation import cached_trainer_class
-        cls = cached_trainer_class(cls,microbatch=1,persistent=False)
-        trainer = cls(model=model, processing_class=tokenizer, args=GRPOConfig(**options),
+        trainer = GRPOTrainer(model=model, processing_class=tokenizer, args=GRPOConfig(**options),
             train_dataset=Dataset.from_list(rows), environment_factory=partial(PermitTrainingEnv,
                 pack=pack, fields_loader=fields_loader, trace_sink=capture))
         if trainer.chat_template is not None:
             raise ValueError('TRL attempted to replace the qualified Qwen inference template')
-
-        from .qualification import apply_configuration, load_selection, qualify_stack
-        try:
-            if smoke:
-                qualify_stack(trainer,tasks,config,output)
-            elif qualification_run is not None:
-                selected = load_selection(qualification_run/'smoke/grpo/qualification.json')
-                apply_configuration(trainer,selected)
-            else:
-                raise ValueError('Cloud GRPO requires a qualified stack from the smoke')
-        except BaseException:
-            trace.close()
-            raise
-        write_json(output/'selected-stack.json',trainer.stack_settings)
 
     initial_path = output/'initial-adapter.safetensors'
     if not initial_path.exists():
@@ -264,10 +241,6 @@ def train(config: CloudConfig, kind: str, output: Path, *, data: Path, pack,
             elapsed_seconds=time.monotonic()-started, peak_vram_allocated_bytes=torch.cuda.max_memory_allocated(),
             peak_vram_reserved_bytes=torch.cuda.max_memory_reserved(), groups=reward_groups(traces,config.num_generations),
             tasks_seen=sorted({r['task_id'] for r in traces}))
-        if kind == 'grpo':
-            metrics['stack'] = trainer.stack_settings
-            metrics['generation_turns'] = trainer.generation_timings
-            write_json(output/'generation-timings.json',trainer.generation_timings)
         write_json(output/'metrics.json', metrics)
         # NaN reward diagnostics are retained as null in JSON.
         logs = json.loads(json.dumps(trainer.state.log_history).replace('NaN','null').replace('Infinity','null'))
