@@ -64,7 +64,7 @@ uses the default generation option permitted by WP2.15. vLLM is not installed.
 The model revision remains `1d4bf0f2ff6012fd82039f2fa52739d0dd7c60c0` of
 `Qwen/Qwen3.8-27B`. The text-only `Qwen3_5ForCausalLM` loader validates every
 language weight and omits vision weights. Defaults are bf16, full-attention
-q/k/v/o LoRA rank 16/alpha 32, four generations, accumulation four, 40 turns and
+q/k/v/o LoRA rank 16/alpha 32, six generations, accumulation six, 40 turns and
 prompt/completion ceilings of 4,096/40,960 tokens (45,056 retained total). Thinking
 is off. Replaying the three saved base episodes through installed TRL, including
 the submission reply and tool feedback, takes 30,259 / 32,582 / 29,878 completion
@@ -114,7 +114,7 @@ by the job. Large archives remain ignored by git.
 WP2.16 rebuilt and verified the retained archive against the working tree. Its
 SHA256 (`sha256sum train/cloud/data/cloud-bundle.tar.gz`):
 
-`21f792590a5a2ddfd91106fa3a4e1370f9a8c7088f82fa81a86ef973048a204f`
+`50a82ebaa400a68f10641a77bd9d610cde2cc5f56c51fa4108b262a1c8ddacf9`
 
 Run from the repository root (the existing `train` environment can run CPU checks
 without installing a second CUDA stack):
@@ -150,10 +150,10 @@ commands (`estimated_total_usd + setup_prior_usd`):
 
 | Recipe | Estimated compute USD | Provider timeout seconds |
 |---|---:|---:|
-| Smoke | 9.21 | 10,800 |
-| Stop at 20, target 100 | 75.25 | 97,200 |
-| Fresh 50, base + final eval | 159.67 | 206,100 |
-| Fresh 100, base + final eval | 243.00 | 326,100 |
+| Smoke | 10.59 | 10,800 |
+| Stop at 20, target 100 | 89.14 | 117,200 |
+| Fresh 50, base + final eval | 194.39 | 256,100 |
+| Fresh 100, base + final eval | 312.44 | 426,100 |
 
 Full plans are fields → base eval → GRPO → final eval → adapter export. The
 20-step check omits final eval/export. Measured on the H200 smoke: 480 CPU-seconds
@@ -161,9 +161,9 @@ per field task divided by four workers, 816 seconds per complete 40-turn eval
 episode including native grading (mean 815.54 s, max 996.94 s; reproduced by the
 replay command above and `test_plan_caps_fit_the_measured_evaluation_timings`)
 and 100 seconds for the kernel check. **Estimated until the
-evaluation-rules smoke measures it:** 1,200 seconds per GRPO step (289 s was measured
-with 8 turns; eval-length rollouts are about four times longer), capped at 2,400
-seconds per step. Smoke save/reload is 180 seconds. Evaluation stages are capped at
+evaluation-rules smoke measures it:** 1,700 seconds per GRPO step of six rollouts (289 s
+was measured with 8 turns and four rollouts; eval-length rollouts are about four times
+longer), capped at 3,400 seconds per step. Smoke save/reload is 180 seconds. Evaluation stages are capped at
 30 × 1,200 seconds. The supervisor/provider enforce the hard wall/dollar limits,
 including JIT. Use the evaluation-rules smoke's measurements before choosing caps or
 launching longer work. `--wall-cap STAGE=SECONDS` and

@@ -20,7 +20,7 @@ def test_standard_grpo_trainer_owns_generation_and_loss():
     opts = training_options(CloudConfig(), 'grpo', Path('unused'), smoke=True)
     assert opts['use_vllm'] is False
     assert opts['max_steps'] == 2
-    assert opts['num_generations'] == opts['gradient_accumulation_steps'] == 4
+    assert opts['num_generations'] == opts['gradient_accumulation_steps'] == 6
     assert opts['max_tool_calling_iterations'] == 40  # the evaluation's turn limit (test_eval_rules.py)
     assert opts['beta'] == 0 and opts['scale_rewards'] == 'group'
     assert opts['mask_truncated_completions'] is False
@@ -95,22 +95,23 @@ def test_stock_trl_accepts_text_lora_and_existing_environment_factory(tmp_path):
         'get_scenario','check_design','evaluate_design','submit_design'}
     assert trainer.reward_weights.tolist() == [0.0, 1.0]
     # Exercise installed TRL reward dispatch and loss masks with truncated scripted responses.
-    responses = [[{'role':'assistant','content':'unfinished'}] for _ in range(4)]
-    generated = ([[1,2]]*4, [[7,8]]*4, [[1,1]]*4, responses, None, {}, None, [[]]*4)
+    n = CloudConfig().num_generations
+    responses = [[{'role':'assistant','content':'unfinished'}] for _ in range(n)]
+    generated = ([[1,2]]*n, [[7,8]]*n, [[1,1]]*n, responses, None, {}, None, [[]]*n)
     inputs = [{'prompt':[{'role':'user','content':'Test'}], 'split':'train',
-               'task_id':'074897d0f159-s47'} for _ in range(4)]
+               'task_id':'074897d0f159-s47'} for _ in range(n)]
     with patch.object(trainer, '_generate', return_value=generated):
         batch = trainer._generate_and_score_completions(inputs)
-    assert batch['completion_mask'].sum().item() == 8
-    assert batch['tool_mask'].sum().item() == 8
-    assert len(records) == 4
+    assert batch['completion_mask'].sum().item() == 2*n
+    assert batch['tool_mask'].sum().item() == 2*n
+    assert len(records) == n
     # The hook's column is None for every rollout, so the environment's reward is the only score and a
     # rollout whose grading failed (environment NaN) stays unscorable, as without the hook.
     import torch
     trainer.environments[0]._grading_failed = True
-    scored = trainer._calculate_rewards(inputs, [x['prompt'] for x in inputs], responses, [[7,8]]*4)
+    scored = trainer._calculate_rewards(inputs, [x['prompt'] for x in inputs], responses, [[7,8]]*n)
     assert torch.isnan(scored[:, 0]).all()
-    assert torch.isnan(scored[0, 1]) and scored[1:, 1].tolist() == [0.0, 0.0, 0.0]
+    assert torch.isnan(scored[0, 1]) and scored[1:, 1].tolist() == [0.0]*(n-1)
     assert all(r['ended'] == 'budget' and r['completion_tokens'] == 2 for r in records)
 
 

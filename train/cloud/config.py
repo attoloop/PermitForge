@@ -5,8 +5,8 @@ import math
 STAGES = ('fields', 'base-eval', 'smoke', 'grpo', 'eval', 'export')
 FIELD_CPU_SECONDS = 480       # measured: five smoke tasks in about ten minutes on four workers
 EVAL_EPISODE_SECONDS = 816    # ceil(mean complete base episodes), including native grading; test_eval_rules.py
-GRPO_STEP_SECONDS = 1200      # estimate: 289 s measured at 8 turns; eval-length rollouts run about four times longer
-GRPO_STEP_CAP_SECONDS = 2400  # cap per step: twice the estimate
+GRPO_STEP_SECONDS = 1700      # estimate for six rollouts: 289 s measured at 8 turns with four; eval-length rollouts run about four times longer
+GRPO_STEP_CAP_SECONDS = 3400  # cap per step: twice the estimate
 PRICES = {'hf-jobs': 5.00}
 
 
@@ -29,8 +29,8 @@ class CloudConfig:
     max_completion_length: int = 40960
     max_prompt_length: int = 4096
     train_turns: int = 40
-    num_generations: int = 4
-    accum: int = 4
+    num_generations: int = 6
+    accum: int = 6
     lora_rank: int = 16
     lora_alpha: int = 32
     seed: int = 0

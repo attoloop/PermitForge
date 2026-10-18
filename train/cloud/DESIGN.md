@@ -201,8 +201,8 @@ settings need their own passed smoke.
 The text-only loader checks all language weights against the pinned checkpoint;
 a CPU test compares its mapping with a tiny conditional-generation checkpoint.
 Only full-attention q/k/v/o LoRA trains (rank 16, alpha 32, zero dropout). Defaults
-are bf16, group reward scaling, beta zero, one update per sampled group, four
-generations, accumulation four, 40 turns and thinking off. The pinned Qwen
+are bf16, group reward scaling, beta zero, one update per sampled group, six
+generations, accumulation six, 40 turns and thinking off. The pinned Qwen
 tokenizer is retained; TRL may not replace its template. Completion limits,
 measured replay sizes and budget-cut diagnostics are specified above. Zero-spread
 diagnostics remain. The existing explicit NF4 and historical SFT utilities remain
@@ -227,7 +227,7 @@ smoke (field preparation, complete 40-turn evaluation episodes including native
 grading, kernel check). Evaluation uses ceil(mean complete time) = 816 s (mean
 815.54 s, max 996.94 s), checked from `episode.json` timestamps by
 `test_plan_caps_fit_the_measured_evaluation_timings`; the
-evaluation-rules GRPO step (1,200 s, capped at 2,400 s) is an estimate until its
+evaluation-rules GRPO step (1,700 s for six rollouts, capped at 3,400 s) is an estimate until its
 smoke measures it, and evaluation stages are capped at 30 × 1,200 s. Reproduce them
 with `python -m train.cloud.run --plan --recipe smoke` in the cloud environment.
 

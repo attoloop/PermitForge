@@ -12,8 +12,8 @@ def test_cloud_training_never_loads_a_second_generator():
     opts = training_options(cfg, 'grpo', Path('runs/output'), smoke=True)
     assert opts['max_steps'] == 2
     assert opts['use_vllm'] is False
-    assert opts['num_generations'] == 4
-    assert opts['generation_batch_size'] == 4
+    assert opts['num_generations'] == 6
+    assert opts['generation_batch_size'] == 6
     assert opts['chat_template_kwargs'] == {'enable_thinking':False}
     assert opts['save_steps'] == 1
     assert opts['mask_truncated_completions'] is False
