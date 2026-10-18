@@ -217,7 +217,7 @@ uvx --from 'huggingface-hub==1.33.0' hf upload \
 
 # One smoke Job, including setup. Trackio is off.
 JOB_ID="$(uvx --from 'huggingface-hub==1.33.0' hf jobs uv run \
-  --namespace attoloop --flavor h200 --timeout 3h --secrets HF_TOKEN \
+  --namespace Attoloop --flavor h200 --timeout 3h --secrets HF_TOKEN \
   --name permitforge-qwen38-smoke --detach --quiet \
   --volume hf://datasets/Attoloop/permitforge-qwen38-inputs:/inputs:ro \
   train/cloud/hf_job.py --bundle /inputs/cloud-bundle.tar.gz \
@@ -228,11 +228,11 @@ JOB_ID="$(uvx --from 'huggingface-hub==1.33.0' hf jobs uv run \
 
 # Keep a local log copy; inspect the final Job status after the stream ends.
 uvx --from 'huggingface-hub==1.33.0' hf jobs logs \
-  --namespace attoloop "$JOB_ID" --follow | tee train/cloud/data/smoke-logs.txt
-uvx --from 'huggingface-hub==1.33.0' hf jobs inspect --namespace attoloop "$JOB_ID"
+  --namespace Attoloop "$JOB_ID" --follow | tee train/cloud/data/smoke-logs.txt
+uvx --from 'huggingface-hub==1.33.0' hf jobs inspect --namespace Attoloop "$JOB_ID"
 
 # Cancel immediately if needed (use a second terminal while following logs).
-uvx --from 'huggingface-hub==1.33.0' hf jobs cancel --namespace attoloop "$JOB_ID"
+uvx --from 'huggingface-hub==1.33.0' hf jobs cancel --namespace Attoloop "$JOB_ID"
 
 # Read back artifacts after completion; destination must be a fresh directory.
 uvx --from 'huggingface-hub==1.33.0' hf sync \
