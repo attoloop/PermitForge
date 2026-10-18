@@ -26,13 +26,22 @@ def write_json(path: Path, data: dict) -> None:
     temp.replace(path)
 
 
-def terminate(process: subprocess.Popen, descendants: dict | None = None) -> None:
+PR_SET_CHILD_SUBREAPER = 36
+
+
+def descendants() -> dict:
     import psutil
-    for child in (descendants or {}).values():
+    found = {}
+    for child in psutil.Process().children(recursive=True):
         try:
-            child.kill()
+            found[(child.pid, child.create_time())] = child
         except psutil.NoSuchProcess:
             pass
+    return found
+
+
+def terminate(process: subprocess.Popen, before: set) -> None:
+    import psutil
     if process.poll() is None:
         os.killpg(process.pid, signal.SIGTERM)
         try:
@@ -40,26 +49,39 @@ def terminate(process: subprocess.Popen, descendants: dict | None = None) -> Non
         except subprocess.TimeoutExpired:
             os.killpg(process.pid, signal.SIGKILL)
             process.wait()
+    # Stop every leftover descendant before killing any, so none can start another.
+    left = {}
+    while found := {key: child for key, child in descendants().items() if key not in before and key not in left}:
+        for child in found.values():
+            try:
+                child.suspend()
+            except psutil.NoSuchProcess:
+                pass
+        left.update(found)
+    for child in left.values():
+        try:
+            child.kill()
+        except psutil.NoSuchProcess:
+            pass
+    psutil.wait_procs(left.values(), timeout=5)
 
 
 def run_guarded(command: list[str], output: Path, *, seconds: float, sync=None) -> dict:
     """Bound the entire process group, including native children and hung GPU calls."""
+    import ctypes
+    # Native models run in their own sessions; as a subreaper this process inherits any the stage orphans.
+    if ctypes.CDLL(None, use_errno=True).prctl(PR_SET_CHILD_SUBREAPER, 1, 0, 0, 0) != 0:
+        raise OSError(ctypes.get_errno(), 'prctl(PR_SET_CHILD_SUBREAPER)')
     output.mkdir(parents=True, exist_ok=True)
+    before = set(descendants())
     started = time.monotonic()
     process = None
-    descendants = {}
     status = 'failed'
     try:
         with (output/'console.log').open('a') as log:
             process = subprocess.Popen(command, stdout=log, stderr=subprocess.STDOUT, start_new_session=True)
             next_sync = started + 60
             while process.poll() is None:
-                import psutil
-                try:
-                    for child in psutil.Process(process.pid).children(recursive=True):
-                        descendants[(child.pid, child.create_time())] = child
-                except psutil.NoSuchProcess:
-                    pass
                 now = time.monotonic()
                 if now-started >= seconds:
                     status = 'cap_exceeded'
@@ -73,7 +95,7 @@ def run_guarded(command: list[str], output: Path, *, seconds: float, sync=None) 
                 status = 'complete' if process.returncode == 0 else 'failed'
     finally:
         if process is not None:
-            terminate(process, descendants)
+            terminate(process, before)
     return dict(status=status, exit_code=process.returncode, elapsed_seconds=time.monotonic()-started)
 
 

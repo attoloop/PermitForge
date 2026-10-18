@@ -100,20 +100,42 @@ def test_mask_only_assistant_bodies_and_eos():
     assert 'SYS' not in trained and 'TOOL' not in trained
 
 
+def running(pid):
+    import psutil
+    try:
+        return psutil.Process(pid).status() != psutil.STATUS_ZOMBIE
+    except psutil.NoSuchProcess:
+        return False
+
+
+def assert_killed(pid):
+    import psutil
+    try:
+        assert not running(pid)
+    finally:
+        if running(pid):
+            psutil.Process(pid).kill()
+
+
 def test_supervisor_kills_detached_native_descendants(tmp_path):
     import sys
-    import psutil
     child_file = tmp_path/'child.pid'
     program = ('import subprocess,sys,time; from pathlib import Path; '
                'p=subprocess.Popen([sys.executable,"-c","import time; time.sleep(60)"],start_new_session=True); '
                f'Path({str(child_file)!r}).write_text(str(p.pid)); time.sleep(60)')
-    result = run_guarded([sys.executable,'-c',program],tmp_path,seconds=.5,sync=None)
-    pid = int(child_file.read_text())
-    try:
-        assert not psutil.pid_exists(pid) or psutil.Process(pid).status() == psutil.STATUS_ZOMBIE
-    finally:
-        if psutil.pid_exists(pid) and psutil.Process(pid).status() != psutil.STATUS_ZOMBIE:
-            psutil.Process(pid).kill()
+    result = run_guarded([sys.executable,'-c',program],tmp_path,seconds=2,sync=None)
+    assert_killed(int(child_file.read_text()))
+    assert result['status'] == 'cap_exceeded'
+
+
+def test_supervisor_kills_detached_descendants_orphaned_between_scans(tmp_path):
+    import sys
+    child_file = tmp_path/'child.pid'
+    # The shell exits within milliseconds, so its detached child is orphaned before a scan can see it.
+    program = ('import subprocess,time; '
+               f'subprocess.run(["sh","-c","setsid sleep 60 & echo $! > {child_file}"]); time.sleep(60)')
+    result = run_guarded([sys.executable,'-c',program],tmp_path,seconds=2,sync=None)
+    assert_killed(int(child_file.read_text()))
     assert result['status'] == 'cap_exceeded'
 
 
