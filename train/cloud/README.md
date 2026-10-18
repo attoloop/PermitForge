@@ -158,26 +158,26 @@ input dataset and run bucket below are private and under attoloop.
 ```sh
 # Create destinations; uploads remain private.
 uvx --from 'huggingface-hub==1.33.0' hf repos create \
-  attoloop/permitforge-qwen38-inputs --repo-type dataset --private
+  Attoloop/permitforge-qwen38-inputs --repo-type dataset --private
 uvx --from 'huggingface-hub==1.33.0' hf buckets create \
-  attoloop/permitforge-qwen38-runs --private
+  Attoloop/permitforge-qwen38-runs --private
 
 # Upload the locally verified archive; retain this hash with the launch record.
 BUNDLE_SHA="$(sha256sum train/cloud/data/cloud-bundle.tar.gz | cut -d ' ' -f 1)"
 uvx --from 'huggingface-hub==1.33.0' hf upload \
-  attoloop/permitforge-qwen38-inputs train/cloud/data/cloud-bundle.tar.gz \
+  Attoloop/permitforge-qwen38-inputs train/cloud/data/cloud-bundle.tar.gz \
   cloud-bundle.tar.gz --repo-type dataset
 
 # One smoke Job, including setup. Trackio is off.
 JOB_ID="$(uvx --from 'huggingface-hub==1.33.0' hf jobs uv run \
   --namespace attoloop --flavor h200 --timeout 2h --secrets HF_TOKEN \
   --name permitforge-qwen38-smoke --detach --quiet \
-  --volume hf://datasets/attoloop/permitforge-qwen38-inputs:/inputs:ro \
+  --volume hf://datasets/Attoloop/permitforge-qwen38-inputs:/inputs:ro \
   train/cloud/hf_job.py --bundle /inputs/cloud-bundle.tar.gz \
   --bundle-sha256 "$BUNDLE_SHA" --workspace /workspace/permit-cloud \
   --job-seconds 7200 -- --execute --recipe smoke --hourly-usd 5.00 \
   --precision bf16 --kernels auto --output train/cloud/runs/smoke-v1 \
-  --artifact-uri hf://buckets/attoloop/permitforge-qwen38-runs/smoke-v1)"
+  --artifact-uri hf://buckets/Attoloop/permitforge-qwen38-runs/smoke-v1)"
 
 # Keep a local log copy; inspect the final Job status after the stream ends.
 uvx --from 'huggingface-hub==1.33.0' hf jobs logs \
@@ -189,7 +189,7 @@ uvx --from 'huggingface-hub==1.33.0' hf jobs cancel --namespace attoloop "$JOB_I
 
 # Read back artifacts after completion; destination must be a fresh directory.
 uvx --from 'huggingface-hub==1.33.0' hf sync \
-  hf://buckets/attoloop/permitforge-qwen38-runs/smoke-v1 train/cloud/data/smoke-result
+  hf://buckets/Attoloop/permitforge-qwen38-runs/smoke-v1 train/cloud/data/smoke-result
 cat train/cloud/data/smoke-result/smoke/REPORT.md
 ```
 
