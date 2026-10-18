@@ -14,7 +14,7 @@ from typing import Any, Callable
 from permit_core.cost import cost
 from permit_core.evaluate import evaluate
 from permit_core.reward import reward
-from permit_openenv.prompts import INSTRUCTIONS, PROMPT_VERSION
+from permit_openenv.prompts import INSTRUCTIONS, PROMPT_VERSION, opening
 from permit_openenv.protocol import DESIGN_SCHEMA, json_value
 from permit_openenv.tasks import Task, TaskPack, load_pack, to_ledger
 
@@ -26,6 +26,11 @@ def training_instructions(max_turns: int | None = None) -> str:
     if max_turns is None:
         return INSTRUCTIONS
     return INSTRUCTIONS.replace('you have 30 evaluations', f'you have {max_turns} tool turns')
+
+
+def opening_messages(turns: int) -> list[dict]:
+    """The opening shared with the frontier Claude driver and the cloud evaluation: instructions, then one line."""
+    return [{'role': 'system', 'content': INSTRUCTIONS}, {'role': 'user', 'content': opening(turns)}]
 
 
 def tool_schemas() -> list[dict]:
@@ -67,9 +72,11 @@ class PermitTrainingEnv:
     def __init__(self, *, pack: TaskPack | None = None,
                  fields_loader: Callable[[Task], Any] | None = None,
                  smoke: bool = False, diagnostics_dir: Path | None = None,
-                 trace_sink: Callable[[dict], None] | None = None):
+                 trace_sink: Callable[[dict], None] | None = None, opening_turns: int | None = None):
         self._pack = pack if pack is not None else load_pack()
         self._fields_loader = fields_loader
+        # Set: reset returns the shared evaluation opening line; unset: the local trainer's compact tables.
+        self._opening_turns = opening_turns
         # smoke/diagnostics_dir remain accepted for older launch commands; grading is identical.
         self._trace_sink = trace_sink
         self._task: Task | None = None
@@ -88,7 +95,7 @@ class PermitTrainingEnv:
         self._evaluations_used = 0
         self._steps: list[dict] = []
         self._final: dict | None = None
-        return scenario_text(task)
+        return scenario_text(task) if self._opening_turns is None else opening(self._opening_turns)
 
     def get_reward(self) -> float:
         """Return the saved fraction; unavailable grading is NaN, no submission is zero."""
@@ -101,11 +108,11 @@ class PermitTrainingEnv:
         return score
 
     def get_scenario(self) -> str:
-        """Read sources, controls, heights, standards, draft and remaining evaluations."""
+        """Read sources, controls, height menus, standards, draft, and evaluations left."""
         return self._dispatch('get_scenario')
 
     def check_design(self, design: dict[str, dict[str, str | float]]) -> str:
-        """Check design validity and exact cost for free, without testing air quality.
+        """Check validity and exact annualized cost, for free; does not test air quality.
 
         Args:
             design: Every source ID mapped to a control ID and a menu height_m.
@@ -113,7 +120,7 @@ class PermitTrainingEnv:
         return self._dispatch('check_design', design)
 
     def evaluate_design(self, design: dict[str, dict[str, str | float]]) -> str:
-        """Return feasibility and binding standards; valid designs spend one evaluation.
+        """Test feasibility and binding standards; spends one evaluation only for a valid design.
 
         Args:
             design: Every source ID mapped to a control ID and a menu height_m.
@@ -121,7 +128,7 @@ class PermitTrainingEnv:
         return self._dispatch('evaluate_design', design)
 
     def submit_design(self, design: dict[str, dict[str, str | float]]) -> str:
-        """Submit the final design once and end the episode.
+        """End the episode and independently verify the final design; grading may take minutes.
 
         Args:
             design: Every source ID mapped to a control ID and a menu height_m.

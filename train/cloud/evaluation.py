@@ -31,6 +31,7 @@ def evaluate(config, model, tokenizer, pack, ids: list[str], output: Path, *, fi
     from permit_openenv.environment import PermitForgeEnvironment
     from permit_openenv.prompts import INSTRUCTIONS
     from permit_openenv.protocol import json_value
+    from train.permit_env import opening_messages
 
     class CachedEvaluator:
         def evaluate(self, task, design):
@@ -73,7 +74,6 @@ def evaluate(config, model, tokenizer, pack, ids: list[str], output: Path, *, fi
                 write_json(final_path, previous)
                 records.append(previous)
                 continue
-            task = pack.get(task_id)
             env = PermitForgeEnvironment(pack, evaluator=CachedEvaluator(), verifier=IsolatedVerifier(folder))
             env.reset(task_id=task_id)
             import asyncio
@@ -83,8 +83,7 @@ def evaluate(config, model, tokenizer, pack, ids: list[str], output: Path, *, fi
             seed = config.seed + repeat*1_000_003 + index
             set_seed(seed)
             model.eval()
-            messages = [{'role':'system','content':INSTRUCTIONS}, {'role':'user','content':
-                json.dumps(task.view())+f'\nYou have {config.eval_turns} turns. Submit before your final turn ends.'}]
+            messages = opening_messages(config.eval_turns)
             model_name = 'hf:'+config.model+(':adapter' if adapter else ':base')
             usage = {'input_tokens':0,'output_tokens':0,'usd':None}
             generation_turns = []

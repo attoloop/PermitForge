@@ -4,14 +4,48 @@ WP2.15 supersedes the cloud kernel/cache machinery from WP2.12–WP2.14. It uses
 ordinary TRL `GRPOTrainer`, `GRPOConfig`, `environment_factory` and PEFT LoRA.
 There is no custom trainer subclass or generation/loss override. Transformers
 chooses its attention implementation and resolves installed FLA automatically.
-The model, tasks, prompts, reward, native evaluation verifier, budgets and LoRA
-targets are unchanged. Local small-model experiments in `train/` remain separate.
+The model, tasks, reward, native evaluation verifier and LoRA targets are unchanged;
+training now follows the evaluation's rules (below). Local small-model experiments
+in `train/` remain separate and keep their compact opening.
+
+## Training under the evaluation rules
+
+GRPO episodes use what the evaluation uses: the environment's instructions,
+unchanged (30 evaluations); one opening line, `opening()` in
+`permit_openenv/prompts.py`, shared by the frontier Claude driver, the cloud
+evaluation and training; the same four tool names and descriptions; at most 40
+executed tool rounds; and 30 evaluations. TRL appends `reset()`'s observation to
+the dataset row's empty user message, so the rendered opening equals the
+evaluation's; `tests/test_eval_rules.py` checks that, the tool descriptions against
+the live MCP server, and that the rendered opening (983 tokens) fits.
+
+Three differences remain, all disclosed:
+
+- **Tool parameter schema.** TRL renders tools from the environment's methods
+  through Transformers' `get_json_schema`, which has no override for an exact
+  schema. Training therefore describes `design` as a mapping of source IDs to
+  `{control, height_m}` without the evaluation schema's strictness metadata (no
+  extra keys, at most six sources). The environment validates designs identically.
+- **Final-turn reminder.** The evaluation adds "Last turn: submit your best
+  feasible design now." before its 40th turn; TRL's tool loop cannot insert a user
+  message mid-episode. Training is therefore no easier than evaluation at the limit.
+- **Submission grading.** The model-facing text is the evaluation's ("independently
+  verify"), but a training submission is graded by the fast evaluator, whose native
+  agreement was measured on 240 designs (1,920 of 1,920 standard values to five
+  decimals). Base and final evaluations use native AERMOD verification.
+
+TRL's loop generates once and then at most `max_tool_calling_iterations` times
+after executed tool calls, so 40 allows the evaluation's 40 executed tool rounds;
+a 41st reply's tool calls are not executed and cannot change the reward.
 
 ## Versions and generation choice
 
-`pyproject.toml` and `uv.lock` select torch 2.12.1 from PyPI, its CUDA 13.0 runtime
-family and exactly Triton 3.7.1. This is Torch's declared dependency, not a
-resolver override. FLA/fla-core 0.5.2 is required. Its Hopper guard excludes
+`pyproject.toml` and `uv.lock` select torch 2.12.1+cu129 from the PyTorch cu129
+index (CUDA 12.9 runtime) and exactly Triton 3.7.1, Torch's declared dependency, not
+a resolver override. PyPI's torch 2.12.1 is a CUDA 13 build; on one H200 host its
+driver could not run it and no GPU was visible, while another host's could. The
+PyTorch cu128 index stops at torch 2.11, which pins the guarded Triton 3.6.0. The
+lock covers Linux x86-64 only, the cloud target, and a test forbids CUDA 13 runtimes. FLA/fla-core 0.5.2 is required. Its Hopper guard excludes
 Triton >=3.4.0,<3.7.1; the new compiler is outside that broken range. TileLang,
 TVM-FFI, nvcc toolchain extras, FA3/Hub attention and Liger dependencies are
 removed. Transformers 5.17.0, TRL 1.12.0, PEFT 0.19.0 and the existing optimizer
@@ -19,8 +53,9 @@ remain pinned. NVML (`nvidia-ml-py==13.580.82`) stays for the device memory guar
 Trackio 0.42.0 remains opt-in. No new training framework is introduced.
 
 The old causal-conv1d 1.7.0 wheel targets torch 2.10/CUDA 12. It cannot be carried
-into this binary stack. The inspected publisher release has no torch 2.12 wheel,
-so it is removed and Transformers' normal convolution implementation is used.
+into this binary stack. No publisher release (through v1.7.0) has a torch 2.11 or
+2.12 wheel, so it is removed and Transformers' normal convolution implementation is
+used; Transformers logs that this is correct but slower.
 FLA accelerates linear attention independently of that optional extension.
 No source build or custom runtime fallback is added.
 
@@ -74,11 +109,19 @@ spread and measured-step projections for 20/50/100 steps. It survives worker
 failure or supervisor timeout. A longer run requires a passed smoke with matching
 provenance and successful kernel/GPU checks. No candidate selection file exists.
 
-The first retained smoke failed in FLA's guarded Hopper backward and lacked
-NVML. The second retained artifact reports a failed TileLang inner-call assertion
-and a Torch fallback; its console does not establish a completed training step.
-Read these artifacts with `python3 internal/reports/WP2.15-evidence/sources.py
---local`. Neither validates this new stack.
+Smoke history (HF Jobs under Attoloop, H200): FLA's guarded Hopper backward
+stopped the first; a TileLang execution assertion and Torch fallback ended the
+second; under the standard stack, an element-wise tolerance rejected one bf16
+rounding step on dk; PyPI's CUDA 13 torch saw no GPU on an older-driver host; a
+worst-element bound rejected dg at FLA-acceptable ratio .0161; then the native
+grader failed because its fresh subprocess lacked the worker's field-cache binding
+(now passed explicitly). Job `Attoloop/6ad478f2c662881452271a2c` then passed with
+8-turn training: all eight kernel tensors within FLA's tolerances, three of three
+untrained 40-turn evaluations feasible (58.2, 67.3 and 30.8% of draft cost saved),
+peak device memory 120.4 GB, two GRPO steps with changed weights and exact reload,
+289 s per step. In those training steps six of eight rollouts ran out of the 8 turns
+before submitting, which led to training under the evaluation's rules. Those
+settings need their own passed smoke.
 
 ## Preserved experiment and operations
 
@@ -86,10 +129,10 @@ The text-only loader checks all language weights against the pinned checkpoint;
 a CPU test compares its mapping with a tiny conditional-generation checkpoint.
 Only full-attention q/k/v/o LoRA trains (rank 16, alpha 32, zero dropout). Defaults
 are bf16, group reward scaling, beta zero, one update per sampled group, four
-generations, accumulation four, eight tool turns and thinking off. The pinned
-Qwen tokenizer is retained; TRL may not replace its template. Training context
-remains 16,384 tokens, split into a 4,096 prompt ceiling and 12,288 completion
-ceiling, including tool feedback. Truncation masking and zero-spread diagnostics
+generations, accumulation four, 40 turns and thinking off. The pinned Qwen
+tokenizer is retained; TRL may not replace its template. Training context is 32,768
+tokens, split into a 4,096 prompt ceiling and 28,672 completion ceiling, including
+tool feedback; 40-turn base episodes measured about 19,000-23,000 tokens. Truncation masking and zero-spread diagnostics
 stay unchanged. The existing explicit NF4 and historical SFT utilities remain
 available but are not part of the standard H200 recipe.
 
@@ -107,11 +150,11 @@ failure stops the launcher. README commands use the `Attoloop` namespace.
 
 The smoke's provider limit remains 10,800 seconds and $15 at the operator's
 $5/hour rate, including setup. Its stage allowance remains 10,200 seconds and
-$14.1667, with cleanup/upload time reserved. Removing the comparison loop removes
-its 2,400-second planning prior. Remaining priors are not throughput claims;
-reproduce them using `python -m train.cloud.run --plan --recipe smoke` in the
-cloud environment. A GPU must still establish CUDA driver compatibility, actual
-FLA numerics, model fit, useful tool behavior, gradients, reload and step speed.
+$14.1667, with cleanup/upload time reserved. Planning inputs come from the passed
+smoke (field preparation, 40-turn evaluation episodes, kernel check); the
+evaluation-rules GRPO step (1,200 s, capped at 2,400 s) is an estimate until its
+smoke measures it, and evaluation stages are capped at 30 × 1,200 s. Reproduce them
+with `python -m train.cloud.run --plan --recipe smoke` in the cloud environment.
 
 Reproduce CPU checks, lock validation, bundle rebuild and verification:
 

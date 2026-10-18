@@ -14,7 +14,8 @@ import subprocess
 import sys
 import time
 
-from .config import CloudConfig, STAGES, stage_plan, remaining_seconds
+from .config import (CloudConfig, STAGES, stage_plan, remaining_seconds, FIELD_CPU_SECONDS,
+                     EVAL_EPISODE_SECONDS, GRPO_STEP_SECONDS, GRPO_STEP_CAP_SECONDS)
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -168,9 +169,11 @@ def main(argv: list[str] | None = None) -> None:
             estimated_total_usd=sum(s['estimated_usd'] for s in plan),
             cap_total_usd=sum(s['effective_seconds']*config.hourly_usd/3600 for s in plan),
             setup_prior_seconds=900, setup_prior_usd=900*config.hourly_usd/3600,
-            priors='Unmeasured: 300 CPU-s/task / workers; 180 s/eval episode; '
-                   '180 s/GRPO step; smoke reload 180 s; kernel sanity 60 s; setup 900 s. No storage/tax/idle costs.',
-            eval_difference='WP2.9 requires three repeats; final panel uses four. Thinking disabled for this model.'), indent=2))
+            priors=(f'Measured on the H200 smoke: {FIELD_CPU_SECONDS} CPU-s/field task / workers, '
+                    f'{EVAL_EPISODE_SECONDS} s/eval episode, kernel sanity 100 s. Estimate until measured: '
+                    f'{GRPO_STEP_SECONDS} s/GRPO step under the evaluation rules (cap {GRPO_STEP_CAP_SECONDS} s). '
+                    'Smoke reload 180 s; setup 900 s. No storage/tax/idle costs.'),
+            eval_difference='Ten frozen eval tasks x three repeats, as in the frontier panel; thinking disabled for this model.'), indent=2))
         return
     if not args.execute or not args.artifact_uri:
         raise ValueError('Execution requires --execute and an existing --artifact-uri')
@@ -255,7 +258,7 @@ def run(args, config: CloudConfig, plan: list[dict], sync) -> None:
             continue
         seconds = remaining_seconds(spec['wall_seconds'], spec['usd_cap'], config.hourly_usd, entry['attempts'])
         if stage == 'grpo' and args.stop_after_step:
-            seconds = min(seconds,args.stop_after_step*360+1800)
+            seconds = min(seconds,args.stop_after_step*GRPO_STEP_CAP_SECONDS+1800)
         if os.environ.get('PERMIT_JOB_DEADLINE_UNIX'):
             seconds = min(seconds,float(os.environ['PERMIT_JOB_DEADLINE_UNIX'])-time.time())
         if seconds <= 150:

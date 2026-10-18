@@ -65,6 +65,22 @@ def load_model(config: CloudConfig, adapter: Path | None = None, *, trainable: b
     return model, load_tokenizer()
 
 
+def grpo_rows(config: CloudConfig, tasks: list) -> list[dict]:
+    """Dataset rows whose prompt, after TRL appends reset()'s observation, equals the evaluation's opening."""
+    from permit_openenv.prompts import INSTRUCTIONS
+    return [dict(prompt=[{'role':'system','content':INSTRUCTIONS},{'role':'user','content':''}],
+                 split='train',task_id=task.task_id) for task in tasks]
+
+
+def opening_ids(config: CloudConfig, tokenizer, pack) -> list[int]:
+    """The opening as TRL renders it: shared messages plus tools from the environment's bound methods."""
+    from train.permit_env import PermitTrainingEnv, TOOL_NAMES, opening_messages
+    env = PermitTrainingEnv(pack=pack)
+    return tokenizer.apply_chat_template(opening_messages(config.train_turns),
+        tools=[getattr(env, name) for name in TOOL_NAMES], enable_thinking=False,
+        add_generation_prompt=True, return_dict=False)
+
+
 def training_options(config: CloudConfig, kind: str, output: Path, *, smoke: bool = False) -> dict:
     common = dict(output_dir=str(output), max_steps=2 if smoke else getattr(config, kind+'_steps'),
         per_device_train_batch_size=1, gradient_accumulation_steps=config.accum,
@@ -116,7 +132,7 @@ def train(config: CloudConfig, kind: str, output: Path, *, data: Path, pack,
     from transformers import TrainerCallback
     from trl import GRPOConfig, GRPOTrainer, SFTConfig, SFTTrainer
     from trl.chat_template_utils import add_response_schema
-    from train.permit_env import PermitTrainingEnv, scenario_text, training_instructions, tool_schemas
+    from train.permit_env import PermitTrainingEnv
     from train.runtime import reward_groups
     from .make_sft import validate_catalog
 
@@ -164,16 +180,9 @@ def train(config: CloudConfig, kind: str, output: Path, *, data: Path, pack,
     else:
         tokenizer.padding_side = 'left'
         tokenizer = add_response_schema(tokenizer)
-        rows = []
-        for task in tasks:
-            messages = [{'role':'system','content':training_instructions(config.train_turns)},
-                        {'role':'user','content':'Optimize the plant and submit your design.\n'}]
-            expanded = [messages[0], {'role':'user','content':messages[1]['content']+scenario_text(task)}]
-            ids = tokenizer.apply_chat_template(expanded,tools=tool_schemas(),enable_thinking=False,
-                                                add_generation_prompt=True,return_dict=False)
-            if len(ids) > config.max_prompt_length:
-                raise ValueError(task.task_id+': prompt exceeds cloud limit')
-            rows.append(dict(prompt=messages, split='train',task_id=task.task_id))
+        rows = grpo_rows(config, tasks)
+        if len(opening_ids(config, tokenizer, pack)) > config.max_prompt_length:
+            raise ValueError('Opening prompt exceeds the cloud limit')
         def capture(record):
             record = {**record, 'optimizer_step':trainer.state.global_step}
             traces.append(record)
@@ -181,7 +190,7 @@ def train(config: CloudConfig, kind: str, output: Path, *, data: Path, pack,
             trace.flush()
         trainer = GRPOTrainer(model=model, processing_class=tokenizer, args=GRPOConfig(**options),
             train_dataset=Dataset.from_list(rows), environment_factory=partial(PermitTrainingEnv,
-                pack=pack, fields_loader=fields_loader, trace_sink=capture))
+                pack=pack, fields_loader=fields_loader, trace_sink=capture, opening_turns=config.train_turns))
         if trainer.chat_template is not None:
             raise ValueError('TRL attempted to replace the qualified Qwen inference template')
 

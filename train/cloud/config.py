@@ -3,6 +3,10 @@ from dataclasses import asdict, dataclass
 import math
 
 STAGES = ('fields', 'base-eval', 'smoke', 'grpo', 'eval', 'export')
+FIELD_CPU_SECONDS = 480       # measured: five smoke tasks in about ten minutes on four workers
+EVAL_EPISODE_SECONDS = 660    # measured: 462-822 s (mean 618 s) for 40-turn base episodes
+GRPO_STEP_SECONDS = 1200      # estimate: 289 s measured at 8 turns; eval-length rollouts run about four times longer
+GRPO_STEP_CAP_SECONDS = 2400  # cap per step: twice the estimate
 PRICES = {'hf-jobs': 5.00}
 
 
@@ -21,10 +25,10 @@ class CloudConfig:
     max_vram_bytes: int = 135_000_000_000
     sft_steps: int = 100
     grpo_steps: int = 100
-    max_length: int = 16384
-    max_completion_length: int = 12288
+    max_length: int = 32768
+    max_completion_length: int = 28672
     max_prompt_length: int = 4096
-    train_turns: int = 8
+    train_turns: int = 40
     num_generations: int = 4
     accum: int = 4
     lora_rank: int = 16
@@ -60,6 +64,8 @@ class CloudConfig:
                 raise ValueError(key + ' must be a positive integer')
         if self.num_generations < 2 or self.accum % self.num_generations:
             raise ValueError('accum must be divisible by num_generations >= 2')
+        if self.train_turns != self.eval_turns:
+            raise ValueError('Training follows the evaluation: train_turns must equal eval_turns')
         if self.max_prompt_length + self.max_completion_length > self.max_length:
             raise ValueError('Prompt plus completion must fit the training context')
         if ((self.eval_repeats not in ((1,3) if self.recipe == 'smoke' else (3,))) or
@@ -80,13 +86,14 @@ def remaining_seconds(wall: float, usd: float, hourly: float, attempts: list[dic
 def stage_plan(config: CloudConfig, train_count: int = 30,
                wall_caps: dict | None = None, usd_caps: dict | None = None,
                *, stop_after_step: int | None = None) -> list[dict]:
-    # Explicit unmeasured priors. Native work includes eval fields. No speed claim.
+    # Planning inputs (README, Plans): fields, eval episodes and the kernel check were measured on the H200
+    # smoke Attoloop/6ad478f2c662881452271a2c; the eval-rules GRPO step is an estimate until a smoke measures it.
     steps = stop_after_step or config.grpo_steps
-    estimates = {'fields': (train_count+10)*300/config.field_jobs, 'base-eval': 30*180,
-        'smoke': 5*300/config.field_jobs+3*180+2*180+180+60,
-        'grpo': steps*180, 'eval':30*180, 'export':300}
-    walls = {'fields':5400, 'base-eval':10800, 'smoke':10200,
-             'grpo':config.grpo_steps*360+1800, 'eval':10800, 'export':900}
+    estimates = {'fields': (train_count+10)*FIELD_CPU_SECONDS/config.field_jobs, 'base-eval': 30*EVAL_EPISODE_SECONDS,
+        'smoke': 5*FIELD_CPU_SECONDS/config.field_jobs+3*EVAL_EPISODE_SECONDS+2*GRPO_STEP_SECONDS+180+100,
+        'grpo': steps*GRPO_STEP_SECONDS, 'eval':30*EVAL_EPISODE_SECONDS, 'export':300}
+    walls = {'fields':2*(train_count+10)*FIELD_CPU_SECONDS//config.field_jobs, 'base-eval':30*1200, 'smoke':10200,
+             'grpo':config.grpo_steps*GRPO_STEP_CAP_SECONDS+1800, 'eval':30*1200, 'export':900}
     stages = ['smoke'] if config.recipe == 'smoke' else ['fields','base-eval','grpo','eval','export']
     if stop_after_step and stop_after_step < config.grpo_steps:
         stages = stages[:3]
@@ -96,7 +103,7 @@ def stage_plan(config: CloudConfig, train_count: int = 30,
         usd = (usd_caps or {}).get(stage, wall*config.hourly_usd/3600)
         effective = remaining_seconds(wall, usd, config.hourly_usd, [])
         if stage == 'grpo' and stop_after_step:
-            effective = min(effective, steps*360+1800)
+            effective = min(effective, steps*GRPO_STEP_CAP_SECONDS+1800)
         if stage == 'smoke' and (wall > 10200 or usd > 15):
             raise ValueError('Smoke caps may only be tightened (10200 seconds, $15)')
         rows.append(dict(stage=stage, estimated_seconds=estimates[stage],

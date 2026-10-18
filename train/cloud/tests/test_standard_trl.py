@@ -21,7 +21,7 @@ def test_standard_grpo_trainer_owns_generation_and_loss():
     assert opts['use_vllm'] is False
     assert opts['max_steps'] == 2
     assert opts['num_generations'] == opts['gradient_accumulation_steps'] == 4
-    assert opts['max_tool_calling_iterations'] == 8
+    assert opts['max_tool_calling_iterations'] == 40  # the evaluation's turn limit (test_eval_rules.py)
     assert opts['beta'] == 0 and opts['scale_rewards'] == 'group'
     assert opts['mask_truncated_completions'] is True
     assert not opts.get('use_liger_kernel')
