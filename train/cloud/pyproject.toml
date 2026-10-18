@@ -19,6 +19,16 @@ dev = ["pytest==8.4.2", "ruff==0.14.1"]
 [tool.uv.sources]
 permit-core = {path = "../../envs/permit/core", editable = true}
 permit-openenv = {path = "../../envs/permit/openenv", editable = true}
+torch = {index = "pytorch-cu129"}
+
+[tool.uv]
+# Cloud training runs only on Linux x86-64 GPU hosts.
+environments = ["sys_platform == 'linux' and platform_machine == 'x86_64'"]
+
+[[tool.uv.index]]
+name = "pytorch-cu129"
+url = "https://download.pytorch.org/whl/cu129"
+explicit = true
 
 [tool.pytest.ini_options]
 testpaths = ["tests", "../tests"]

@@ -42,7 +42,12 @@ def test_fixed_upstream_compiler_is_required_without_workaround_extras():
     assert 'nvidia-ml-py==13.580.82' in deps
     assert set(project['project']['optional-dependencies']) == {'metrics'}
     assert not any('tilelang' in dep or 'causal-conv1d' in dep for dep in deps)
-    assert 'torch' not in project['tool']['uv']['sources']
+    # PyPI's torch 2.12.1 is a CUDA 13 build; an H200 host with an older driver saw no GPU
+    # (Attoloop/6ad46d435ccb47ba0f7c22a4). The CUDA 12.9 build runs on CUDA 12 drivers.
+    assert project['tool']['uv']['sources']['torch'] == {'index': 'pytorch-cu129'}
+    lock = (ROOT/'train/cloud/uv.lock').read_text()
+    assert 'version = "2.12.1+cu129"' in lock
+    assert 'name = "nvidia-cuda-runtime"\n' not in lock and '-cu13' not in lock
 
 
 def test_stock_trl_accepts_text_lora_and_existing_environment_factory(tmp_path):

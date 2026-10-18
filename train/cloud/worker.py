@@ -16,7 +16,11 @@ from .run import write_json
 def gpu_guard(config: CloudConfig, output: Path):
     import torch
     if not torch.cuda.is_available() or torch.cuda.device_count() != 1:
-        raise RuntimeError('Cloud training requires exactly one visible CUDA GPU')
+        import subprocess
+        smi = subprocess.run(['nvidia-smi', '--query-gpu=name,driver_version', '--format=csv,noheader'],
+                             capture_output=True, text=True).stdout.strip()
+        raise RuntimeError(f'Cloud training requires exactly one visible CUDA GPU (torch CUDA {torch.version.cuda}, '
+                           f'devices {torch.cuda.device_count()}, nvidia-smi: {smi or "unavailable"})')
     properties = torch.cuda.get_device_properties(0)
     if (torch.cuda.get_device_capability() != (9,0) or 'sm_90' not in torch.cuda.get_arch_list()
             or properties.total_memory < config.max_vram_bytes or 'H200' not in properties.name):
