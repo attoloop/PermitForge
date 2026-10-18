@@ -51,10 +51,13 @@ Primary evidence, also captured by `internal/reports/WP2.15-evidence/sources.py`
 state, before any large model load. It calls the function selected by
 Transformers and compares output, final state and q/k/v/g/beta/initial-state
 gradients against an independent fp32 recurrence on the same quantized inputs.
-Each tensor must stay within relative L2 .02 and a worst element within .02 of the
-tensor's largest magnitude. Element-wise absolute tolerances are not used: bf16 results
-differ from the fp32 recurrence by rounding steps (the first H200 run saw 2^-7 on one
-dk element at relative L2 .0043). This short
+Tolerances are the library's own: flash-linear-attention v0.5.2
+`tests/ops/test_gdn.py::test_chunk` compares this kernel with a naive recurrence by
+error ratio (RMS of the difference over RMS of the reference): output and state .005,
+dq/dk/dv/dh0 .008, dg/dbeta .02. Every tensor is measured and recorded before the
+verdict. Earlier ad-hoc bounds were wrong for bf16: an element-wise atol rejected one
+bf16 rounding step on dk (ratio .0043), and a worst-element bound rejected dg at
+ratio .0161, both within FLA's tolerances. This short
 check crosses a chunk boundary and exercises the model's head dimension. It is
 cheap insurance, not exhaustive qualification of every model shape or kernel.
 It records versions, dispatch, errors and elapsed time. Failure aborts; it never

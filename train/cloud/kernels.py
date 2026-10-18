@@ -33,6 +33,11 @@ def recurrence(q: Tensor, k: Tensor, v: Tensor, g: Tensor, beta: Tensor,
     return torch.stack(output, dim=1), state
 
 
+# flash-linear-attention v0.5.2 tests/ops/test_gdn.py::test_chunk compares this kernel with a naive
+# recurrence using these assert_close error ratios; the check adopts the library's own standard.
+TOLERANCES = dict(out=.005, state=.005, dq=.008, dk=.008, dv=.008, dg=.02, dbeta=.02, dh0=.008)
+
+
 def numerical_check(function: Callable, *, device: str = 'cuda') -> dict:
     """One bf16 chunk-boundary case; check output, state and all input gradients."""
     import torch
@@ -56,19 +61,18 @@ def numerical_check(function: Callable, *, device: str = 'cuda') -> dict:
                                  output_final_state=True, use_qk_l2norm_in_kernel=True)
         gradients = torch.autograd.grad((out, state), leaves, cotangents)
         results.append((out, state, *gradients))
-    comparisons = {}
-    for name, actual, expected in zip(('out','state','dq','dk','dv','dg','dbeta','dh0'), *results):
+    comparisons, failed = {}, []
+    for name, actual, expected in zip(TOLERANCES, *results):
         a, b = actual.detach().float(), expected.detach().float()
-        relative = ((a-b).norm()/b.norm().clamp_min(1e-12)).item()
-        # bf16 results against the fp32 recurrence differ by rounding steps, so errors are judged at the tensor's scale.
-        max_relative = ((a-b).abs().max()/b.abs().max().clamp_min(1e-12)).item()
-        comparisons[name] = dict(max_abs_error=(a-b).abs().max().item(), relative_l2_error=relative,
-                                 max_relative_error=max_relative)
-        if (not torch.isfinite(a).all() or not torch.isfinite(b).all()
-                or relative > .02 or max_relative > .02):
-            raise RuntimeError(f'Kernel numerical agreement failed: {name}: {comparisons[name]}')
-    return dict(status='passed', shape=list(shape), seed=212, dtype='bfloat16',
-                tolerances=dict(relative_l2=.02, max_relative=.02),
+        # FLA's error ratio: RMS of the difference over RMS of the reference.
+        ratio = ((a-b).square().mean().sqrt()/(b.square().mean().sqrt()+1e-8)).item()
+        comparisons[name] = dict(error_ratio=ratio, tolerance=TOLERANCES[name],
+                                 max_abs_error=(a-b).abs().max().item())
+        if not torch.isfinite(a).all() or not torch.isfinite(b).all() or not ratio <= TOLERANCES[name]:
+            failed.append(name)
+    if failed:
+        raise RuntimeError(f'Kernel numerical agreement failed: {failed}: {comparisons}')
+    return dict(status='passed', shape=list(shape), seed=212, dtype='bfloat16', tolerances=TOLERANCES,
                 comparisons=comparisons, seconds=time.monotonic()-started)
 
 
