@@ -51,20 +51,29 @@ allocator headroom. This is a guard, not evidence that the model fits.
 TRL 1.12.0, PEFT 0.19.0 and HF Hub **1.33.0**. The bootstrap pins uv 0.11.32.
 The optional `fast-kernels` extra pins FLA/fla-core **0.5.2**, and the **1.7.0**
 causal-conv1d CPython 3.12/CUDA 12/torch 2.10/C++11 ABI wheel, including its SHA256.
-No CUDA source compilation is needed. Normal attention uses PyTorch SDPA.
+It also pins **TileLang 0.1.15**, **TVM-FFI 0.1.12** and its CUDA compiler
+components at **13.2.86** (runtime **13.2.86**). Torch retains CUDA 12.8 and its exact
+Triton 3.6.0 dependency. FLA uses TileLang for the gated backward blocked on
+Hopper with this Triton version. The CUDA 13 nvcc wheel supplies the compiler;
+the CUDA 12 nvcc wheel supplies only ptxas. TileLang JIT compiles device code;
+the convolution extension remains prebuilt. Normal attention uses PyTorch SDPA.
+The base lock includes **nvidia-ml-py 13.580.82** for device memory monitoring.
 
 `--kernels auto` attempts the extra for at most 300 seconds, then restores the
 base lock on installation failure. Transformers automatically dispatches to the
 installed local packages. Hub kernel downloads are disabled with
-`USE_HUB_KERNELS=NO`. The GPU probe records function dispatch and exercises GDN
-prefill/backward/decode and causal convolution/backward/update. A runtime kernel
-error fails the job; it is retained for diagnosis. `--kernels required` also
-fails if optimized dispatch is missing. `--kernels off` skips the extra in the
-fresh job environment and uses the reference Torch implementations.
+`USE_HUB_KERNELS=NO`. Before model loading, small bf16 probes compare outputs,
+recurrent/cache states and gradients with the non-FLA Torch references. Tensor
+errors and tolerances are recorded in `kernels.json`. Numerical mismatches and
+runtime/JIT/gradient errors abort; `--kernels required` also fails if optimized
+dispatch is missing. `--kernels off` skips the extra in the fresh job environment
+and explicitly selects the reference Torch implementations even when extras
+are already installed. Runtime failures do not trigger an automatic retry.
 
-The pinned packages installed and imported in a CPU-only temporary target;
-Transformers resolved all four functions to FLA/causal-conv1d. This does not test
-Hopper JIT or gradients. The reference implementation warns of more than an
+The complete frozen cloud project and fast extra installed in a CPU-only temporary
+environment; the exact TileLang backend imports and Transformers resolves all four
+functions to FLA/causal-conv1d. This does not establish Hopper numerical agreement,
+driver compatibility or training speed. The reference implementation warns of more than an
 order-of-magnitude GDN slowdown on H100; that is an upstream kernel observation,
 not a measured H200 training multiplier. Fallback may exhaust the same $10 cap.
 No numerical H200 fallback-cost prediction is available before a measured run.

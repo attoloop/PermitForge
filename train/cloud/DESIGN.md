@@ -27,12 +27,32 @@ training signal.
 The frozen project adds no training framework. Optional dependencies are:
 
 - `flash-linear-attention==0.5.2` and its exact `fla-core==0.5.2`: Triton GDN kernels.
+- `tilelang[nvcc]==0.1.15` and `apache-tvm-ffi==0.1.12`: FLA's gated-backward
+  backend for Hopper and its compiler FFI. Torch 2.10.0+cu128 requires Triton
+  3.6.0 exactly; FLA refuses gated backward with Triton >=3.4.0,<3.7.1 on Hopper.
+  We keep Torch's dependency instead of overriding it. FLA automatically selects
+  TileLang on Hopper only when an actual `nvcc` compiler is available.
+- The compiler pins are `nvidia-cuda-nvcc`, `nvidia-cuda-crt`,
+  and `nvidia-nvvm` **13.2.86**, with `nvidia-cuda-cccl==13.2.86` and
+  `nvidia-cuda-runtime==13.2.86`. The CUDA 12 nvcc wheel contains
+  ptxas, not nvcc, and cannot satisfy FLA's compiler check. The CUDA 13 compiler
+  installs under `nvidia/cu13`; Torch still loads its pinned CUDA 12.8 runtime.
+  TileLang JIT compiles device kernels. GPU driver/module-loading compatibility
+  must still pass the H200 probe.
 - `causal-conv1d==1.7.0`: a publisher release wheel for cp312, CUDA 12, torch 2.10,
-  Linux x86_64, C++11 ABI. The URL and SHA256 are locked. No source compile or nvcc
-  dependency is introduced.
+  Linux x86_64, C++11 ABI. The URL and SHA256 are locked. This extension needs no
+  local source build.
 - `trackio==0.42.0`: optional live experiment metrics, enabled only with an
   explicitly supplied attoloop Space. Transformers passes the Space/bucket IDs
   and disables static Space export, matching FineEnvs' GeoGuesser recipe.
+
+The base project also pins `nvidia-ml-py==13.580.82`. The first H200 smoke's
+memory-monitor thread exited because `torch.cuda.device_memory_used` could not
+import this dependency. It is required even with fast kernels switched off.
+TileLang also locks cloudpickle, ml-dtypes, torch-c-dlpack-ext and z3-solver.
+Its nvcc extra locks Windows-only nvidia-cuda-nvrtc and nvidia-curand dependencies;
+neither is installed by this Linux recipe.
+TVM/TileLang are kernel compilers; no training framework is added.
 
 The kernel extras also lock `einops==0.8.2` for tensor rearrangements and
 `ninja==1.13.2` as a causal-conv1d package dependency; the pinned wheel avoids a
@@ -42,28 +62,53 @@ The bootstrap first installs the frozen base project, then attempts fast kernels
 for at most 300 seconds. Installation failure in auto mode restores the base
 project; required mode aborts. `USE_HUB_KERNELS=NO` prevents implicit Hub kernel
 loads. Transformers 5.17.0's `use_kernel_func_from_hub_with_fallback` resolves local
-FLA and causal-conv1d automatically. Runtime dispatch evidence and tiny
-prefill/backward/recurrent/convolution probes precede model loading. Runtime
-kernel failures abort instead of silently changing a training configuration.
+FLA and causal-conv1d automatically. `--kernels off` explicitly replaces all four
+Qwen dispatch functions with their unwrapped Torch implementations before model
+loading, even if optional packages are installed. Required mode rejects reference
+dispatch. Auto mode falls back only on installation failure; runtime kernel or
+numerical failures abort instead of changing a training configuration.
+
+Before model loading, `kernels.qualify` compares installed dispatch against
+`inspect.unwrap` of the pinned Transformers functions: the non-FLA Torch
+references. Deterministic bf16 probes cover chunk lengths 64 and 65 (padding and
+cross-chunk state), nonzero initial state, outputs/final states and gradients for
+q/k/v/g/beta/initial state with identical random cotangents. Recurrent decode checks
+output and state. Convolution checks output, input/weight/bias gradients, decode
+output and mutated cache. Every tensor must be finite, satisfy elementwise
+`rtol=0.03, atol=0.002`, and have relative L2 error <=0.02. These bf16 tolerances
+are fixed guards, not a measured H200 error bound. `kernels.json` records errors,
+tolerances, seed, dispatch and versions. CPU regression tests inject finite output,
+state, gradient and cache corruption to verify rejection. CUDA-unavailable probes
+return `gpu_unavailable` without claiming numerical qualification.
 The upstream Torch reference warns that GDN chunk execution is over an order of
 magnitude slower on H100. That does not quantify H200 end-to-end cost. Fallback
 keeps the same time/dollar cap and may time out.
 
-The CPU installation probe installs only pinned optional packages and missing
-Trackio dependencies into `/tmp`, using the existing locked torch environment.
-All imports and four optimized dispatch targets resolve. CUDA is unavailable,
-so Hopper JIT, numerical agreement, memory and real step times are unmeasured.
-Reproduce the recorded package/dispatch checks from the repository root:
+WP2.12b installs the complete frozen cloud project with the fast-kernel extra into
+`${TMPDIR:-/tmp}/permit-wp212b-cloud-env` (the initial workspace installation ran out of disk
+and its incomplete environment was removed). It checks imports of the exact FLA
+TileLang backend, nvcc discovery/version, NVML import, optimized dispatch, and the
+full comparison harness on CPU references. Older TileLang 0.1.9 failed with the
+resolver's TVM-FFI 0.1.14.post1 at import and with TVM-FFI 0.1.2 during lowering;
+those diagnostics are retained in WP2.12b evidence. The selected release explicitly
+requires TVM-FFI >=0.1.11,<0.1.13. CUDA compiler 13.2.86 fixes the rsqrt exception
+declaration conflict seen with the older compiler and this host's glibc headers.
+The installed FLA gated backward compiles offline for sm_90a with head dimensions
+32 and 128. This checks lowering and compilation, not execution. GPU numerical
+agreement, driver compatibility, memory and step times remain unmeasured.
+Reproduce from the repository root:
 
 ```sh
-KERNEL_TARGET="${TMPDIR:-/tmp}/permit-wp212-kernels"
-uv pip install --python train/.venv/bin/python --target "$KERNEL_TARGET" --no-deps \
-  'flash-linear-attention==0.5.2' 'fla-core==0.5.2' 'einops==0.8.2' \
-  'trackio==0.42.0' \
-  'causal-conv1d @ https://github.com/Dao-AILab/causal-conv1d/releases/download/v1.7.0/causal_conv1d-1.7.0%2Bcu12torch2.10cxx11abiTRUE-cp312-cp312-linux_x86_64.whl#sha256=8e81f8c76435ad31aa41edc6c0c9d26de971a293b190183d2816da71547614d7'
-CUDA_VISIBLE_DEVICES='' USE_HUB_KERNELS=NO \
-  PYTHONPATH="$KERNEL_TARGET":.:envs/permit/core:envs/permit/openenv \
-  train/.venv/bin/python internal/reports/WP2.12-evidence/check_installs.py
+export UV_PROJECT_ENVIRONMENT="${TMPDIR:-/tmp}/permit-wp212b-cloud-env"
+export TILELANG_CACHE_DIR="${TMPDIR:-/tmp}/permit-wp212b-tilelang"
+export TVM_FFI_CACHE_DIR="${TMPDIR:-/tmp}/permit-wp212b-tvm-ffi"
+export USE_HUB_KERNELS=NO CUDA_VISIBLE_DEVICES='' OMP_NUM_THREADS=4
+export PYTHONPATH=.:envs/permit/core:envs/permit/openenv
+uv sync --project train/cloud --frozen --extra fast-kernels
+uv run --project train/cloud --frozen --no-sync python \
+  internal/reports/WP2.12b-evidence/check_stack.py
+uv run --project train/cloud --frozen --no-sync python \
+  internal/reports/WP2.12b-evidence/compile_hopper.py
 ```
 
 The smoke warms exactly its five tasks, evaluates the untrained base on three
@@ -102,6 +147,9 @@ Primary references (implementation behavior was also checked in installed pins):
 - [Pinned Qwen implementation](https://github.com/huggingface/transformers/blob/v5.17.0/src/transformers/models/qwen3_5/modeling_qwen3_5.py)
 - [Pinned kernel fallback dispatch](https://github.com/huggingface/transformers/blob/v5.17.0/src/transformers/integrations/hub_kernels.py)
 - [FLA package/release requirements](https://pypi.org/project/flash-linear-attention/0.5.2/)
+- [FLA TileLang dispatch](https://github.com/fla-org/flash-linear-attention/blob/v0.5.2/fla/ops/common/backends/tilelang/__init__.py)
+- [FLA compiler discovery](https://github.com/fla-org/flash-linear-attention/blob/v0.5.2/fla/utils/_compat.py)
+- [TileLang pinned wheel and compiler extra](https://pypi.org/pypi/tilelang/0.1.15/json)
 - [Causal-convolution publisher releases](https://github.com/Dao-AILab/causal-conv1d/releases/tag/v1.7.0)
 - [HF Jobs volumes, H200 and pricing](https://huggingface.co/docs/huggingface_hub/en/guides/jobs)
 - [Trackio Transformers integration](https://huggingface.co/docs/trackio/transformers_integration)
