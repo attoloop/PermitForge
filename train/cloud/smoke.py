@@ -136,5 +136,12 @@ def write_report(output: Path) -> None:
     for n, row in report['projections'].items():
         text.append(f"| {n} | {row['grpo_seconds']} | {row['grpo_compute_usd']} |")
     text.extend(['', report['projection_note'], '',
+        'Training endings: '+json.dumps(report['training'].get('ending_counts', {})), '',
+        'Budget cuts per optimizer step (completion tokens include tool feedback):', '',
+        '| Optimizer step | Rollouts | Budget cuts |', '|---|---|---|'])
+    for row in report['training'].get('budget_cuts_per_step', []):
+        text.append(f"| {row['optimizer_step']} | {row['rollouts']} | {row['budget_cuts']} |")
+    text.extend(['', 'Budget-cut rollouts remain in the loss. Per-rollout counts are in grpo/episodes.jsonl; '
+        'TRL model-generated completion lengths are in grpo/trainer_metrics.json.', '',
         'Reproduce: read smoke/metrics.json, smoke/grpo/metrics.json and smoke/base-eval/**/episode.json.', ''])
     (output/'REPORT.md').write_text('\n'.join(text))

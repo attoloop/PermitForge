@@ -22,6 +22,8 @@ def bundle_files(root: Path) -> list[Path]:
         'envs/permit/tasks/permit-v2-*/*.json*','envs/permit/tasks/data/**/*',
         'envs/permit/tasks/met/**/*','envs/permit/core/native_build/bin/*'):
         files.update(p for p in root.glob(pattern) if p.is_file())
+    # This operator README records the resulting archive digest and cannot hash itself.
+    files.discard(root/'train/cloud/README.md')
     return sorted(files)
 
 

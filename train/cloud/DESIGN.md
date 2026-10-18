@@ -19,24 +19,97 @@ the dataset row's empty user message, so the rendered opening equals the
 evaluation's; `tests/test_eval_rules.py` checks that, the tool descriptions against
 the live MCP server, and that the rendered opening (983 tokens) fits.
 
-Three differences remain, all disclosed:
+The operator's WP2.16 decision scopes this experiment to learnability: base Qwen
+versus trained Qwen on the same unchanged cloud evaluation, with no frontier-panel
+comparison. Standard TRL is retained. The remaining differences are:
 
-- **Tool parameter schema.** TRL renders tools from the environment's methods
-  through Transformers' `get_json_schema`, which has no override for an exact
-  schema. Training therefore describes `design` as a mapping of source IDs to
-  `{control, height_m}` without the evaluation schema's strictness metadata (no
-  extra keys, at most six sources). The environment validates designs identically.
-- **Final-turn reminder.** The evaluation adds "Last turn: submit your best
-  feasible design now." before its 40th turn; TRL's tool loop cannot insert a user
-  message mid-episode. Training is therefore no easier than evaluation at the limit.
-- **Submission grading.** The model-facing text is the evaluation's ("independently
-  verify"), but a training submission is graded by the fast evaluator, whose native
-  agreement was measured on 240 designs (1,920 of 1,920 standard values to five
-  decimals). Base and final evaluations use native AERMOD verification.
+- **Turn and retry prompts.** Evaluation appends `Turns left: …` to every tool
+  result. It retries one empty/no-tool reply with a tool-use prompt and prompts for
+  correction after malformed calls. Training has no turn-count suffix or retry
+  prompts; TRL stops when a parsed reply has no tool calls.
+- **Last-turn reminder.** Evaluation adds a submission reminder before its final
+  turn. Training does not insert that reminder.
+- **Termination and extra targets.** Evaluation stops immediately after submission
+  and generates at most 40 replies. TRL permits 40 executed tool rounds and one
+  additional reply. After submission it continues while the model calls tools;
+  the environment returns an episode-over error. These extra replies have loss
+  mask 1 even though they cannot change the grade. Multiple calls in a training
+  reply are all dispatched; evaluation stops dispatching when submission ends
+  the episode. Invalid submission ends the environment in either path.
+- **Tool parameter schema.** Training's `design` schema is a mapping of source
+  IDs to rows with arbitrary string-or-number values. It lacks explicit `control`
+  and `height_m` properties, required row fields, their distinct types, and the
+  evaluation's extra-key/source-count restrictions. Actual design validation is
+  unchanged. The pinned template/parser is used by TRL; evaluation uses its own
+  XML parser with format-correction prompts.
+- **Tool JSON text and grading.** Training emits compact JSON and no per-receptor
+  arrays; evaluation emits public JSON with the turn suffix. Training submit also
+  includes `grading_failed` and `training_grade`. Training uses the fast evaluator
+  at submission; evaluation uses the native verifier. These are different feedback
+  strings and graders, even though tool names/descriptions and reward are shared.
+- **Budgets and clocks.** Training has a cumulative completion allowance including
+  tool feedback. Evaluation has a per-reply allowance and an episode wall-clock
+  cap, with no matching cumulative allowance. Training is bounded by stage caps.
+  TRL can execute tools before dropping overflowing feedback; that side effect
+  (including submission) remains. The diagnostics below distinguish it.
 
-TRL's loop generates once and then at most `max_tool_calling_iterations` times
-after executed tool calls, so 40 allows the evaluation's 40 executed tool rounds;
-a 41st reply's tool calls are not executed and cannot change the reward.
+Sampling is now matched through `GRPOConfig`: temperature 1.0, top_p 0.95 and
+top_k 20, as recorded in the pinned model's `base-eval/sampling.json`. Both use
+thinking off and a 32,768-token per-reply cap. TRL's tokenizer EOS/pad handling
+stops generation at tokenizer EOS; evaluation's model config also accepts its pad
+token as EOS. These stock stop-token defaults remain different. Training seeds
+the trainer once and samples groups across updates; evaluation reseeds each task
+and repeat. Training uses train-only groups and group-normalized advantages;
+evaluation reports saved-fraction rewards on its frozen eval cohort.
+`test_stock_trl_accepts_text_lora_and_existing_environment_factory` checks the
+resolved trainer generation settings against that saved model configuration.
+
+## Completion allowance and termination evidence
+
+The retained `data/smoke-result-grade/smoke/base-eval/` transcripts replay through
+installed `GRPOTrainer._tool_call_loop` and its `_get_tool_suffix_ids`, without
+running any tools. In task order 4528c31805f3 / 660f38096246 / 9b1cffc36b20, the
+prefixes before the submit reply are 30,207 / 32,472 / 29,829 total tokens. Through
+the submit reply and compact feedback the completions are 30,259 / 32,582 / 29,878
+tokens, including one synthetic EOS for TRL's unrecorded post-submit reply. The
+opening adds 983 tokens. These are replay sizes, not evidence that the cloud
+training feedback or future sampled rollouts have identical lengths.
+
+`max_completion_length=40,960` gives at least 20% headroom over these complete
+replays; `max_length=45,056` is the 4,096 prompt ceiling plus that allowance.
+`tests/test_rollout_limits.py` compares unrestricted and budgeted replay, including
+submit feedback; `test_eval_rules.py` retains the opening-fits check. Reproduce
+all sizes with the replay command in README.
+
+The installed trainer builds its `GenerationConfig` from GRPO options, then
+updates it with `generation_kwargs`. Setting `max_new_tokens=32,768` there caps
+**each** regeneration. `max_length` is not a GRPO generation-time limit: TRL
+checks tool feedback against the cumulative allowance, generates a full reply,
+then slices it to remaining space. The conservative configured transient bound
+is 4,096 + 40,960 + 32,768 = 77,824 tokens, versus 45,056 retained. Loss logits
+cover all retained completion positions, including masked tool feedback;
+`logits_to_keep=1` only helps generation. Fit and speed need the new GPU smoke.
+
+A zero-weight reward hook reads `completion_ids`, parsed completions and
+`environments` before TRL's environment reward flushes the trace. Each rollout
+records `ended` (`submitted`, `stopped_tools`, `budget`, `turn_limit`), `submitted`,
+`budget_cut`, `turn_limit` and `completion_tokens` (retained IDs including tool
+feedback). Submission takes precedence in `ended`; flags also expose a later
+budget/round cut. Pending tool calls with dropped feedback identify budget cuts
+that end in EOS below the allowance; non-EOS endings identify sliced replies or
+the reply cap. The model context ceiling is above these configured limits.
+Pooled resets clear the diagnostics.
+
+`grpo/metrics.json` and `smoke/REPORT.md` report budget-cut counts per optimizer
+step (one-based; episode records retain the trainer's zero-based sampling step).
+`grpo/trainer_metrics.json` keeps TRL's log history: its completion lengths count
+model tokens only, and its EOS-based clipped ratio can miss feedback overflow.
+`generation_config.json` records the trainer's resolved sampling and reply cap.
+**Budget-cut rollouts stay in the loss** (`mask_truncated_completions=False`);
+only tool-result tokens retain TRL's usual zero loss mask. The installed-loop
+regressions cover overflow after an executed tool, sliced replies, submission,
+multiple/unknown calls and the round limit. A tiny CPU trainer verifies reward-hook
+ordering and retained loss masks; there is no custom rollout implementation.
 
 ## Versions and generation choice
 
@@ -130,10 +203,9 @@ a CPU test compares its mapping with a tiny conditional-generation checkpoint.
 Only full-attention q/k/v/o LoRA trains (rank 16, alpha 32, zero dropout). Defaults
 are bf16, group reward scaling, beta zero, one update per sampled group, four
 generations, accumulation four, 40 turns and thinking off. The pinned Qwen
-tokenizer is retained; TRL may not replace its template. Training context is 32,768
-tokens, split into a 4,096 prompt ceiling and 28,672 completion ceiling, including
-tool feedback; 40-turn base episodes measured about 19,000-23,000 tokens. Truncation masking and zero-spread diagnostics
-stay unchanged. The existing explicit NF4 and historical SFT utilities remain
+tokenizer is retained; TRL may not replace its template. Completion limits,
+measured replay sizes and budget-cut diagnostics are specified above. Zero-spread
+diagnostics remain. The existing explicit NF4 and historical SFT utilities remain
 available but are not part of the standard H200 recipe.
 
 This matches the FineEnvs examples' trainer/factory/PEFT structure. GeoGuesser uses
@@ -151,7 +223,10 @@ failure stops the launcher. README commands use the `Attoloop` namespace.
 The smoke's provider limit remains 10,800 seconds and $15 at the operator's
 $5/hour rate, including setup. Its stage allowance remains 10,200 seconds and
 $14.1667, with cleanup/upload time reserved. Planning inputs come from the passed
-smoke (field preparation, 40-turn evaluation episodes, kernel check); the
+smoke (field preparation, complete 40-turn evaluation episodes including native
+grading, kernel check). Evaluation uses ceil(mean complete time) = 816 s (mean
+815.54 s, max 996.94 s), checked from `episode.json` timestamps by
+`test_plan_caps_fit_the_measured_evaluation_timings`; the
 evaluation-rules GRPO step (1,200 s, capped at 2,400 s) is an estimate until its
 smoke measures it, and evaluation stages are capped at 30 × 1,200 s. Reproduce them
 with `python -m train.cloud.run --plan --recipe smoke` in the cloud environment.
@@ -159,8 +234,13 @@ with `python -m train.cloud.run --plan --recipe smoke` in the cloud environment.
 Reproduce CPU checks, lock validation, bundle rebuild and verification:
 
 ```sh
-python3 internal/reports/WP2.15-evidence/reproduce.py
-python3 internal/reports/WP2.15-evidence/reproduce.py --summary
+python3 internal/reports/WP2.16-evidence/reproduce.py
+python3 internal/reports/WP2.16-evidence/reproduce.py --summary
 ```
+
+The WP2.15 reproducer now checks an explicit reviewed-source SHA256 manifest,
+independent of git HEAD, and installed distribution versions against the lock
+(including Torch’s CUDA local-version suffix). Its default environment is
+`train/cloud/.venv-verify`. WP2.16 evidence is kept separately from the old smoke.
 
 No HF write, paid call, GPU job, commit or publication is part of this package.

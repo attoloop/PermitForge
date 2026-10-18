@@ -16,7 +16,7 @@ def test_cloud_training_never_loads_a_second_generator():
     assert opts['generation_batch_size'] == 4
     assert opts['chat_template_kwargs'] == {'enable_thinking':False}
     assert opts['save_steps'] == 1
-    assert opts['mask_truncated_completions'] is True
+    assert opts['mask_truncated_completions'] is False
 
 
 def test_missing_text_weights_fail_closed():

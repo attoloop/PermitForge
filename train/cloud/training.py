@@ -1,4 +1,5 @@
 """Cloud text-backbone bf16/NF4 LoRA and save/reload qualification."""
+from collections import Counter
 from functools import partial
 import json
 import math
@@ -99,9 +100,44 @@ def training_options(config: CloudConfig, kind: str, output: Path, *, smoke: boo
         'generation_batch_size':config.num_generations,
         'max_tool_calling_iterations':config.train_turns,
         'max_completion_length':config.max_completion_length, 'scale_rewards':'group',
-        'beta':0, 'num_iterations':1, 'mask_truncated_completions':True,
+        'beta':0, 'num_iterations':1, 'mask_truncated_completions':False,
+        'temperature':1.0, 'top_p':0.95, 'top_k':20,
         'chat_template_kwargs':{'enable_thinking':False}, 'use_vllm':False,
-        'generation_kwargs':{'use_cache':True, 'logits_to_keep':1}}
+        'generation_kwargs':{'use_cache':True, 'logits_to_keep':1, 'max_new_tokens':config.eval_max_tokens}}
+
+
+def rollout_diagnostics(completions: list, completion_ids: list, environments: list, *,
+                        config: CloudConfig, tokenizer, **kwargs) -> list[float]:
+    """Zero-weight reward hook runs before TRL calls each environment's get_reward/trace sink.
+
+    It returns None so that a rollout whose grading failed stays unscorable (TRL excludes a rollout
+    only when every reward function returns None).
+    """
+    budget, turns = config.max_completion_length, config.train_turns
+    for messages, ids, env in zip(completions, completion_ids, environments, strict=True):
+        rounds = sum(m['role'] == 'tool' and (i == 0 or messages[i-1]['role'] != 'tool')
+                     for i, m in enumerate(messages))
+        pending_calls = bool(messages and messages[-1].get('tool_calls'))
+        # TRL drops overflowing feedback after executing the call. Its terminal EOS then hides the cut.
+        budget_cut = (len(ids) >= budget or
+                      bool(ids and ids[-1] not in (tokenizer.eos_token_id, tokenizer.pad_token_id)) or
+                      (pending_calls and rounds < turns))
+        turn_cut = rounds >= turns
+        env._rollout_diagnostics = dict(
+            ended='submitted' if env._done else 'budget' if budget_cut else
+                  'turn_limit' if turn_cut else 'stopped_tools',
+            submitted=env._done, budget_cut=budget_cut, turn_limit=turn_cut,
+            completion_tokens=len(ids))
+    return [None]*len(environments)
+
+
+def rollout_metrics(traces: list[dict]) -> dict:
+    steps = sorted({row['optimizer_step'] for row in traces})
+    return dict(ending_counts=dict(Counter(row['ended'] for row in traces)),
+        budget_cuts_per_step=[dict(optimizer_step=step+1,
+            rollouts=sum(row['optimizer_step'] == step for row in traces),
+            budget_cuts=sum(bool(row.get('budget_cut')) for row in traces if row['optimizer_step'] == step))
+            for step in steps])
 
 
 def latest_checkpoint(output: Path) -> Path | None:
@@ -188,11 +224,14 @@ def train(config: CloudConfig, kind: str, output: Path, *, data: Path, pack,
             traces.append(record)
             trace.write(json.dumps(record, allow_nan=False)+'\n')
             trace.flush()
-        trainer = GRPOTrainer(model=model, processing_class=tokenizer, args=GRPOConfig(**options),
+        trainer = GRPOTrainer(model=model, processing_class=tokenizer,
+            args=GRPOConfig(**options, reward_weights=[0.0]),
+            reward_funcs=partial(rollout_diagnostics, config=config, tokenizer=tokenizer),
             train_dataset=Dataset.from_list(rows), environment_factory=partial(PermitTrainingEnv,
                 pack=pack, fields_loader=fields_loader, trace_sink=capture, opening_turns=config.train_turns))
         if trainer.chat_template is not None:
             raise ValueError('TRL attempted to replace the qualified Qwen inference template')
+        write_json(output/'generation_config.json', trainer.generation_config.to_dict())
 
     initial_path = output/'initial-adapter.safetensors'
     if not initial_path.exists():
@@ -249,7 +288,7 @@ def train(config: CloudConfig, kind: str, output: Path, *, data: Path, pack,
             seconds_per_step=statistics.mean(step_seconds) if step_seconds else None,
             elapsed_seconds=time.monotonic()-started, peak_vram_allocated_bytes=torch.cuda.max_memory_allocated(),
             peak_vram_reserved_bytes=torch.cuda.max_memory_reserved(), groups=reward_groups(traces,config.num_generations),
-            tasks_seen=sorted({r['task_id'] for r in traces}))
+            tasks_seen=sorted({r['task_id'] for r in traces}), **rollout_metrics(traces))
         write_json(output/'metrics.json', metrics)
         # NaN reward diagnostics are retained as null in JSON.
         logs = json.loads(json.dumps(trainer.state.log_history).replace('NaN','null').replace('Infinity','null'))

@@ -23,7 +23,7 @@ def test_standard_grpo_trainer_owns_generation_and_loss():
     assert opts['num_generations'] == opts['gradient_accumulation_steps'] == 4
     assert opts['max_tool_calling_iterations'] == 40  # the evaluation's turn limit (test_eval_rules.py)
     assert opts['beta'] == 0 and opts['scale_rewards'] == 'group'
-    assert opts['mask_truncated_completions'] is True
+    assert opts['mask_truncated_completions'] is False
     assert not opts.get('use_liger_kernel')
 
 
@@ -52,13 +52,14 @@ def test_fixed_upstream_compiler_is_required_without_workaround_extras():
 
 def test_stock_trl_accepts_text_lora_and_existing_environment_factory(tmp_path):
     from functools import partial
+    from unittest.mock import patch
     from datasets import Dataset
     from peft import LoraConfig, get_peft_model
     from transformers import Qwen3_5TextConfig, Qwen3_5ForCausalLM
     from trl import GRPOConfig, GRPOTrainer
     from trl.chat_template_utils import add_response_schema
     from train.cloud.formatting import load_tokenizer
-    from train.cloud.training import LORA_TARGET
+    from train.cloud.training import LORA_TARGET, rollout_diagnostics
     from train.permit_env import PermitTrainingEnv
     from permit_openenv.tasks import load_pack
 
@@ -70,14 +71,47 @@ def test_stock_trl_accepts_text_lora_and_existing_environment_factory(tmp_path):
                                             target_modules=LORA_TARGET,task_type='CAUSAL_LM'))
     opts = training_options(CloudConfig(), 'grpo', tmp_path, smoke=True)
     opts.update(use_cpu=True, bf16=False, optim='adamw_torch')
-    trainer = GRPOTrainer(model=model,processing_class=tokenizer,args=GRPOConfig(**opts),
+    records = []
+    trainer = GRPOTrainer(model=model,processing_class=tokenizer,args=GRPOConfig(**opts, reward_weights=[0.0]),
+        reward_funcs=partial(rollout_diagnostics,config=CloudConfig(),tokenizer=tokenizer),
         train_dataset=Dataset.from_list([{'prompt':[{'role':'user','content':'Test'}],
                                          'split':'train','task_id':'074897d0f159-s47'}]),
-        environment_factory=partial(PermitTrainingEnv,pack=load_pack(ROOT/'envs/permit/tasks')))
+        environment_factory=partial(PermitTrainingEnv,pack=load_pack(ROOT/'envs/permit/tasks'),
+                                    trace_sink=records.append))
     assert type(trainer) is GRPOTrainer
     assert trainer.chat_template is None
+    assert trainer.generation_config.max_new_tokens == CloudConfig().eval_max_tokens
+    assert trainer.generation_kwargs['max_new_tokens'] == CloudConfig().eval_max_tokens
+    from transformers import GenerationConfig
+    import json
+    cfg = CloudConfig()
+    base = ROOT/'train/cloud/data/smoke-result-grade/smoke/base-eval'
+    sampling = json.loads((base/'sampling.json').read_text())
+    assert all(json.loads(path.read_text())['model_revision'] == cfg.revision for path in base.rglob('episode.json'))
+    pinned = GenerationConfig.from_dict(sampling['generation_config'])
+    for key in ('top_p', 'top_k', 'temperature'):
+        assert opts[key] == getattr(pinned, key) == getattr(trainer.generation_config, key)
     assert {tool.__name__ for tool in trainer.tools} == {
         'get_scenario','check_design','evaluate_design','submit_design'}
+    assert trainer.reward_weights.tolist() == [0.0, 1.0]
+    # Exercise installed TRL reward dispatch and loss masks with truncated scripted responses.
+    responses = [[{'role':'assistant','content':'unfinished'}] for _ in range(4)]
+    generated = ([[1,2]]*4, [[7,8]]*4, [[1,1]]*4, responses, None, {}, None, [[]]*4)
+    inputs = [{'prompt':[{'role':'user','content':'Test'}], 'split':'train',
+               'task_id':'074897d0f159-s47'} for _ in range(4)]
+    with patch.object(trainer, '_generate', return_value=generated):
+        batch = trainer._generate_and_score_completions(inputs)
+    assert batch['completion_mask'].sum().item() == 8
+    assert batch['tool_mask'].sum().item() == 8
+    assert len(records) == 4
+    # The hook's column is None for every rollout, so the environment's reward is the only score and a
+    # rollout whose grading failed (environment NaN) stays unscorable, as without the hook.
+    import torch
+    trainer.environments[0]._grading_failed = True
+    scored = trainer._calculate_rewards(inputs, [x['prompt'] for x in inputs], responses, [[7,8]]*4)
+    assert torch.isnan(scored[:, 0]).all()
+    assert torch.isnan(scored[0, 1]) and scored[1:, 1].tolist() == [0.0, 0.0, 0.0]
+    assert all(r['ended'] == 'budget' and r['completion_tokens'] == 2 for r in records)
 
 
 def test_smoke_caps_cannot_be_increased():

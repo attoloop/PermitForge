@@ -15,8 +15,7 @@ def test_training_turns_and_context_follow_the_evaluation():
     options = training_options(config, 'grpo', Path('unused'), smoke=True)
     # TRL allows at most this many executed tool rounds, the same maximum as the evaluation's 40 turns.
     assert options['max_tool_calling_iterations'] == 40
-    # Eval-length episodes measured 19-23k tokens on the H200 smoke; the old 12,288 cap would truncate them.
-    assert options['max_completion_length'] == 28672 and config.max_length == 32768
+    assert config.max_length == config.max_prompt_length + options['max_completion_length']
     with pytest.raises(ValueError, match='evaluation'):
         CloudConfig(train_turns=8)
 
@@ -72,9 +71,20 @@ def test_rendered_opening_fits_the_prompt_limit():
 
 
 def test_plan_caps_fit_the_measured_evaluation_timings():
-    from train.cloud.config import GRPO_STEP_CAP_SECONDS, GRPO_STEP_SECONDS, stage_plan
+    import math
+    import statistics
+    from datetime import datetime
+    import json
+    from train.cloud.config import EVAL_EPISODE_SECONDS, GRPO_STEP_CAP_SECONDS, GRPO_STEP_SECONDS, stage_plan
     plan = {row['stage']: row for row in stage_plan(CloudConfig(recipe='grpo', grpo_steps=45))}
-    # The H200 smoke's 40-turn base episodes took up to 822 s; thirty must fit each evaluation stage.
-    assert plan['base-eval']['wall_seconds'] >= 30*822 and plan['eval']['wall_seconds'] >= 30*822
+    episodes = [json.loads(p.read_text()) for p in
+                (ROOT/'train/cloud/data/smoke-result-grade/smoke/base-eval').rglob('episode.json')]
+    assert len(episodes) == 3
+    seconds = [(datetime.fromisoformat(r['finished_at']) -
+                datetime.fromisoformat(r['started_at'])).total_seconds() for r in episodes]
+    assert EVAL_EPISODE_SECONDS == math.ceil(statistics.mean(seconds))
+    for stage in ('base-eval', 'eval'):
+        assert plan[stage]['estimated_seconds'] == 30*EVAL_EPISODE_SECONDS
+        assert plan[stage]['wall_seconds'] >= 30*max(seconds)
     assert GRPO_STEP_CAP_SECONDS >= 2*GRPO_STEP_SECONDS
     assert plan['grpo']['wall_seconds'] >= 45*GRPO_STEP_CAP_SECONDS

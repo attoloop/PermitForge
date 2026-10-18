@@ -92,6 +92,7 @@ class PermitTrainingEnv:
             raise ValueError('Training requires an eligible train task')
         self._task = task
         self._done, self._grading_failed, self._flushed = False, False, False
+        self._rollout_diagnostics: dict = {}
         self._evaluations_used = 0
         self._steps: list[dict] = []
         self._final: dict | None = None
@@ -193,4 +194,5 @@ class PermitTrainingEnv:
             'steps': self._steps, 'final': self._final,
             'ended': 'submitted' if self._done else 'no_submit',
             'evaluations_used': self._evaluations_used, 'grading_failed': self._grading_failed,
+            **self._rollout_diagnostics,
         }))

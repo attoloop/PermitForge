@@ -1,6 +1,6 @@
 # Qwen3.8-27B on HF Jobs
 
-WP2.15 uses standard TRL `GRPOTrainer` + `environment_factory` + PEFT LoRA,
+WP2.16 uses standard TRL `GRPOTrainer` + `environment_factory` + PEFT LoRA,
 with bf16 on one H200 under **Attoloop**. Transformers selects attention and
 linear-attention implementations. TRL owns generation, tool turns, masks and
 loss. No trainer subclass, persistent-cache implementation, FA3/Liger selection,
@@ -9,7 +9,9 @@ TileLang workaround or automatic retry/fallback remains in the cloud path.
 Training follows the evaluation's rules: the same instructions, the same opening
 line as the frontier Claude harness, the same four tool names and descriptions,
 40 turns and 30 evaluations. See [DESIGN.md](DESIGN.md#training-under-the-evaluation-rules)
-for the three remaining, disclosed differences.
+for every remaining interaction difference. The experiment compares the base and
+trained Qwen on this unchanged cloud evaluation to test learnability; it is not
+a comparison with the frontier panel.
 
 ## Smoke first
 
@@ -63,10 +65,31 @@ The model revision remains `1d4bf0f2ff6012fd82039f2fa52739d0dd7c60c0` of
 `Qwen/Qwen3.8-27B`. The text-only `Qwen3_5ForCausalLM` loader validates every
 language weight and omits vision weights. Defaults are bf16, full-attention
 q/k/v/o LoRA rank 16/alpha 32, four generations, accumulation four, 40 turns and
-prompt/completion ceilings of 4,096/28,672 tokens (32,768 total). Thinking is off.
-The completion budget includes tool replies: 40-turn base episodes measured about
-19,000-23,000 tokens, and the rendered opening is 983 tokens. The existing explicit
-`--precision nf4` option is retained,
+prompt/completion ceilings of 4,096/40,960 tokens (45,056 retained total). Thinking
+is off. Replaying the three saved base episodes through installed TRL, including
+the submission reply and tool feedback, takes 30,259 / 32,582 / 29,878 completion
+tokens with a 983-token opening (the replay adds one synthetic EOS after submit).
+The new completion allowance leaves at least 20% headroom. Each generated reply
+is capped at the evaluation's 32,768 tokens; sampling matches the pinned model:
+temperature 1.0, top_p 0.95, top_k 20. Reproduce the counts with the CPU replay:
+
+```sh
+CUDA_VISIBLE_DEVICES='' OMP_NUM_THREADS=4 HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1 \
+  PYTHONPATH=.:envs/permit/core:envs/permit/openenv \
+  train/cloud/.venv-verify/bin/python -c \
+  'import json; from train.cloud.tests.replay import replay_episodes; print(json.dumps(replay_episodes(), indent=2))'
+```
+
+TRL slices cumulative continuations **after** generation. Thus 45,056 bounds the
+retained sequence, not transient generation memory: with the reply cap the
+configured upper bound is 77,824 tokens. Loss computation still covers the full
+retained completion, including masked tool positions. Both require a new GPU
+smoke; the earlier memory measurement does not qualify these budgets.
+`grpo/episodes.jsonl` records submission, termination reason, budget/turn flags
+and completion tokens including tool feedback. `grpo/metrics.json` and the smoke
+report count budget cuts per optimizer step; `trainer_metrics.json` retains TRL's
+per-step model-generated lengths. Budget-cut rollouts remain in the loss.
+The existing explicit `--precision nf4` option is retained,
 but the H200 recipe uses bf16. The device guard aborts above 135,000,000,000 bytes;
 this is a limit, not evidence of fit. Task identities, prompt, saved-fraction
 reward and native evaluation verifier are unchanged. Local small-model `train/`
@@ -83,9 +106,15 @@ as in the frontier panel. No eval task trains.
 
 The archive includes code, the frozen stack, catalogs, the selection, native
 binaries, and task/met inputs for the selected thirty train plus ten eval tasks.
-Fields, model weights, credentials, rollouts and SFT data are excluded. All
+Fields, model weights, credentials, rollouts and SFT data are excluded. This
+README is excluded so it can record the archive digest without self-reference. All
 archive members and converted task/met hashes are verified locally and again
 by the job. Large archives remain ignored by git.
+
+WP2.16 rebuilt and verified the retained archive against the working tree. Its
+SHA256 (`sha256sum train/cloud/data/cloud-bundle.tar.gz`):
+
+`21f792590a5a2ddfd91106fa3a4e1370f9a8c7088f82fa81a86ef973048a204f`
 
 Run from the repository root (the existing `train` environment can run CPU checks
 without installing a second CUDA stack):
@@ -121,15 +150,17 @@ commands (`estimated_total_usd + setup_prior_usd`):
 
 | Recipe | Estimated compute USD | Provider timeout seconds |
 |---|---:|---:|
-| Smoke | 8.56 | 10,800 |
-| Stop at 20, target 100 | 68.75 | 97,200 |
-| Fresh 50, base + final eval | 146.67 | 206,100 |
-| Fresh 100, base + final eval | 230.00 | 326,100 |
+| Smoke | 9.21 | 10,800 |
+| Stop at 20, target 100 | 75.25 | 97,200 |
+| Fresh 50, base + final eval | 159.67 | 206,100 |
+| Fresh 100, base + final eval | 243.00 | 326,100 |
 
 Full plans are fields → base eval → GRPO → final eval → adapter export. The
 20-step check omits final eval/export. Measured on the H200 smoke: 480 CPU-seconds
-per field task divided by four workers, 660 seconds per 40-turn eval episode
-(462-822 s observed) and 100 seconds for the kernel check. **Estimated until the
+per field task divided by four workers, 816 seconds per complete 40-turn eval
+episode including native grading (mean 815.54 s, max 996.94 s; reproduced by the
+replay command above and `test_plan_caps_fit_the_measured_evaluation_timings`)
+and 100 seconds for the kernel check. **Estimated until the
 evaluation-rules smoke measures it:** 1,200 seconds per GRPO step (289 s was measured
 with 8 turns; eval-length rollouts are about four times longer), capped at 2,400
 seconds per step. Smoke save/reload is 180 seconds. Evaluation stages are capped at
