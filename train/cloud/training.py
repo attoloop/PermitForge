@@ -1,6 +1,7 @@
-"""Cloud-only text-backbone NF4 training and save/reload qualification."""
+"""Cloud text-backbone bf16/NF4 LoRA and save/reload qualification."""
 from functools import partial
 import json
+import math
 from pathlib import Path
 import statistics
 import time
@@ -21,10 +22,21 @@ def validate_loading_info(info: dict) -> None:
         raise ValueError('Unmatched language weights: '+str(info))
 
 
+def model_load_kwargs(config: CloudConfig) -> dict:
+    import torch
+    from transformers import BitsAndBytesConfig
+    options = dict(dtype=torch.bfloat16, device_map={'':0}, attn_implementation='sdpa')
+    if config.precision == 'nf4':
+        options['quantization_config'] = BitsAndBytesConfig(load_in_4bit=True,
+            bnb_4bit_quant_type='nf4', bnb_4bit_use_double_quant=True,
+            bnb_4bit_compute_dtype=torch.bfloat16)
+    return options
+
+
 def load_model(config: CloudConfig, adapter: Path | None = None, *, trainable: bool = False):
     import torch
     from peft import LoraConfig, PeftModel, get_peft_model, prepare_model_for_kbit_training
-    from transformers import AutoConfig, BitsAndBytesConfig, Qwen3_5ForCausalLM, set_seed
+    from transformers import AutoConfig, Qwen3_5ForCausalLM, set_seed
     set_seed(config.seed)
     original = AutoConfig.from_pretrained(config.model, revision=config.revision)
     if original.model_type != 'qwen3_5':
@@ -32,17 +44,17 @@ def load_model(config: CloudConfig, adapter: Path | None = None, *, trainable: b
     # Transformers 5.17's qwen3_5_text PrefixChange removes language_model.
     # CPU test compares every tensor with a tiny conditional-generation checkpoint.
     model, info = Qwen3_5ForCausalLM.from_pretrained(config.model, revision=config.revision,
-        config=original.text_config, output_loading_info=True, dtype=torch.bfloat16,
-        device_map={'':0}, attn_implementation='sdpa',
-        quantization_config=BitsAndBytesConfig(load_in_4bit=True, bnb_4bit_quant_type='nf4',
-            bnb_4bit_use_double_quant=True, bnb_4bit_compute_dtype=torch.bfloat16))
+        config=original.text_config, output_loading_info=True, **model_load_kwargs(config))
     validate_loading_info(info)
-    if trainable:
+    if trainable and config.precision == 'nf4':
         model = prepare_model_for_kbit_training(model, use_gradient_checkpointing=True,
                                                 gradient_checkpointing_kwargs={'use_reentrant':False})
         # k-bit preparation casts all nonquantized weights to fp32; retain bf16 large tables.
         model.get_input_embeddings().to(torch.bfloat16)
         model.get_output_embeddings().to(torch.bfloat16)
+    elif trainable:
+        model.requires_grad_(False)
+        model.enable_input_require_grads()
     if adapter:
         model = PeftModel.from_pretrained(model, adapter, is_trainable=trainable)
     elif trainable:
@@ -64,6 +76,10 @@ def training_options(config: CloudConfig, kind: str, output: Path, *, smoke: boo
         dataloader_num_workers=0)
     if kind == 'sft':
         return {**common, 'max_length':config.max_length, 'packing':False, 'assistant_only_loss':False}
+    if config.trackio_space:
+        common.update(report_to='trackio', project='permitforge-qwen38', run_name=output.name,
+            trackio_space_id=config.trackio_space, trackio_bucket_id=config.trackio_bucket,
+            trackio_static_space_id=False)
     return {**common, 'num_generations':config.num_generations,
         'generation_batch_size':config.num_generations,
         'max_tool_calling_iterations':config.train_turns,
@@ -76,12 +92,24 @@ def training_options(config: CloudConfig, kind: str, output: Path, *, smoke: boo
 def latest_checkpoint(output: Path) -> Path | None:
     candidates = [p for p in output.glob('checkpoint-*') if (p/'trainer_state.json').exists()
                   and (p/'optimizer.pt').exists() and (p/'adapter_model.safetensors').exists()
+                  and (p/'scheduler.pt').exists() and (p/'rng_state.pth').exists()
                   and (p/'.complete').exists()]
     return max(candidates, key=lambda p:int(p.name.split('-')[-1]), default=None)
 
 
+def stop_callback(step: int):
+    from transformers import TrainerCallback
+    class StopAtStep(TrainerCallback):
+        def on_step_end(self, args, state, control, **kwargs):
+            if state.global_step >= step:
+                control.should_save = True
+                control.should_training_stop = True
+    return StopAtStep()
+
+
 def train(config: CloudConfig, kind: str, output: Path, *, data: Path, pack,
-          tasks: list, fields_loader, adapter: Path | None = None, smoke: bool = False) -> dict:
+          tasks: list, fields_loader, adapter: Path | None = None, smoke: bool = False,
+          stop_after_step: int | None = None) -> dict:
     import torch
     from datasets import Dataset
     from peft import get_peft_model_state_dict
@@ -95,8 +123,11 @@ def train(config: CloudConfig, kind: str, output: Path, *, data: Path, pack,
     from .make_sft import validate_catalog
 
     output.mkdir(parents=True, exist_ok=True)
-    if (output/'metrics.json').exists() and json.loads((output/'metrics.json').read_text()).get('status') == 'passed':
-        return json.loads((output/'metrics.json').read_text())
+    if (output/'metrics.json').exists():
+        previous = json.loads((output/'metrics.json').read_text())
+        if (previous.get('status') == 'passed' and
+                previous.get('optimizer_steps',0) >= (stop_after_step or (2 if smoke else getattr(config,kind+'_steps')))):
+            return previous
     checkpoint = latest_checkpoint(output)
     model, tokenizer = load_model(config, checkpoint or adapter, trainable=True)
     options = training_options(config, kind, output, smoke=smoke)
@@ -173,8 +204,10 @@ def train(config: CloudConfig, kind: str, output: Path, *, data: Path, pack,
             torch.cuda.synchronize()
             step_seconds.append(time.monotonic()-self.start)
             if torch.cuda.max_memory_reserved() > config.max_vram_bytes:
-                raise RuntimeError('VRAM exceeds 90 GB')
+                raise RuntimeError('VRAM exceeds configured device cap')
     trainer.add_callback(Timer())
+    if stop_after_step:
+        trainer.add_callback(stop_callback(stop_after_step))
     started = time.monotonic()
     metrics = dict(status='failed', kind=kind, smoke=smoke, resume_checkpoint=str(checkpoint) if checkpoint else None)
     try:
@@ -202,7 +235,10 @@ def train(config: CloudConfig, kind: str, output: Path, *, data: Path, pack,
             raise RuntimeError('Smoke requires exactly two optimizer steps')
         if any(r.get('grading_failed') for r in traces):
             raise RuntimeError('GRPO grading unavailable')
-        metrics['status'] = 'passed'
+        if any(not math.isfinite(row[key]) for row in trainer.state.log_history
+               for key in ('loss','grad_norm') if isinstance(row.get(key),(int,float))):
+            raise RuntimeError('Nonfinite training loss/gradient norm')
+        metrics['status'] = 'paused' if trainer.state.global_step < options['max_steps'] else 'passed'
     finally:
         trace.close()
         metrics.update(optimizer_steps=trainer.state.global_step, step_seconds=step_seconds,

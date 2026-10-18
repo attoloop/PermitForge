@@ -14,21 +14,21 @@ SMOKE = ROOT / 'results/rollouts/wp2.0b-smoke'
 
 
 def test_plan_is_pinned_bounded_and_covers_all_stages():
-    config = CloudConfig(hourly_usd=2.75)
-    plan = stage_plan(config, train_count=230)
-    assert [s['stage'] for s in plan] == ['fields', 'base-eval', 'smoke', 'sft', 'grpo', 'eval', 'export']
+    config = CloudConfig(hourly_usd=5, recipe='grpo')
+    plan = stage_plan(config, train_count=30)
+    assert [s['stage'] for s in plan] == ['fields', 'base-eval', 'grpo', 'eval', 'export']
     assert config.model == 'Qwen/Qwen3.8-27B'
     assert config.revision == '1d4bf0f2ff6012fd82039f2fa52739d0dd7c60c0'
-    assert config.max_vram_bytes == 90_000_000_000
+    assert config.max_vram_bytes == 135_000_000_000
     assert config.field_jobs <= 4 and config.use_vllm is False
-    assert plan[1]['episodes'] == plan[5]['episodes'] == 30
-    assert all(s['estimated_usd'] == pytest.approx(s['estimated_seconds']/3600*2.75) for s in plan)
+    assert plan[1]['episodes'] == plan[3]['episodes'] == 30
+    assert all(s['estimated_usd'] == pytest.approx(s['estimated_seconds']/3600*5) for s in plan)
     assert all(s['effective_seconds'] <= s['wall_seconds'] for s in plan)
 
 
 @pytest.mark.parametrize('kwargs', [dict(hourly_usd=0), dict(hourly_usd=float('nan')),
     dict(hourly_usd=2, field_jobs=5), dict(hourly_usd=2, use_vllm=True),
-    dict(hourly_usd=2, max_vram_bytes=91_000_000_000)])
+    dict(hourly_usd=2, max_vram_bytes=136_000_000_000)])
 def test_config_rejects_unsafe_or_nonfinite_inputs(kwargs):
     with pytest.raises(ValueError):
         CloudConfig(**kwargs)
@@ -133,7 +133,7 @@ def test_checkpoint_resume_ignores_partial_writes(tmp_path):
     for number in [1,2]:
         folder = tmp_path/f'checkpoint-{number}'
         folder.mkdir()
-        for filename in ['trainer_state.json','optimizer.pt','adapter_model.safetensors']:
+        for filename in ['trainer_state.json','optimizer.pt','adapter_model.safetensors','scheduler.pt','rng_state.pth']:
             (folder/filename).write_text('x')
     (tmp_path/'checkpoint-1/.complete').write_text('complete')
     assert latest_checkpoint(tmp_path) == tmp_path/'checkpoint-1'

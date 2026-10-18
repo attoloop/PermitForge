@@ -18,10 +18,10 @@ def gpu_guard(config: CloudConfig, output: Path):
     if not torch.cuda.is_available() or torch.cuda.device_count() != 1:
         raise RuntimeError('Cloud training requires exactly one visible CUDA GPU')
     properties = torch.cuda.get_device_properties(0)
-    if (torch.cuda.get_device_capability() != (12,0) or 'sm_120' not in torch.cuda.get_arch_list()
-            or properties.total_memory < config.max_vram_bytes or 'RTX PRO 6000' not in properties.name):
-        raise RuntimeError('This recipe is qualified only for one RTX PRO 6000 96 GB, sm_120')
-    # Reserve nonallocator CUDA overhead below the device-wide 90 decimal GB guard.
+    if (torch.cuda.get_device_capability() != (9,0) or 'sm_90' not in torch.cuda.get_arch_list()
+            or properties.total_memory < config.max_vram_bytes or 'H200' not in properties.name):
+        raise RuntimeError('This recipe requires one H200, Hopper sm_90')
+    # Reserve nonallocator CUDA overhead below the device-wide cap.
     torch.cuda.set_per_process_memory_fraction((config.max_vram_bytes-2_000_000_000)/properties.total_memory)
     torch.cuda.reset_peak_memory_stats()
     torch.set_num_threads(4)
@@ -44,6 +44,10 @@ def gpu_guard(config: CloudConfig, output: Path):
     try:
         yield
         evidence['status'] = 'passed'
+    except BaseException:
+        if evidence['status'] == 'running':
+            evidence['status'] = 'failed'
+        raise
     finally:
         stop.set()
         thread.join(timeout=1)
@@ -60,7 +64,7 @@ def export(run: Path, output: Path) -> None:
     summaries = {str(p.relative_to(run)):json.loads(p.read_text()) for p in run.rglob('metrics.json')
                  if output not in p.parents}
     write_json(output/'metrics.json',dict(status='passed',stages=summaries,merged=False,
-        merge_note='Adapter-only export preserves NF4 training provenance; no quantized merge is performed.'))
+        merge_note='Adapter-only export; precision and kernel provenance are in run.json.'))
     shutil.copyfile(run/'run.json',output/'run.json')
 
 
@@ -68,6 +72,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--run',type=Path,required=True)
     parser.add_argument('--stage',required=True)
+    parser.add_argument('--stop-after-step',type=int)
     args = parser.parse_args()
     signal.signal(signal.SIGTERM,lambda *_: (_ for _ in ()).throw(KeyboardInterrupt()))
     record = json.loads((args.run/'run.json').read_text())
@@ -86,45 +91,44 @@ def main() -> None:
         warm(train_tasks+eval_tasks,root,output,config.field_jobs)
         return
     if args.stage == 'export':
+        if json.loads((args.run/'grpo/metrics.json').read_text()).get('optimizer_steps',0) < config.grpo_steps:
+            raise ValueError('Finish the fixed GRPO step target before export')
         export(args.run,output)
         return
-    if args.stage in ('sft','grpo','eval'):
-        smoke = args.run/'smoke/metrics.json'
-        if not smoke.exists() or json.loads(smoke.read_text()).get('status') != 'passed':
-            raise ValueError('Complete the SFT+GRPO smoke gate before longer stages')
+    if args.stage in ('grpo','eval'):
+        from .smoke import smoke_gate
+        smoke_gate(Path(record['qualification_run']), record)
+    if args.stage == 'eval' and json.loads((args.run/'grpo/metrics.json').read_text()).get('optimizer_steps',0) < config.grpo_steps:
+        raise ValueError('Finish the fixed GRPO step target before final evaluation')
     fields = CloudFields(eval_tasks if args.stage in ('base-eval','eval') else train_tasks, root,
         tasks_dir=Path(record['tasks_dir']),output=output/'field-misses',jobs=config.field_jobs)
-    with gpu_guard(config,output):
-        if args.stage in ('sft','grpo','smoke'):
-            data = Path(record['sft_data'])
-            if args.stage == 'smoke':
-                if len(train_tasks) < 2:
-                    raise ValueError('Smoke needs two train tasks')
-                sft = train(config,'sft',output/'sft',data=data,pack=pack,tasks=train_tasks[:2],
-                            fields_loader=fields,smoke=True)
-                import gc
-                import torch
-                gc.collect()
-                torch.cuda.empty_cache()
-                grpo = train(config,'grpo',output/'grpo',data=data,pack=pack,tasks=train_tasks[:2],
-                    fields_loader=fields,adapter=output/'sft/adapter',smoke=True)
-                if grpo['tasks_seen'] and len(grpo['tasks_seen']) != 2:
-                    raise RuntimeError('Smoke must exercise two training tasks')
-                write_json(output/'metrics.json',dict(status='passed',sft=sft,grpo=grpo))
+    try:
+        with gpu_guard(config,output):
+            from .kernels import probe
+            kernels = probe(config.kernels)
+            write_json(output/'kernels.json', kernels)
+            if config.kernels == 'required' and kernels['status'] != 'fast':
+                raise RuntimeError('Required fast kernels unavailable; see kernels.json')
+            if args.stage in ('grpo','smoke'):
+                data = Path(record['sft_data'])
+                if args.stage == 'smoke':
+                    from .smoke import run_smoke
+                    run_smoke(config,record,pack,output)
+                else:
+                    train(config,args.stage,output,data=data,pack=pack,tasks=train_tasks,
+                          fields_loader=fields,stop_after_step=args.stop_after_step)
             else:
-                adapter = args.run/'sft/adapter' if args.stage == 'grpo' else None
+                from .evaluation import evaluate
+                adapter = args.run/'grpo/adapter' if args.stage == 'eval' else None
                 if adapter and not adapter.exists():
-                    raise ValueError('SFT adapter is required before GRPO')
-                train(config,args.stage,output,data=data,pack=pack,tasks=train_tasks,
-                      fields_loader=fields,adapter=adapter)
-        else:
-            from .evaluation import evaluate
-            adapter = args.run/'grpo/adapter' if args.stage == 'eval' else None
-            if adapter and not adapter.exists():
-                raise ValueError('GRPO adapter missing')
-            model,tokenizer = load_model(config,adapter)
-            evaluate(config,model,tokenizer,pack,record['eval_tasks'],output,
-                     fields_loader=fields,tasks_dir=Path(record['tasks_dir']),adapter=adapter)
+                    raise ValueError('GRPO adapter missing')
+                model,tokenizer = load_model(config,adapter)
+                evaluate(config,model,tokenizer,pack,record['eval_tasks'],output,
+                         fields_loader=fields,tasks_dir=Path(record['tasks_dir']),adapter=adapter)
+    finally:
+        if args.stage == 'smoke':
+            from .smoke import write_report
+            write_report(output)
 
 
 if __name__ == '__main__':

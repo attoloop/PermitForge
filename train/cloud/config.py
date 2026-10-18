@@ -2,24 +2,29 @@
 from dataclasses import asdict, dataclass
 import math
 
-STAGES = ('fields', 'base-eval', 'smoke', 'sft', 'grpo', 'eval', 'export')
-WALL_HOURS = dict(zip(STAGES, (8, 16, 1, 2, 8, 16, 1)))
-PRICES = {'hf-jobs': 2.75, 'jarvislabs': 2.19, 'runpod': 2.49}
+STAGES = ('fields', 'base-eval', 'smoke', 'grpo', 'eval', 'export')
+PRICES = {'hf-jobs': 5.00}
 
 
 @dataclass(frozen=True)
 class CloudConfig:
-    hourly_usd: float
+    hourly_usd: float = 5.00
+    flavor: str = 'h200'
+    precision: str = 'bf16'
+    recipe: str = 'smoke'
+    kernels: str = 'auto'
+    trackio_space: str | None = None
+    trackio_bucket: str | None = None
     model: str = 'Qwen/Qwen3.8-27B'
     revision: str = '1d4bf0f2ff6012fd82039f2fa52739d0dd7c60c0'
     field_jobs: int = 4
     use_vllm: bool = False
-    max_vram_bytes: int = 90_000_000_000
+    max_vram_bytes: int = 135_000_000_000
     sft_steps: int = 100
     grpo_steps: int = 100
     max_length: int = 16384
-    max_completion_length: int = 8192
-    max_prompt_length: int = 8192
+    max_completion_length: int = 12288
+    max_prompt_length: int = 4096
     train_turns: int = 8
     num_generations: int = 4
     accum: int = 4
@@ -39,8 +44,17 @@ class CloudConfig:
             raise ValueError('Cloud recipe requires the WP2.3a model revision')
         if not 1 <= self.field_jobs <= 4 or self.use_vllm or self.enable_thinking:
             raise ValueError('Use at most four native workers, HF generation and thinking off')
-        if not 0 < self.max_vram_bytes <= 90_000_000_000:
-            raise ValueError('VRAM abort threshold cannot exceed 90 decimal GB')
+        if self.flavor != 'h200' or self.precision not in ('bf16', 'nf4'):
+            raise ValueError('Use H200 with bf16 LoRA or explicit NF4')
+        if self.recipe not in ('smoke', 'grpo') or self.kernels not in ('auto', 'required', 'off'):
+            raise ValueError('Unknown recipe or kernel policy')
+        if self.trackio_bucket and not self.trackio_space:
+            raise ValueError('Trackio bucket requires an explicitly named Space')
+        for destination in (self.trackio_space, self.trackio_bucket):
+            if destination and (not destination.startswith('attoloop/') or destination.count('/') != 1):
+                raise ValueError('Name Trackio resources under attoloop')
+        if not 0 < self.max_vram_bytes <= 135_000_000_000:
+            raise ValueError('VRAM abort threshold cannot exceed 135 decimal GB')
         for key in ('sft_steps', 'grpo_steps', 'max_length', 'max_completion_length',
                     'max_prompt_length', 'train_turns', 'num_generations', 'accum'):
             if not isinstance(getattr(self, key), int) or getattr(self, key) <= 0:
@@ -49,7 +63,8 @@ class CloudConfig:
             raise ValueError('accum must be divisible by num_generations >= 2')
         if self.max_prompt_length + self.max_completion_length > self.max_length:
             raise ValueError('Prompt plus completion must fit the training context')
-        if (self.eval_repeats, self.eval_turns, self.eval_max_tokens, self.eval_wall_seconds) != (3, 40, 32768, 1800):
+        if ((self.eval_repeats not in ((1,3) if self.recipe == 'smoke' else (3,))) or
+                (self.eval_turns, self.eval_max_tokens, self.eval_wall_seconds) != (40,32768,1800)):
             raise ValueError('Frozen cloud evaluation uses 10 tasks x 3, 40 turns, 32768 tokens, 1800 s')
 
     def record(self) -> dict:
@@ -63,18 +78,32 @@ def remaining_seconds(wall: float, usd: float, hourly: float, attempts: list[dic
     return max(0., min(wall, usd * 3600 / hourly) - charged)
 
 
-def stage_plan(config: CloudConfig, train_count: int = 230,
-               wall_caps: dict | None = None, usd_caps: dict | None = None) -> list[dict]:
+def stage_plan(config: CloudConfig, train_count: int = 30,
+               wall_caps: dict | None = None, usd_caps: dict | None = None,
+               *, stop_after_step: int | None = None) -> list[dict]:
     # Explicit unmeasured priors. Native work includes eval fields. No speed claim.
-    estimates = dict(zip(STAGES, ((train_count+10)*300/config.field_jobs, 30*180,
-        1800, config.sft_steps*20, config.grpo_steps*180, 30*180, 900)))
+    steps = stop_after_step or config.grpo_steps
+    estimates = {'fields': (train_count+10)*300/config.field_jobs, 'base-eval': 30*180,
+        'smoke': 5*300/config.field_jobs+3*180+2*180+180+60,
+        'grpo': steps*180, 'eval':30*180, 'export':300}
+    walls = {'fields':5400, 'base-eval':10800, 'smoke':6600,
+             'grpo':config.grpo_steps*360+1800, 'eval':10800, 'export':900}
+    stages = ['smoke'] if config.recipe == 'smoke' else ['fields','base-eval','grpo','eval','export']
+    if stop_after_step and stop_after_step < config.grpo_steps:
+        stages = stages[:3]
     rows = []
-    for stage in STAGES:
-        wall = (wall_caps or {}).get(stage, WALL_HOURS[stage]*3600)
+    for stage in stages:
+        wall = (wall_caps or {}).get(stage, walls[stage])
         usd = (usd_caps or {}).get(stage, wall*config.hourly_usd/3600)
+        effective = remaining_seconds(wall, usd, config.hourly_usd, [])
+        if stage == 'grpo' and stop_after_step:
+            effective = min(effective, steps*360+1800)
+        if stage == 'smoke' and (wall > 6600 or usd > 10):
+            raise ValueError('Smoke caps may only be tightened (6600 seconds, $10)')
         rows.append(dict(stage=stage, estimated_seconds=estimates[stage],
             estimated_usd=estimates[stage]*config.hourly_usd/3600,
             wall_seconds=wall, usd_cap=usd,
-            effective_seconds=remaining_seconds(wall, usd, config.hourly_usd, []),
-            **({'episodes':30} if stage in ('base-eval', 'eval') else {})))
+            effective_seconds=effective,
+            **({'episodes':30} if stage in ('base-eval', 'eval') else {}),
+            **({'optimizer_steps_this_invocation':steps} if stage == 'grpo' else {})))
     return rows

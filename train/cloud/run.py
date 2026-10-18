@@ -1,11 +1,12 @@
-"""Single cloud entrypoint: python -m train.cloud.run --plan --hourly-usd 2.75.
+"""Single cloud entrypoint: python -m train.cloud.run --plan --recipe smoke.
 
-Execution is opt-in with --execute; --plan imports no GPU libraries and does no I/O.
+Execution is opt-in with --execute; --plan reads local identities and writes nothing.
 """
 import argparse
 import fcntl
 import hashlib
 import json
+import math
 import os
 from pathlib import Path
 import signal
@@ -96,7 +97,14 @@ def parser() -> argparse.ArgumentParser:
     p.add_argument('--plan', action='store_true')
     p.add_argument('--execute', action='store_true')
     p.add_argument('--stage', choices=(*STAGES, 'all'), default='all')
-    p.add_argument('--hourly-usd', type=float, required=True)
+    p.add_argument('--hourly-usd', type=float, default=5.00)
+    p.add_argument('--recipe', choices=('smoke','grpo'), default='smoke')
+    p.add_argument('--precision', choices=('bf16','nf4'), default='bf16')
+    p.add_argument('--kernels', choices=('auto','required','off'), default='auto')
+    p.add_argument('--trackio-space', help='Explicit attoloop/Space; omitted means no Trackio writes')
+    p.add_argument('--trackio-bucket')
+    p.add_argument('--qualification-run', type=Path, help='Previously passed smoke run (local or mounted read-only)')
+    p.add_argument('--stop-after-step',type=int,help='Stop and save at this step, keeping --grpo-steps scheduler target')
     p.add_argument('--wall-cap', action='append', default=[], help='stage=seconds, cumulative across resumes')
     p.add_argument('--usd-cap', action='append', default=[], help='stage=USD of compute at --hourly-usd')
     p.add_argument('--output', type=Path, default=Path('train/cloud/runs/qwen38'))
@@ -108,7 +116,7 @@ def parser() -> argparse.ArgumentParser:
     p.add_argument('--field-jobs', type=int, default=4)
     p.add_argument('--fields-dir', type=Path, default=Path('train/cloud/cache/fields'))
     p.add_argument('--field-cache-gb', type=float, default=128)
-    p.add_argument('--train-tasks', nargs='+', help='Optional explicit train-only subset; default all eligible train tasks')
+    p.add_argument('--train-tasks', nargs='+', help='Optional train-only override; default frozen station-balanced thirty')
     p.add_argument('--sft-steps', type=int, default=100)
     p.add_argument('--grpo-steps', type=int, default=100)
     return p
@@ -117,15 +125,30 @@ def parser() -> argparse.ArgumentParser:
 def main(argv: list[str] | None = None) -> None:
     args = parser().parse_args(argv)
     config = CloudConfig(hourly_usd=args.hourly_usd, field_jobs=args.field_jobs,
-                         sft_steps=args.sft_steps, grpo_steps=args.grpo_steps)
-    plan = stage_plan(config, len(args.train_tasks) if args.train_tasks else 230,
-                      parse_caps(args.wall_cap), parse_caps(args.usd_cap))
+                         sft_steps=args.sft_steps, grpo_steps=args.grpo_steps,recipe=args.recipe,
+                         precision=args.precision,kernels=args.kernels,
+                         trackio_space=args.trackio_space,trackio_bucket=args.trackio_bucket)
+    if args.stop_after_step is not None and (config.recipe != 'grpo' or not 0 < args.stop_after_step <= config.grpo_steps):
+        raise ValueError('stop-after-step must be within the fixed GRPO scheduler target')
+    from permit_openenv.tasks import load_pack
+    from .selection import selection_manifest
+    selection = selection_manifest(load_pack(args.tasks_dir),args.cohort)
+    plan = stage_plan(config, len(args.train_tasks) if args.train_tasks else 30,
+                      parse_caps(args.wall_cap), parse_caps(args.usd_cap),stop_after_step=args.stop_after_step)
+    if args.stage != 'all':
+        plan = [s for s in plan if s['stage'] == args.stage]
+        if not plan:
+            raise ValueError('Stage is outside this recipe')
     if args.plan:
         print(json.dumps(dict(config=config.record(), stages=plan,
+            selection=selection, stop_after_step=args.stop_after_step,
+            provider_timeout_seconds=7200 if args.recipe == 'smoke' else
+                math.ceil(sum(s['effective_seconds'] for s in plan)+1800),
             estimated_total_usd=sum(s['estimated_usd'] for s in plan),
             cap_total_usd=sum(s['effective_seconds']*config.hourly_usd/3600 for s in plan),
-            priors='Unmeasured: 300 CPU-s/task / workers; 180 s/eval episode; 20 s/SFT step; '
-                   '180 s/GRPO step; smoke 1800 s; export 900 s. Includes no startup/storage/tax/idle costs.',
+            setup_prior_seconds=900, setup_prior_usd=900*config.hourly_usd/3600,
+            priors='Unmeasured: 300 CPU-s/task / workers; 180 s/eval episode; '
+                   '180 s/GRPO step; smoke reload 180 s; setup 900 s. No storage/tax/idle costs.',
             eval_difference='WP2.9 requires three repeats; final panel uses four. Thinking disabled for this model.'), indent=2))
         return
     if not args.execute or not args.artifact_uri:
@@ -143,43 +166,62 @@ def main(argv: list[str] | None = None) -> None:
     signal.signal(signal.SIGTERM, lambda *_: (_ for _ in ()).throw(KeyboardInterrupt()))
     with (args.output/'run.lock').open('a') as lock:
         fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
-        run(args, config, plan, sync)
+        run(args, config, stage_plan(config,len(args.train_tasks) if args.train_tasks else 30,
+            parse_caps(args.wall_cap),parse_caps(args.usd_cap)), sync)
 
 
 def run(args, config: CloudConfig, plan: list[dict], sync) -> None:
     from permit_openenv.tasks import load_pack
-    from .selection import select_cohort, select_train
+    from .selection import selection_manifest, select_train
     pack = load_pack(args.tasks_dir)
-    train = select_train(pack, args.train_tasks)
-    cohort = select_cohort(pack, args.cohort)
-    files = [args.cohort.resolve(), args.sft_data.resolve(), ROOT/'eval/PROTOCOL.md',
+    selection = selection_manifest(pack,args.cohort)
+    train = select_train(pack, selection['smoke_train'] if config.recipe == 'smoke' else
+                         args.train_tasks or selection['train'])
+    cohort = selection['smoke_eval'] if config.recipe == 'smoke' else selection['eval']
+    files = [args.cohort.resolve(), ROOT/'eval/PROTOCOL.md',
              ROOT/'envs/permit/openenv/permit_openenv/prompts.py',
              *ROOT.glob('train/cloud/*.py'), *ROOT.glob('train/*.py'),
              *ROOT.glob('envs/permit/core/permit_core/*.py'),
              *ROOT.glob('envs/permit/openenv/permit_openenv/*.py'),
              *args.tasks_dir.resolve().glob('permit-v2-*/tasks.jsonl'),
-             ROOT/'train/cloud/uv.lock']
+             ROOT/'train/cloud/uv.lock', ROOT/'train/cloud/pyproject.toml']
+    input_manifest = ROOT/'train/cloud/input-manifest.json'
+    if input_manifest.exists():
+        files.append(input_manifest)
     frozen = dict(config=config.record(), plan=plan, hashes=fingerprint(files),
+                  selection=selection,
                   train_tasks=[t.task_id for t in train], eval_tasks=cohort,
                   tasks_dir=str(args.tasks_dir.resolve()), sft_data=str(args.sft_data.resolve()),
                   fields_dir=str(args.fields_dir.resolve()), field_cache_gb=args.field_cache_gb,
-                  artifact_uri=args.artifact_uri)
+                  artifact_uri=args.artifact_uri,
+                  qualification_run=str(args.qualification_run.resolve()) if args.qualification_run else None)
+    if config.recipe == 'grpo':
+        if not args.qualification_run:
+            raise ValueError('GRPO requires --qualification-run from a passed smoke')
+        from .smoke import smoke_gate
+        smoke_gate(args.qualification_run, frozen)
     manifest = args.output/'run.json'
     if manifest.exists() and json.loads(manifest.read_text()) != frozen:
         raise ValueError('Resume refuses changed config, cohort, data, source or protocol')
     write_json(manifest, frozen)
+    if os.environ.get('PERMIT_BOOTSTRAP_REPORT'):
+        write_json(args.output/'setup.json',json.loads(Path(os.environ['PERMIT_BOOTSTRAP_REPORT']).read_text()))
     state_path = args.output/'state.json'
     state = json.loads(state_path.read_text()) if state_path.exists() else {}
     os.environ.update(PERMIT_FIELDS_CACHE_GB=str(args.field_cache_gb),
                       PERMIT_FIELDS_JOBS=str(config.field_jobs),
                       OMP_NUM_THREADS='4', TOKENIZERS_PARALLELISM='false',
+                      USE_HUB_KERNELS='NO',
                       PYTORCH_CUDA_ALLOC_CONF='expandable_segments:True')
     for spec in plan:
         stage = spec['stage']
+        if args.stop_after_step and args.stop_after_step < config.grpo_steps and stage in ('eval','export'):
+            continue
         if args.stage not in ('all', stage):
             continue
         entry = state.setdefault(stage, {'attempts':[]})
-        if entry.get('status') == 'complete':
+        if entry.get('status') == 'complete' and not (stage == 'grpo' and
+                entry.get('optimizer_steps',0) < (args.stop_after_step or config.grpo_steps)):
             if entry.get('upload_complete'):
                 continue
             allowance = remaining_seconds(spec['wall_seconds'], spec['usd_cap'], config.hourly_usd, entry['attempts'])
@@ -192,6 +234,10 @@ def run(args, config: CloudConfig, plan: list[dict], sync) -> None:
             write_json(state_path,state)
             continue
         seconds = remaining_seconds(spec['wall_seconds'], spec['usd_cap'], config.hourly_usd, entry['attempts'])
+        if stage == 'grpo' and args.stop_after_step:
+            seconds = min(seconds,args.stop_after_step*360+1800)
+        if os.environ.get('PERMIT_JOB_DEADLINE_UNIX'):
+            seconds = min(seconds,float(os.environ['PERMIT_JOB_DEADLINE_UNIX'])-time.time())
         if seconds <= 150:
             raise RuntimeError(stage+': cumulative cap exhausted')
         attempt = {'reserved_seconds':seconds, 'started_unix':time.time()}
@@ -202,15 +248,22 @@ def run(args, config: CloudConfig, plan: list[dict], sync) -> None:
         try:
             sync(args.output, args.artifact_uri, min(30, seconds/4))
             command = [sys.executable, '-m', 'train.cloud.worker', '--run', str(args.output), '--stage', stage]
+            if stage == 'grpo' and args.stop_after_step:
+                command += ['--stop-after-step',str(args.stop_after_step)]
             result = run_guarded(command, args.output/stage, seconds=seconds-(time.monotonic()-start)-120,
                                  sync=lambda timeout: sync(args.output, args.artifact_uri, timeout))
             entry.update(status=result['status'], exit_code=result['exit_code'])
+            if stage == 'grpo' and (args.output/'grpo/metrics.json').exists():
+                entry['optimizer_steps'] = json.loads((args.output/'grpo/metrics.json').read_text()).get('optimizer_steps',0)
         except BaseException:
             entry['status'] = 'interrupted'
             raise
         finally:
             # Reserve the final upload allowance before syncing state. A crash keeps the full reservation.
             attempt['charged_seconds'] = min(seconds, time.monotonic()-start+120)
+            if stage == 'smoke':
+                from .smoke import finalize_report
+                finalize_report(args.output/stage,entry['status'],time.monotonic()-start,config.hourly_usd)
             write_json(state_path, state)
             sync(args.output, args.artifact_uri, max(.01, min(120, seconds-(time.monotonic()-start))))
             entry['upload_complete'] = True

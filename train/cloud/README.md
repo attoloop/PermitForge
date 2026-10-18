@@ -1,224 +1,203 @@
-# Qwen3.8-27B cloud setup
+# Qwen3.8-27B on HF Jobs
 
-This is a free, CPU-checked setup for one RTX PRO 6000 96 GB. It does not rent a
-GPU or submit a Job. GPU fit, numerical stability, throughput and learning remain
-unmeasured. Existing local training commands and defaults are unchanged.
+WP2.12 prepares an H200 job under **attoloop**, using **bf16 LoRA and direct
+GRPO**. No job, upload, repository, bucket or Space has been created by this work.
+SFT utilities remain available as historical code; no SFT data is required or
+built by this workflow. GPU memory, speed and learning await the smoke.
 
-`run.py` is the entrypoint for both platforms. `--plan` is read-only; execution
-requires `--execute`, the actual `--hourly-usd`, and an existing `--artifact-uri`.
-Artifacts accept `hf://buckets/OWNER/BUCKET/PREFIX`,
-`hf://datasets/OWNER/REPO/PREFIX`, or `hf://models/OWNER/REPO/PREFIX`.
-Use a dedicated private destination and an HF token in the environment.
+## Smoke first
 
-## Pins and CPU checks
+One job performs, in order:
 
-The model is `Qwen/Qwen3.8-27B`, revision
-`1d4bf0f2ff6012fd82039f2fa52739d0dd7c60c0`, from WP2.3a. The separate
-[pyproject.toml](pyproject.toml) and [uv.lock](uv.lock) pin Python's cloud stack:
-torch `2.10.0+cu128`, TRL `1.12.0`, Transformers `5.17.0`, PEFT `0.19.0`,
-bitsandbytes `0.49.2`, Accelerate `1.12.0`, datasets `4.7.0`, HF Hub `1.33.0`.
-The launch script pins uv `0.11.32`. Reproduce all pins with
-`uv lock --project train/cloud --check` and `cat train/cloud/pyproject.toml`.
+1. Verify the input archive, install the frozen stack and attempt pinned fast kernels.
+2. Prepare fields for exactly two selected train tasks and three selected eval tasks,
+   with at most four native workers. No other task fields are warmed.
+3. Run the **untrained base** on the three eval tasks, one repeat each, through the
+   public tools and native terminal verifier. Preserve transcripts, valid calls,
+   submissions, rewards and infrastructure failures.
+4. Run **two direct GRPO optimizer steps**, on the two train tasks, without SFT.
+   Require finite loss/weights, changed adapter weights, both task identities and
+   exact save/reload equality. Save optimizer, scheduler and RNG state too.
+5. Write `smoke/REPORT.md`, `smoke/metrics.json`, GPU/kernel evidence and projections
+   for 20/50/100 steps, derived from the measured step mean.
 
-Transformers' explicit `Qwen3_5ForCausalLM` loader extracts the language backbone
-from the multimodal checkpoint, using its supported `qwen3_5_text` prefix mapping.
-A tiny CPU checkpoint test compares every text weight; unmatched language weights
-abort loading. Vision weights are omitted. NF4, double quantization and bf16
-compute are used; LoRA targets only language full-attention q/k/v/o projections.
-There is one model, HF generation, generation microbatch one, and no vLLM.
-Thinking is disabled in SFT, GRPO and evaluation. See [DESIGN.md](DESIGN.md).
+The provider timeout is **2 hours**, a **$10 GPU-compute envelope at $5/hour**.
+The stage limit is 6,600 seconds and $9.17; the launcher also subtracts setup
+from a shared job deadline and reserves final-upload time. The provider timeout
+covers setup and process termination. Storage, taxes and other account activity
+are outside this compute envelope. A timeout may leave an incomplete smoke; it
+never authorizes another paid attempt automatically.
 
-Run from the repository root on a machine with sufficient installation disk:
+Longer GRPO requires a passed smoke with matching code, input hashes, selection,
+model and training settings. At least one valid tool call, one submission, one
+positive base reward and nonzero training-group reward spread must be observed,
+along with the gradient/reload checks. Failure produces a report and blocks the
+longer workflow. A smoke pass establishes readiness to experiment, not learning.
+
+## Pinned stack and kernels
+
+The model revision is `1d4bf0f2ff6012fd82039f2fa52739d0dd7c60c0` of
+`Qwen/Qwen3.8-27B`. The text-only `Qwen3_5ForCausalLM` loader checks every
+language weight; it omits the vision encoder. Defaults are one H200, bf16,
+full-attention q/k/v/o LoRA rank 16/alpha 32, HF generation microbatch one,
+4 generations, accumulation 4, 8 tool turns, a 4,096-token prompt ceiling and
+12,288-token completion ceiling. Thinking and vLLM are disabled. The completion
+budget includes tool replies; its sizing follows `train/DESIGN.md`.
+`--precision nf4` retains double-quantized NF4 with bf16 computation as an option.
+The device guard aborts above 135,000,000,000 device bytes, reserving additional
+allocator headroom. This is a guard, not evidence that the model fits.
+
+`pyproject.toml` and `uv.lock` pin torch 2.10.0+cu128, Transformers 5.17.0,
+TRL 1.12.0, PEFT 0.19.0 and HF Hub **1.33.0**. The bootstrap pins uv 0.11.32.
+The optional `fast-kernels` extra pins FLA/fla-core **0.5.2**, and the **1.7.0**
+causal-conv1d CPython 3.12/CUDA 12/torch 2.10/C++11 ABI wheel, including its SHA256.
+No CUDA source compilation is needed. Normal attention uses PyTorch SDPA.
+
+`--kernels auto` attempts the extra for at most 300 seconds, then restores the
+base lock on installation failure. Transformers automatically dispatches to the
+installed local packages. Hub kernel downloads are disabled with
+`USE_HUB_KERNELS=NO`. The GPU probe records function dispatch and exercises GDN
+prefill/backward/decode and causal convolution/backward/update. A runtime kernel
+error fails the job; it is retained for diagnosis. `--kernels required` also
+fails if optimized dispatch is missing. `--kernels off` skips the extra in the
+fresh job environment and uses the reference Torch implementations.
+
+The pinned packages installed and imported in a CPU-only temporary target;
+Transformers resolved all four functions to FLA/causal-conv1d. This does not test
+Hopper JIT or gradients. The reference implementation warns of more than an
+order-of-magnitude GDN slowdown on H100; that is an upstream kernel observation,
+not a measured H200 training multiplier. Fallback may exhaust the same $10 cap.
+No numerical H200 fallback-cost prediction is available before a measured run.
+See [DESIGN.md](DESIGN.md) for source links and local reproduction commands.
+
+## Task selection and local bundle
+
+`selection.py` chooses **30 train tasks**: three per station, ordered by
+SHA256 of `WP2.12:` plus task ID, with no policy outcomes. Smoke train tasks are
+the first two of these by `(source count, ID)`. Smoke eval tasks are the first
+three distinct stations in the frozen ten-task cohort, ordered by the same
+structural key. Full base/final evaluation uses that cohort, three repeats each;
+this differs from the frontier panel's four repeats. No eval task trains.
+
+The archive includes code, the frozen stack, catalogs, the selection, native
+binaries, and task/met inputs for the selected thirty train plus ten eval tasks.
+Fields, model weights, credentials, rollouts and SFT data are excluded. All
+archive members and converted task/met hashes are verified locally and again
+by the job. Large archives remain ignored by git.
+
+Run from the repository root (the existing `train` environment can run CPU checks
+without installing a second CUDA stack):
 
 ```sh
-uv sync --project train/cloud --frozen
-CUDA_VISIBLE_DEVICES='' uv run --project train/cloud --frozen python -m pytest \
-  train/tests train/cloud/tests -q
-CUDA_VISIBLE_DEVICES='' uv run --project train/cloud --frozen python -m train.cloud.check_tokens \
-  --records results/rollouts/wp2.0b-smoke --output train/cloud/data/token-check.json
-uv run --project train/cloud --frozen ruff check train/cloud
-```
-
-The WP2.9 check used the existing `train` environment (`--project train --no-sync`):
-a second complete CUDA installation ran out of local disk, and only its partial
-`train/cloud/.venv` was removed. Dependency resolution passed; a fresh full cloud
-installation was not completed locally. No weights, native simulations or GPU
-training were used. Tokenizer files alone were downloaded at the pinned revision.
-
-The recorded smoke episode is **10,422 tokens**, with a **2,226-token prompt** and
-**585 assistant target tokens**; its **10 calls** round-trip through both the
-Qwen XML parser and TRL. The **16,384-token** training context fits it. Reproduce
-with the `check_tokens` command above. It also saves the complete rendered text.
-Masks cover assistant completion bodies and end tokens, excluding system/user
-text, tool results and the empty thinking prefix. Longer SFT episodes are counted
-and excluded whole, never truncated before submission.
-
-## Data hand-off and input bundle
-
-After train-task evaluation trajectories exist, build the SFT data with:
-
-```sh
-uv run --project train/cloud --frozen python -m train.cloud.make_sft \
-  --records results/rollouts/FINAL_RUN --output train/cloud/data/sft.jsonl
-# Free check against the existing recorded smoke:
-uv run --project train/cloud --frozen python -m train.cloud.make_sft \
-  --records results/rollouts/wp2.0b-smoke --output train/cloud/data/smoke.jsonl
-```
-
-The builder reads canonical Episode records or explicit episode JSONL files. It
-checks authoritative task IDs and station-disjoint splits, rejects contradictory
-identities, deduplicates repeat identities, filters eval episodes, and retains
-only complete, feasible, positive-savings trajectories ending in one submission.
-Exact savings are checked against the task's final design. Synthetic examples are
-excluded. The adjacent `.stats.json` records rejection counts and source hashes.
-The smoke produces one accepted train trajectory; it is a formatting check, not
-evidence that a useful training dataset exists.
-
-Make a private input archive after reviewing the SFT data and current panel cohort:
-
-```sh
-uv run --project train/cloud --frozen python -m train.cloud.bundle \
-  --sft-data train/cloud/data/sft.jsonl --cohort results/subsets.json \
+uv lock --project train/cloud --check
+CUDA_VISIBLE_DEVICES='' uv run --project train --no-sync python -m pytest \
+  -c train/cloud/pyproject.toml train/cloud/tests train/tests -q
+uv run --project train --no-sync ruff check train/cloud
+uv run --project train --no-sync python -m train.cloud.bundle \
   --output train/cloud/data/cloud-bundle.tar.gz
-sha256sum train/cloud/data/cloud-bundle.tar.gz
+BUNDLE_SHA="$(sha256sum train/cloud/data/cloud-bundle.tar.gz | cut -d ' ' -f 1)"
+uv run --project train --no-sync python -m train.cloud.bundle --verify \
+  --output train/cloud/data/cloud-bundle.tar.gz --sha256 "$BUNDLE_SHA"
 ```
 
-`--inventory-only` inventories without creating the archive. The allowlist includes
-converted task data/met, current code, the cloud lock, the cohort, SFT JSONL and
-already-built static native binaries. It excludes credentials, rollouts, model
-weights, field caches and other repositories. The bundle contains a hash manifest;
-the launcher checks the whole archive hash before safe extraction. This setup
-never uploads the bundle. The operator must place the reviewed bundle in an
-existing private input repository or transfer it to the VM.
+## Plans, costs and continuation
 
-## Stage plan, caps and resume
+These commands are CPU-only and write nothing:
 
 ```sh
-uv run --project train/cloud --frozen python -m train.cloud.run --plan --hourly-usd 2.75
+uv run --project train --no-sync python -m train.cloud.run --plan --recipe smoke
+uv run --project train --no-sync python -m train.cloud.run --plan --recipe grpo \
+  --grpo-steps 100 --stop-after-step 20
+uv run --project train --no-sync python -m train.cloud.run --plan --recipe grpo --grpo-steps 50
+uv run --project train --no-sync python -m train.cloud.run --plan --recipe grpo --grpo-steps 100
 ```
 
-Default plan, reproduced by that command:
+Unmeasured priors at $5/hour, including 900 seconds of setup, reproduced by those
+commands (`estimated_total_usd + setup_prior_usd`):
 
-| Stage | Work | Estimated hours | Hard runtime cap, hours |
-|---|---|---:|---:|
-| fields | Selected train tasks plus panel eval tasks, four native workers | 5.000 | 8 |
-| base-eval | Frozen ten eval tasks, three independent repeats | 1.500 | 16 |
-| smoke | Two SFT steps, reload, two GRPO steps, reload | 0.500 | 1 |
-| sft | 100 steps on accepted train trajectories | 0.556 | 2 |
-| grpo | 100 steps, all eligible train tasks available | 5.000 | 8 |
-| eval | Same tasks, seeds and sampling with trained adapter | 1.500 | 16 |
-| export | Adapter, provenance and stage metrics | 0.250 | 1 |
-
-These are **unmeasured planning priors**, not benchmark timings: field work assumes
-300 CPU-seconds/task divided by four workers; evaluation 180 seconds/episode;
-SFT 20 seconds/step; GRPO 180 seconds/step, including possible cold fields.
-`--sft-steps`, `--grpo-steps` and `--train-tasks` change the plan explicitly.
-The default train set contains all 230 eligible tasks. Actual throughput, reward
-spread and stability must be established by the smoke before longer training.
-
-Every stage has cumulative wall and compute-dollar limits. Override with, for
-example, `--wall-cap grpo=14400 --usd-cap grpo=11`. The effective deadline is
-`min(wall_cap, usd_cap / hourly_rate * 3600)`, less prior charged attempts.
-A missing charge after a crash consumes the full reservation. The supervisor
-stops the worker and tracks detached native descendants; periodic uploads and
-final cleanup use the same allowance. An upload failure stops progress.
-
-These are **process compute caps**, not an account-wide billing promise. Package
-setup, HF Job Starting time, storage, tax and idle VM rental are outside them.
-Set the provider timeout too and terminate the VM when the command exits. The
-example HF timeout below permits setup beyond the 52-hour cumulative stage caps.
-
-`run.json` freezes source/data/protocol hashes, cohort, settings and destination.
-Resume uses the identical command and output directory; completed stages and
-terminal episodes are skipped. Checkpoints have optimizer/RNG state and an
-explicit completion marker. Uploads send payloads before completion markers.
-Use `--restore` on an empty output directory to recover a remote run, keeping the
-same workspace paths. A lost in-flight reservation remains charged. An interrupted
-native submission is held for review, never selectively resubmitted. A stopped
-non-submitting sampled episode is retained as infrastructure failure; it is not
-counted as zero reward.
-
-The field cache defaults to 128 GiB and evicts idle packs. The full selected field
-estimate exceeds HF Jobs' local disk: reproduce with `estimated_bytes` in
-[fields.py](fields.py) or the WP2.9 evidence command. Initial warming records
-progress without requiring every pack to remain resident. A later miss is
-computed in a small CPU subprocess with at most four native workers; the same
-stage cap covers that work. This keeps all train tasks available. Native final
-grading also runs in a small subprocess so the model's host RAM cannot trip the
-published verifier's resource gate.
-
-The smoke aborts if sampled device usage exceeds **90,000,000,000 bytes** and
-sets a lower PyTorch allocator limit to reserve CUDA overhead. Metrics include
-peak allocated/reserved/device memory, step times, changed weights, exact adapter
-reload equality and GRPO reward spread. A zero-change or failed-reload smoke
-blocks SFT/GRPO/eval. GPU allocation sampling is periodic; driver allocation
-failures can abort sooner. Export is adapter-only; no quantized merged model is
-produced.
-
-Evaluation uses the current panel cohort and public OpenEnv tool schemas/prompt:
-40 responses, 32,768 output tokens/response, 30 valid evaluations, native terminal
-grading, 1,800 seconds/episode. WP2.9 explicitly requests **three** repeats; the
-final frontier panel uses four. Qwen thinking is off and its pinned generation
-configuration supplies temperature/sampling defaults. These differences are
-recorded; cloud runs must not be pooled as identical frontier-panel runs.
-Episode JSON, raw returned text/tool transcript, seeds, usage and per-task spread
-are retained. Infrastructure failures are excluded from graded means and exposed
-as incomplete coverage. Reward comes from saved fraction; no anchor is used.
-
-## Platform prices and launch commands
-
-Quotes captured by WP2.3a on 2026-10-17, rechecked against primary pricing pages.
-Reproduce totals with `run --plan --hourly-usd RATE`; `config.py:PRICES` contains
-these inputs. Installation/startup, storage and taxes are excluded.
-
-| Platform, RTX PRO 6000 | USD/hour input | Estimated compute | Sum of stage compute caps |
+| Recipe | Estimated compute USD | Provider timeout seconds | Provider compute envelope USD |
 |---|---:|---:|---:|
-| [HF Jobs](https://huggingface.co/docs/hub/jobs-pricing) | 2.75 | 39.34 | 143.00 |
-| [Jarvislabs](https://jarvislabs.ai/pricing) | 2.19 | 31.33 | 113.88 |
-| [RunPod](https://www.runpod.io/pricing) | 2.49 | 35.62 | 129.48 |
+| Smoke | 3.35 | 7,200 | 10.00 |
+| Stop at 20, target 100 | 17.92 | 27,000 | 37.50 |
+| Fresh 50, base + final eval | 33.33 | 49,500 | 68.75 |
+| Fresh 100, base + final eval | 45.83 | 67,500 | 93.75 |
 
-Jarvislabs' VM page has advertised a lower quote than its pricing page; use the
-higher quote until the dashboard confirms the actual offer. RunPod pricing
-varies by offer. Recheck the selected rate and pass it explicitly. HF lists
-475 GB ephemeral storage for this flavor; the bounded cache avoids needing the
-entire field collection on disk. VM disk must also fit model downloads, the uv
-cache, checkpoints and the chosen field-cache size.
+Full plans are fields → base eval → GRPO → final eval → adapter export. The
+20-step check omits final eval/export. Priors assume 300 CPU-seconds per field
+task divided by four workers, 180 seconds per eval episode, and 180 seconds per
+GRPO step. They are planning inputs, not throughput claims. Use smoke measurements
+before choosing new caps or launching longer work. `--wall-cap STAGE=SECONDS` and
+`--usd-cap STAGE=USD` may tighten caps; resumed attempts consume the same cumulative
+allowance. Unknown crash charges consume the full reservation.
 
-The following are **operator launch commands; none was executed by this WP**.
-`INPUT_REPO`, `BUNDLE_SHA` and `ARTIFACT_URI` are required operator values. The input
-repository must contain the reviewed `cloud-bundle.tar.gz` at its root; `HF_TOKEN`
-is supplied as a secret, never written into a command file.
+For a check intended to continue to 100, set `--grpo-steps 100` from its first
+invocation and add `--stop-after-step 20`. The callback saves a complete checkpoint
+and stops at 20 while keeping the 100-step scheduler horizon. Resume the identical
+run/output/artifact prefix with `--restore` and omit `--stop-after-step`. Optimizer,
+RNG, scheduler and step are restored; partial checkpoints are ignored. Completed
+fields/base episodes are skipped and training continues from 20. Do not change
+`--grpo-steps` from 20 to 100: immutable run fingerprints reject that change.
+A separate fresh 50-step run uses its own output and artifact prefix.
 
-HF Jobs (requires access to Jobs; the official [Jobs guide](https://huggingface.co/docs/huggingface_hub/guides/jobs)
-documents the PEP 723 runner and mounted inputs):
+Longer jobs pass `--qualification-run /previous/smoke-v1`, with the run bucket
+mounted read-only at `/previous`. Their `--job-seconds` must match the provider
+`--timeout` printed by the plan. All jobs use the same workspace path. `run.json`
+freezes code/data/settings, and payloads upload before completion markers. Failed
+or interrupted native submissions remain pending for review and are not retried
+selectively. An upload failure stops progression. The field cache is bounded at
+128 GiB; misses regenerate within the requesting stage's allowance, four workers
+maximum. Native grading runs in a small subprocess independent of model RAM.
+
+## Operator commands: create, upload, launch, watch, cancel
+
+**The commands below write to HF or spend money; they were not executed here.**
+They use the inspected HF Hub CLI **1.33.0**, which supports `h200`, `--volume`
+and `--namespace`. Set `HF_TOKEN` securely in your environment first. The named
+input dataset and run bucket below are private and under attoloop.
 
 ```sh
-hf jobs uv run --flavor rtx-pro-6000 --timeout 54h --secrets HF_TOKEN \
-  --volume "hf://datasets/$INPUT_REPO:/inputs:ro" train/cloud/hf_job.py \
-  --bundle /inputs/cloud-bundle.tar.gz --bundle-sha256 "$BUNDLE_SHA" \
-  --workspace /workspace/permit-cloud -- --execute --stage all --hourly-usd 2.75 \
-  --artifact-uri "$ARTIFACT_URI" --output train/cloud/runs/qwen38
+# Create destinations; uploads remain private.
+uvx --from 'huggingface-hub==1.33.0' hf repos create \
+  attoloop/permitforge-qwen38-inputs --repo-type dataset --private
+uvx --from 'huggingface-hub==1.33.0' hf buckets create \
+  attoloop/permitforge-qwen38-runs --private
+
+# Upload the locally verified archive; retain this hash with the launch record.
+BUNDLE_SHA="$(sha256sum train/cloud/data/cloud-bundle.tar.gz | cut -d ' ' -f 1)"
+uvx --from 'huggingface-hub==1.33.0' hf upload \
+  attoloop/permitforge-qwen38-inputs train/cloud/data/cloud-bundle.tar.gz \
+  cloud-bundle.tar.gz --repo-type dataset
+
+# One smoke Job, including setup. Trackio is off.
+JOB_ID="$(uvx --from 'huggingface-hub==1.33.0' hf jobs uv run \
+  --namespace attoloop --flavor h200 --timeout 2h --secrets HF_TOKEN \
+  --name permitforge-qwen38-smoke --detach --quiet \
+  --volume hf://datasets/attoloop/permitforge-qwen38-inputs:/inputs:ro \
+  train/cloud/hf_job.py --bundle /inputs/cloud-bundle.tar.gz \
+  --bundle-sha256 "$BUNDLE_SHA" --workspace /workspace/permit-cloud \
+  --job-seconds 7200 -- --execute --recipe smoke --hourly-usd 5.00 \
+  --precision bf16 --kernels auto --output train/cloud/runs/smoke-v1 \
+  --artifact-uri hf://buckets/attoloop/permitforge-qwen38-runs/smoke-v1)"
+
+# Keep a local log copy; inspect the final Job status after the stream ends.
+uvx --from 'huggingface-hub==1.33.0' hf jobs logs \
+  --namespace attoloop "$JOB_ID" --follow | tee train/cloud/data/smoke-logs.txt
+uvx --from 'huggingface-hub==1.33.0' hf jobs inspect --namespace attoloop "$JOB_ID"
+
+# Cancel immediately if needed (use a second terminal while following logs).
+uvx --from 'huggingface-hub==1.33.0' hf jobs cancel --namespace attoloop "$JOB_ID"
+
+# Read back artifacts after completion; destination must be a fresh directory.
+uvx --from 'huggingface-hub==1.33.0' hf sync \
+  hf://buckets/attoloop/permitforge-qwen38-runs/smoke-v1 train/cloud/data/smoke-result
+cat train/cloud/data/smoke-result/smoke/REPORT.md
 ```
 
-The HF launcher checks and extracts the bundle, installs its frozen cloud project,
-and invokes the same entrypoint as the VM. A 54-hour provider timeout at the quoted
-rate is a **$148.50 compute envelope**, including setup time but excluding other
-charges; reproduce with `python3 -c 'print(54*2.75)'`. The stage caps still apply.
-
-Plain Linux VM (Jarvislabs or RunPod; NVIDIA driver supporting CUDA 12.8, one GPU
-visible; uv 0.11.32 installed). Transfer the same bundle, then:
-
-```sh
-uv run train/cloud/hf_job.py --bundle /path/to/cloud-bundle.tar.gz \
-  --bundle-sha256 "$BUNDLE_SHA" --workspace /workspace/permit-cloud -- --plan --hourly-usd 2.19
-cd /workspace/permit-cloud/permitforge
-CUDA_VISIBLE_DEVICES=0 timeout --kill-after=30s 54h sh train/cloud/vm.sh \
-  --execute --stage all --hourly-usd 2.19 --artifact-uri "$ARTIFACT_URI" \
-  --output train/cloud/runs/qwen38
-# For RunPod, use the dashboard rate (planning quote: --hourly-usd 2.49).
-```
-
-The first VM command reuses the verified bundle bootstrap and prints the plan;
-it performs package setup but starts no stage. Subsequent VM runs use the thin
-`vm.sh` launcher. `timeout` ends the command, not the rental: the operator must
-stop/delete the instance through the provider. No rental-management API is used.
+Trackio is opt-in: after the operator names its Space, append
+`--trackio-space attoloop/CHOSEN_SPACE --trackio-bucket attoloop/CHOSEN_METRICS_BUCKET`
+to the **run arguments after `--`**. This installs the pinned `metrics` extra and
+logs trainer metrics to that live Space, using Transformers' Trackio integration
+as FineEnvs does. Static Space export is disabled. Trackio can create/update the
+named Space/bucket; omitting the flag means no Trackio initialization or writes.
+No Space name has been chosen by this work. The private run bucket independently
+retains training logs, checkpoints, traces, GPU/kernel evidence and smoke reports.
