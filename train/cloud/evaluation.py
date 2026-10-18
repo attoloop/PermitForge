@@ -16,6 +16,13 @@ class EpisodeTimeout(BaseException):
     pass
 
 
+def grading_command(tasks_dir: Path, task_id: str, design: Path, output: Path) -> list[str]:
+    from permit_core import fields
+    # The grader is a fresh process; hand it this worker's field-cache volume explicitly.
+    return [sys.executable,'-m','train.cloud.verify',str(tasks_dir),task_id,str(design),str(output),
+            str(fields.cache_root())]
+
+
 def evaluate(config, model, tokenizer, pack, ids: list[str], output: Path, *, fields_loader,
              tasks_dir: Path, adapter: Path | None) -> None:
     import torch
@@ -36,8 +43,8 @@ def evaluate(config, model, tokenizer, pack, ids: list[str], output: Path, *, fi
             write_json(self.folder/'submitted-design.json', design)
             # Record before dispatch: interruptions here are held, never silently regraded.
             write_json(self.folder/'pending-grade.json', {'task_id':task.task_id})
-            subprocess.run([sys.executable,'-m','train.cloud.verify',str(tasks_dir),task.task_id,
-                str(self.folder/'submitted-design.json'),str(self.folder/'native-grade.json')],check=True)
+            subprocess.run(grading_command(tasks_dir,task.task_id,self.folder/'submitted-design.json',
+                self.folder/'native-grade.json'),check=True)
             result = json.loads((self.folder/'native-grade.json').read_text())
             (self.folder/'pending-grade.json').unlink()
             return result
