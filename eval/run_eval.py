@@ -34,18 +34,19 @@ from .budget import HardBudget, request_bound
 
 
 def provenance(models: list[str], settings: dict, concurrency: int, budget: float) -> dict:
-    from permit_openenv.prompts import INSTRUCTIONS, PROMPT_VERSION
+    from permit_openenv.prompts import PROMPT_VERSION, instructions
     commit = subprocess.run(['git', 'rev-parse', 'HEAD'], cwd=ROOT, capture_output=True, text=True, check=True).stdout.strip()
     dirty = subprocess.run(['git', 'status', '--porcelain'], cwd=ROOT, capture_output=True, text=True, check=True).stdout
     effort = settings.get('effort', 'xhigh')
     sampling = {key: settings.get(key, default) for key, default in
                 [('max_turns', 40), ('max_tokens', MAX_TOKENS), ('wall_clock', 1800),
-                 ('temperature', 'provider-default'), ('effort', effort)]}
+                 ('temperature', 'provider-default'), ('effort', effort),
+                 ('evaluate_budget', 30), ('prompt_cache', False), ('experiment', None)]}
     sampling['models'] = {m: model_settings(m, effort) for m in models if m in MODELS}
     protocol = Path(__file__).with_name('PROTOCOL.md').read_bytes()
     digest = hashlib.sha256(protocol + b'\n' + json.dumps(sampling, sort_keys=True).encode()).hexdigest()
     return {'git_commit': commit, 'git_dirty': bool(dirty), 'prompt_version': PROMPT_VERSION,
-            'prompt_sha256': hashlib.sha256(INSTRUCTIONS.encode()).hexdigest(),
+            'prompt_sha256': hashlib.sha256(instructions(sampling['evaluate_budget']).encode()).hexdigest(),
             'protocol_sha256': digest,
             'protocol_document_sha256': hashlib.sha256(protocol).hexdigest(),
             'reporting_sha256': hashlib.sha256(Path(__file__).with_name('REPEATS.md').read_bytes()).hexdigest(),
@@ -58,25 +59,31 @@ def provenance(models: list[str], settings: dict, concurrency: int, budget: floa
 class Budget:
     """Launch guard; reservations cover concurrent in-flight episodes, not a hard invoice cap."""
     def __init__(self, limit: float, *, concurrency: int, prior: float = 5.0, spent: float = 0,
-                 costs: list[float] | None = None):
+                 costs: list[float] | None = None, whole_episode: bool = False):
         if not finite(limit) or limit < 0 or not finite(prior) or prior <= 0 or not 1 <= concurrency <= 12:
             raise ValueError('budget and prior must be finite and nonnegative; prior positive; concurrency 1..12')
         self.limit, self.concurrency, self.prior, self.spent = limit, concurrency, prior, spent
         self.costs = list(costs or [])
         self.active: dict[str, float] = {}
+        self.whole_episode = whole_episode
         self.lock = threading.Lock()
 
     @property
     def estimate(self) -> float:
         if not self.costs:
             return self.prior
+        if self.whole_episode:
+            return max(self.costs)
         ordered = sorted(self.costs)
         return ordered[max(0, math.ceil(.95*len(ordered))-1)]
 
     def reserve(self, key: str, paid: bool) -> bool:
         with self.lock:
             estimate = self.estimate if paid else 0
-            if paid and self.spent+max(self.concurrency*estimate, sum(self.active.values())+estimate) > self.limit:
+            required = sum(self.active.values())+estimate
+            if not self.whole_episode:
+                required = max(self.concurrency*estimate, required)
+            if paid and self.spent+required > self.limit:
                 return False
             self.active[key] = estimate
             return True
@@ -149,7 +156,11 @@ def run_panel(run: Path, tasks: list[dict], models: list[str], driver: Callable,
               force: bool = False, settings: dict | None = None,
               repeats: int = 1, import_runs: list[Path] | None = None,
               order: str = 'task-major', codex_concurrency: int | None = None,
-              anthropic_concurrency: int | None = None) -> None:
+              anthropic_concurrency: int | None = None, claudecode_concurrency: int | None = None) -> None:
+    settings = {'evaluate_budget': 30, 'prompt_cache': False, **(settings or {})}
+    from permit_openenv.prompts import instructions
+    instructions(settings['evaluate_budget'])
+    extended = settings.get('experiment') == 'extended-budget'
     if type(repeats) is not int or repeats < 1:
         raise ValueError('repeats must be positive')
     if not 1 <= concurrency <= 4:
@@ -159,12 +170,18 @@ def run_panel(run: Path, tasks: list[dict], models: list[str], driver: Callable,
     if len({t['task_id'] for t in tasks}) != len(tasks):
         raise ValueError('duplicate tasks')
     limits = {'codex': codex_concurrency or concurrency, 'anthropic': anthropic_concurrency or concurrency}
+    if any(m.startswith('claudecode:') for m in models):
+        limits['claudecode'] = claudecode_concurrency or concurrency
+        if not 1 <= limits['claudecode'] <= 4:
+            raise ValueError('Claude Code concurrency must be 1..4')
     if any(not 1 <= v <= 8 for v in limits.values()):
         raise ValueError('provider concurrency must be 1..8')
-    if codex_concurrency is not None or anthropic_concurrency is not None:
+    if codex_concurrency is not None or anthropic_concurrency is not None or claudecode_concurrency is not None:
         concurrency = sum(limits[p] for p in limits if any(m.startswith(p+':') for m in models))
         if concurrency > 12:  # episodes mostly wait on provider APIs; native submits are single-core
             raise ValueError('combined concurrency must be at most 12')
+    if extended and concurrency > 4:
+        raise ValueError('extended experiment concurrency must be at most 4')
     schedule_phases = phases(tasks, models, repeats, order)
     schedule = [job for phase in schedule_phases for job in phase]
     with run_lock(run):
@@ -200,8 +217,9 @@ def run_panel(run: Path, tasks: list[dict], models: list[str], driver: Callable,
         costs = [r.get('budget_charge_usd', (r.get('usage') or {}).get('usd')) for r in billed
                  if r['model'].startswith('anthropic:')]
         costs = [c if finite(c) else prior for c in costs]
-        budget = Budget(budget_usd, concurrency=limits['anthropic'], prior=prior, spent=sum(costs), costs=costs)
-        hard_budget = HardBudget(run/'request-budget.json', budget_usd)
+        budget = Budget(budget_usd, concurrency=limits['anthropic'], prior=prior, spent=sum(costs), costs=costs,
+                        whole_episode=extended)
+        hard_budget = None if extended else HardBudget(run/'request-budget.json', budget_usd)
         stop = False
         with ThreadPoolExecutor(max_workers=concurrency) as pool:
             for phase_index, phase in enumerate(schedule_phases):
@@ -232,7 +250,7 @@ def run_panel(run: Path, tasks: list[dict], models: list[str], driver: Callable,
                     if history and (len(history) >= attempts.MAX_ATTEMPTS or not history[-1].get('retryable')):
                         continue
                     key = model+'|'+task['task_id']+'|'+str(repeat)
-                    if model in MODELS[:2] and not hard_budget.can_reserve(
+                    if model in MODELS and model.startswith('anthropic:') and hard_budget is not None and not hard_budget.can_reserve(
                             request_bound(model.partition(':')[2], (settings or {}).get('max_tokens', MAX_TOKENS))):
                         stop = True
                         continue
@@ -281,6 +299,9 @@ def run_panel(run: Path, tasks: list[dict], models: list[str], driver: Callable,
         write_index(run, status=status)
         manifest.update(finished_at=now(), status=status)
         write_json(path, manifest)
+        if extended and any(m == 'anthropic:claude-fable-5-1' for m in models):
+            from .extended import remaining
+            write_json(run/'remaining-tasks.json', remaining(run, tasks))
         append_log(run/'harness.log', now()+' run '+manifest['status'])
 
 
@@ -304,7 +325,8 @@ def collect(jobs: list, run: Path, budget: Budget) -> None:
             error, trace = str(exc), traceback.format_exc()
             record = {}
         partial = json.loads((capture.root/'checkpoint.json').read_text())
-        record = {**partial, **record, 'model': model, **task}
+        record = {**partial, **record, 'model': model, **task,
+                  'settings': {**partial.get('settings', {}), **record.get('settings', {})}}
         if error is None and (record.get('infrastructure_error') or (
                 record.get('ended') == 'error' and record.get('error_type') != 'timeout')):
             error = str(record.get('error') or record.get('error_type') or 'driver returned an infrastructure error')
@@ -364,12 +386,16 @@ def main() -> None:
     parser.add_argument('--concurrency', type=int, default=1)
     parser.add_argument('--codex-concurrency', type=int, default=1)
     parser.add_argument('--anthropic-concurrency', type=int, default=1)
+    parser.add_argument('--claudecode-concurrency', type=int, default=1)
     parser.add_argument('--order', choices=['task-major', 'round-robin'], default='round-robin')
     parser.add_argument('--dry-run', action='store_true')
     parser.add_argument('--effort', choices=EFFORTS, default='xhigh')
     parser.add_argument('--max-turns', type=int, default=40)
     parser.add_argument('--max-tokens', type=int, default=MAX_TOKENS)
     parser.add_argument('--wall-clock', type=float, default=1800)
+    parser.add_argument('--evaluate-budget', type=int, default=30)
+    parser.add_argument('--prompt-cache', action='store_true')
+    parser.add_argument('--remaining-tasks', type=Path)
     parser.add_argument('--budget-usd', type=float, default=0)
     parser.add_argument('--prior-episode-usd', type=float)
     parser.add_argument('--server')
@@ -377,34 +403,53 @@ def main() -> None:
     parser.add_argument('--tasks-root', type=Path, default=ROOT/'envs/permit/tasks')
     parser.add_argument('--output-root', type=Path, default=ROOT/'results/rollouts')
     args = parser.parse_args()
+    extended = args.run in ('extended-budget', 'extended-budget-sub')
     if args.prior_episode_usd is None:
-        args.prior_episode_usd = EPISODE_PRIORS[args.effort]
+        from .extended import PRIOR_USD
+        args.prior_episode_usd = PRIOR_USD if extended else EPISODE_PRIORS[args.effort]
     if args.max_tokens != MAX_TOKENS:
         parser.error('final protocol requires --max-tokens 32768')
-    if not 1 <= args.concurrency <= 4 or args.max_turns < 1 or args.max_turns > 40 or args.max_tokens < 1 or not finite(args.wall_clock) or args.wall_clock <= 0:
+    if not 1 <= args.concurrency <= 4 or args.max_turns < 1 or args.max_turns > 150 or args.max_tokens < 1 or not finite(args.wall_clock) or args.wall_clock <= 0:
         parser.error('invalid concurrency, turn, token, or wall-clock limit')
+    if not 1 <= args.evaluate_budget <= 200:
+        parser.error('--evaluate-budget must be 1..200')
+    if not 1 <= args.claudecode_concurrency <= 4:
+        parser.error('--claudecode-concurrency must be 1..4')
+    if args.prompt_cache and not extended:
+        parser.error('--prompt-cache is opt-in for the extended-budget experiment only')
+    if extended:
+        from .extended import ASTRA, FABLE_API, FABLE_SUB
+        allowed = {ASTRA, FABLE_API} if args.run == 'extended-budget' else {FABLE_SUB}
+        if not set(args.models) <= allowed or not args.subsets or args.split != 'both' or args.repeats != 1 or (
+                args.effort, args.evaluate_budget, args.max_turns, args.wall_clock) != ('medium', 100, 150, 7200):
+            parser.error('extended experiment requires its named models, frozen subsets, both splits, one repeat, medium/100/150/7200')
+        if args.run == 'extended-budget-sub' and not args.remaining_tasks:
+            parser.error('subscription leg requires --remaining-tasks from the credit leg')
     if args.repeats < 1:
         parser.error('--repeats must be positive')
     if any(not 1 <= c <= 8 for c in (args.codex_concurrency, args.anthropic_concurrency)):
         parser.error('provider concurrency must be 1..8')
-    used_concurrency = sum(c for p, c in [('codex', args.codex_concurrency), ('anthropic', args.anthropic_concurrency)]
+    used_concurrency = sum(c for p, c in [('codex', args.codex_concurrency), ('anthropic', args.anthropic_concurrency),
+                                        ('claudecode', args.claudecode_concurrency)]
                            if any(m.startswith(p+':') for m in args.models))
     if used_concurrency > 12:
         parser.error('combined provider concurrency must be at most 12')
+    if extended and used_concurrency > 4:
+        parser.error('extended experiment concurrency must be at most 4')
     if args.budget_usd > 190:
         parser.error('Anthropic hard cap is 190 USD')
     Budget(args.budget_usd, concurrency=args.concurrency, prior=args.prior_episode_usd)
     for model in args.models:
         provider, _, name = model.partition(':')
-        if provider not in ('codex', 'anthropic') or not name:
-            parser.error('supported drivers: anthropic:<model>, codex:<model>')
+        if provider not in ('codex', 'anthropic', 'claudecode') or not name:
+            parser.error('supported drivers: anthropic:<model>, codex:<model>, claudecode:<model>')
         if model not in MODELS:
             parser.error('WP2.8 models are: '+', '.join(MODELS))
     paid = any(m.startswith('anthropic:') for m in args.models)
     if paid and args.budget_usd <= 0:
         parser.error('Anthropic requires a positive --budget-usd')
     from .transport import Session, load_eval_pack, recording_app, serve
-    from permit_openenv.prompts import INSTRUCTIONS, PROMPT_VERSION
+    from permit_openenv.prompts import PROMPT_VERSION, instructions
     try:
         pack = load_eval_pack(args.tasks_root)
         if args.subsets:
@@ -420,25 +465,40 @@ def main() -> None:
             if args.split == 'both':
                 raise ValueError('--split both requires --subsets')
             tasks = select_tasks(pack, args.split, args.tasks, args.limit)
+        if args.remaining_tasks:
+            if args.models != ['claudecode:claude-fable-5-1'] or not extended:
+                raise ValueError('--remaining-tasks is only for the Fable subscription leg')
+            from .extended import consume_remaining
+            tasks = consume_remaining(args.remaining_tasks, tasks, preview=args.dry_run)
     except (OSError, ValueError) as exc:
         parser.error('preflight: task loading/selection failed: '+str(exc))
-    if not tasks:
+    if not tasks and not args.remaining_tasks:
         parser.error('no eligible tasks selected')
-    settings = {'prompt_version': PROMPT_VERSION, 'prompt_sha256': hashlib.sha256(INSTRUCTIONS.encode()).hexdigest(),
+    settings = {'prompt_version': PROMPT_VERSION, 'prompt_sha256': hashlib.sha256(instructions(args.evaluate_budget).encode()).hexdigest(),
                 'max_turns': args.max_turns, 'max_tokens': args.max_tokens,
                 'wall_clock': args.wall_clock, 'temperature': 'provider-default',
-                'evaluate_budget': 30, 'concurrency': used_concurrency,
+                'evaluate_budget': args.evaluate_budget, 'prompt_cache': args.prompt_cache,
+                'experiment': 'extended-budget' if extended else None, 'concurrency': used_concurrency,
                 'codex_concurrency': args.codex_concurrency, 'anthropic_concurrency': args.anthropic_concurrency,
+                'claudecode_concurrency': args.claudecode_concurrency,
                 'budget_usd': args.budget_usd, 'prior_episode_usd': args.prior_episode_usd,
                 'order': args.order, 'effort': args.effort,
                 'models': {m: model_settings(m, args.effort) for m in args.models},
-                'subsets_sha256': hashlib.sha256(args.subsets.read_bytes()).hexdigest() if args.subsets else None}
+                'subsets_sha256': hashlib.sha256(args.subsets.read_bytes()).hexdigest() if args.subsets else None,
+                'remaining_tasks_sha256': hashlib.sha256(args.remaining_tasks.read_bytes()).hexdigest() if args.remaining_tasks else None}
     schedule = [j for phase in phases(tasks, args.models, args.repeats, args.order) for j in phase]
     if args.dry_run:
         projected = projection(schedule, [], args.prior_episode_usd)
-        projected['note'] += ' '+PRIOR_ASSUMPTION
+        from .extended import PRIOR_NOTE
+        projected['note'] += ' '+(PRIOR_NOTE if extended else PRIOR_ASSUMPTION)
+        if extended:
+            projected['note'] = projected['note'].replace('Request-level hard cap always applies.',
+                'Whole-episode launch reservations apply; admitted episodes are never budget-interrupted.')
         print(json.dumps({'schedule': schedule, 'settings': settings,
                           'projection_prior': projected}, indent=2))
+        return
+    if not tasks:
+        print('No Fable tasks remain; no subscription episodes to launch.')
         return
     try:
         loaded_drivers = preflight.drivers(args.models)
@@ -453,7 +513,8 @@ def main() -> None:
 
     def run(url):
         try:
-            preflight.server(url, token, tasks)
+            preflight.server(url, token, tasks, **({'evaluate_budget': args.evaluate_budget}
+                                                  if args.evaluate_budget != 30 else {}))
         except preflight.PreflightError as exc:
             parser.error('preflight: '+str(exc))
         def driver(model, task, checkpoint, capture, hard_budget):
@@ -461,19 +522,20 @@ def main() -> None:
                 fn = loaded_drivers[model.partition(':')[0]]
                 return fn(session, model, max_turns=args.max_turns,
                           max_tokens=args.max_tokens, wall_clock=args.wall_clock, effort=args.effort,
-                          **({'hard_budget': hard_budget} if model.startswith('anthropic:') else {}))
+                          **({'hard_budget': hard_budget, 'prompt_cache': args.prompt_cache}
+                             if model.startswith('anthropic:') else {}))
         run_panel(args.output_root/component(args.run), tasks, args.models, driver,
                   concurrency=args.concurrency, budget_usd=args.budget_usd,
                   prior=args.prior_episode_usd, force=args.force, settings=settings,
                   repeats=args.repeats, import_runs=[args.output_root/component(r) for r in args.import_run],
                   order=args.order, codex_concurrency=args.codex_concurrency,
-                  anthropic_concurrency=args.anthropic_concurrency)
+                  anthropic_concurrency=args.anthropic_concurrency, claudecode_concurrency=args.claudecode_concurrency)
     from .warm_fields import pin_warm
     with pin_warm(args.tasks_root, [t['task_id'] for t in tasks]) if args.subsets else nullcontext():
         if args.server:
             run(args.server)
         else:
-            with serve(recording_app(token, pack=pack)) as url:
+            with serve(recording_app(token, pack=pack, evaluate_budget=args.evaluate_budget)) as url:
                 run(url)
 
 

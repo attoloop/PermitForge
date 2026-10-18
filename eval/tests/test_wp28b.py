@@ -117,7 +117,7 @@ def test_launch_effort_dry_run_manifest_hash_and_episode(tmp_path, monkeypatch, 
     assert settings['models'][MODELS[0]]['effort'] == native
     assert settings['models'][MODELS[-1]]['effort'] == effort
     assert 'assumption' in result['projection_prior']['note'].lower()
-    assert result['projection_prior']['projected_remaining_paid_usd'] == 160*prior
+    assert result['projection_prior']['projected_remaining_paid_usd'] == 80*sum(m.startswith('anthropic:') for m in MODELS)*prior
     assert not list(tmp_path.iterdir())
     hashes = {run_eval.provenance(list(MODELS), {'effort': level}, 1, 190)['protocol_sha256']
               for level in ('medium', 'high', 'xhigh')}
@@ -190,7 +190,7 @@ def test_launcher_passes_effort_to_every_driver(monkeypatch, effort):
     calls = []
     def provider(session, model, **kwargs):
         calls.append((model, kwargs['effort'], kwargs['max_tokens']))
-    monkeypatch.setattr(run_eval.preflight, 'drivers', lambda _: {'codex': provider, 'anthropic': provider})
+    monkeypatch.setattr(run_eval.preflight, 'drivers', lambda _: {p: provider for p in ('codex', 'anthropic', 'claudecode')})
     monkeypatch.setattr(run_eval.preflight, 'server', lambda *a: None)
     monkeypatch.setattr(transport, 'Session', lambda *a, **kw: nullcontext(object()))
     monkeypatch.setattr(transport, 'recording_app', lambda *a, **kw: None)

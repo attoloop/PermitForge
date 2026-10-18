@@ -2,7 +2,8 @@
 from __future__ import annotations
 
 MODELS = ('anthropic:claude-opus-5-5', 'anthropic:claude-sonnet-5-5',
-          'codex:gpt-6.1-sol', 'codex:gpt-5.6-sol')  # 2026-10-17: Astra dropped (plan usage limits)
+          'codex:gpt-6.1-sol', 'codex:gpt-5.6-sol',
+          'anthropic:claude-fable-5-1', 'claudecode:claude-fable-5-1', 'codex:gpt-6-astra')
 MAX_TOKENS = 32768
 EFFORTS = ('medium', 'high', 'xhigh')
 EPISODE_PRIORS = {'medium': 2.0, 'high': 3.5, 'xhigh': 5.0}
@@ -17,7 +18,9 @@ def model_settings(model: str, effort: str = 'xhigh') -> dict:
         raise ValueError('effort must be medium, high or xhigh')
     if model.startswith('codex:'):
         return {'launch_effort': effort, 'effort': effort, 'model_reasoning_effort': effort}
-    if model in MODELS[:2]:
+    if model.startswith('claudecode:'):
+        return {'launch_effort': effort, 'effort': effort, 'harness': 'claude-code-subscription'}
+    if model.startswith('anthropic:') and model in MODELS:
         native = 'max' if effort == 'xhigh' else effort
         return {'launch_effort': effort, 'effort': native, 'output_config': {'effort': native},
                 'thinking': {'type': 'adaptive', 'display': 'summarized'}}

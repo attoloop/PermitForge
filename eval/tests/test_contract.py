@@ -64,9 +64,10 @@ def test_anthropic_records_contract_and_no_temperature():
 
 def test_price_tiers_cache_and_sources():
     table = prices()
-    assert len(table) == 3
-    for value in table.values():
-        assert value['source'].startswith('https://') and value['verified_at'] == '2026-10-17'
+    assert len(table) == 4
+    for model, value in table.items():
+        checked = '2026-10-18' if model == 'claude-fable-5-1' else '2026-10-17'
+        assert value['source'].startswith('https://') and value['verified_at'] == checked
     assert request_cost('claude-haiku-5-5', {'input_tokens': 100000, 'output_tokens': 100}) == pytest.approx(.01005)
     assert request_cost('claude-haiku-5-5', {'input_tokens': 100000, 'cache_read_input_tokens': 1,
                                          'output_tokens': 100}) == pytest.approx(.05025005)

@@ -23,7 +23,7 @@ from permit_core.verify import Verification
 from .episode import Episode, STORE, public_result
 from .evaluator import Evaluator, VerifyEvaluator, select_evaluator
 from .diagnostics import diagnostic_sink
-from .prompts import INSTRUCTIONS, PROMPT_VERSION
+from .prompts import PROMPT_VERSION, instructions
 from .protocol import DESIGN_SCHEMA, json_value
 from .rubric import PermitRubric
 from .tasks import TaskPack, load_pack, to_ledger
@@ -49,7 +49,9 @@ class PermitForgeEnvironment(MCPEnvironment):
     SUPPORTS_CONCURRENT_SESSIONS = True
 
     def __init__(self, pack: TaskPack | None = None, *, evaluator: Evaluator | None = None,
-                 verifier: Evaluator | None = None):
+                 verifier: Evaluator | None = None, evaluate_budget: int = EVALUATE_BUDGET):
+        self.instructions = instructions(evaluate_budget)
+        self.evaluate_budget = evaluate_budget
         self.pack = pack if pack is not None else load_pack()
         self.evaluator = evaluator if evaluator is not None else select_evaluator()
         # Injection supports deterministic tests; production always uses VerifyEvaluator.
@@ -123,22 +125,23 @@ class PermitForgeEnvironment(MCPEnvironment):
                 task = self.pack.at(split, index)
             if self._episode and not self._episode.done:
                 self._episode.finish()
-            self._episode = Episode(task, str(episode_id)[:64] if episode_id else uuid.uuid4().hex)
+            self._episode = Episode(task, str(episode_id)[:64] if episode_id else uuid.uuid4().hex,
+                                    evaluate_budget=self.evaluate_budget)
             STORE.add(self._episode)
             self._state = PermitState(episode_id=self.episode.episode_id, task_id=task.task_id, split=task.split)
             self._reset_rubric()
             self.episode.log('episode reset')
             return Observation(done=False, reward=0.0, metadata={
                 'episode_id': self.episode.episode_id, 'task_id': task.task_id, 'split': task.split,
-                'instructions': INSTRUCTIONS, 'prompt_version': PROMPT_VERSION, 'tools': TOOLS,
-                'scenario': task.view(), 'evaluate_budget': EVALUATE_BUDGET,
+                'instructions': self.instructions, 'prompt_version': PROMPT_VERSION, 'tools': TOOLS,
+                'scenario': task.view(self.evaluate_budget), 'evaluate_budget': self.evaluate_budget,
             })
 
     def _dispatch(self, name: str, args: dict) -> str:
         with self._lock:
             ep = self.episode
             ep.log('tool received: ' + name)
-            left = EVALUATE_BUDGET - self._state.evaluations_used
+            left = self.evaluate_budget - self._state.evaluations_used
             if ep.done:
                 result = {'error': 'episode is over; reset to start another', 'evaluations_left': left}
             elif name == 'get_scenario':
@@ -193,7 +196,7 @@ class PermitForgeEnvironment(MCPEnvironment):
         score = reward(saved, task.draft_cost)
         result.update(reward=score, prescore_usd_saved=float(saved),
                       pct_saved=float(100 * saved / task.draft_cost) if verified.feasible else 0.0,
-                      evaluations_left=EVALUATE_BUDGET-self._state.evaluations_used)
+                      evaluations_left=self.evaluate_budget-self._state.evaluations_used)
         return result
 
     def _evaluate(self, evaluator: Evaluator, design: dict) -> dict:

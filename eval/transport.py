@@ -44,18 +44,19 @@ def load_eval_pack(root: Path | None = None) -> TaskPack:
                      if t.record.get('eligible') is True])
 
 
-def recording_app(token: str, *, pack: TaskPack | None = None, evaluator: Any = None, verifier: Any = None):
+def recording_app(token: str, *, pack: TaskPack | None = None, evaluator: Any = None, verifier: Any = None,
+                  evaluate_budget: int = 30):
     from fastapi import Header, HTTPException
     from permit_openenv.server import create_server
     os.environ['ENABLE_WEB_INTERFACE'] = 'false'
-    app = create_server(pack=pack, evaluator=evaluator, verifier=verifier)
+    app = create_server(pack=pack, evaluator=evaluator, verifier=verifier, evaluate_budget=evaluate_budget)
 
     @app.get('/eval/preflight', include_in_schema=False)
     def preflight(authorization: str = Header(default='')):
         if not secrets.compare_digest(authorization, 'Bearer '+token):
             raise HTTPException(status_code=403, detail='recording credentials required')
         selected = pack if pack is not None else load_eval_pack()
-        return {'status': 'ok', 'tasks': [
+        return {'status': 'ok', 'evaluate_budget': evaluate_budget, 'tasks': [
             {'task_id': t.task_id, 'split': t.split, 'station': t.record['station']}
             for t in selected.tasks if t.record.get('eligible') is True]}
 
@@ -227,11 +228,13 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--port', type=int, default=8012)
     parser.add_argument('--tasks-root', type=Path)
+    parser.add_argument('--evaluate-budget', type=int, default=30, choices=range(1, 201))
     args = parser.parse_args()
     token = os.environ.get('PERMIT_EVAL_TOKEN')
     if not token:
         parser.error('set PERMIT_EVAL_TOKEN for the private record endpoint')
-    uvicorn.run(recording_app(token, pack=load_eval_pack(args.tasks_root)), host='127.0.0.1', port=args.port)
+    uvicorn.run(recording_app(token, pack=load_eval_pack(args.tasks_root), evaluate_budget=args.evaluate_budget),
+                host='127.0.0.1', port=args.port)
 
 
 if __name__ == '__main__':

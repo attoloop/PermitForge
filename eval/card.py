@@ -59,6 +59,9 @@ def baseline_scores(tasks: list[dict]) -> list[dict]:
 
 def build_card(run: Path, subsets_path: Path) -> dict:
     manifest, subsets = read(run/'run.json'), read(subsets_path)
+    settings = manifest['settings']
+    if settings.get('experiment') == 'extended-budget' or settings.get('evaluate_budget', 30) != 30:
+        raise ValueError('extended experiments are excluded from the main 30-evaluation card')
     if manifest['status'] != 'complete':
         raise ValueError('card requires a complete run')
     report = split_report(run, 'eval')
@@ -68,7 +71,6 @@ def build_card(run: Path, subsets_path: Path) -> dict:
     actual = {(r['model'], r['task_id'], r['repeat']) for _, r in records([run]) if r['split'] == 'eval'}
     if actual != expected:
         raise ValueError('eval coverage differs from frozen cohort/repeats')
-    settings = manifest['settings']
     return {
         'env': 'permitforge', 'version': 'v2',
         'authors': [{'name': 'Attoloop', 'github': 'attoloop', 'affiliation': 'Attoloop'}],

@@ -49,7 +49,8 @@ def rescore_record(record: dict, task: Any, *, verify_fn: Callable = native_veri
     final.update(prescore_usd_saved=float(saved),
                  pct_saved=float(100*saved/Decimal(str(task.draft_cost))) if feasible else 0.0,
                  reward=reward(saved, task.draft_cost),
-                 evaluations_left=30-out.get('evaluations_used', 0))
+                 evaluations_left=out.get('settings', {}).get('evaluate_budget', out.get('evaluate_budget', 30))-
+                                  out.get('evaluations_used', 0))
     out.setdefault('rescore_history', []).append(previous)
     out.update(final=final, reward=final['reward'], ended='submitted')
     submission['result'] = final

@@ -15,7 +15,7 @@ class BudgetExhausted(RuntimeError):
 
 def request_bound(model: str, max_tokens: int) -> float:
     from .anthropic_driver import prices
-    if model not in ('claude-opus-5-5', 'claude-sonnet-5-5'):
+    if model not in ('claude-opus-5-5', 'claude-sonnet-5-5', 'claude-fable-5-1'):
         raise ValueError('no verified context ceiling for '+model)
     p = prices()[model]
     # Both models have a 1M context window. No cache/fast/region options are

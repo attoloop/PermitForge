@@ -201,3 +201,128 @@ automatically. For an external recorder, warm its host separately; local cache
 pins do not protect a different host's files.
 
 Offline suite: `uv run --project envs/permit/openenv --no-sync python -m pytest eval/tests -q`.
+
+## Extended-budget experiment
+
+WP2.11, 2026-10-18: a separate headroom experiment asks whether the evaluation
+budget constrains performance. In `results/rollouts/final-medium3`, neither Claude
+model exhausted its budget (0/120 episodes); the GPT models exhausted it in
+27/120 episodes (16 GPT-6.1 Sol, 11 GPT-5.6 Sol). Recompute the counts and the
+cost prior without sampling:
+
+```sh
+export PERMIT_FIELDS_CACHE_GB=64
+uv run --project envs/permit/openenv --no-sync python -m eval.extended
+```
+
+Use the same frozen `results/subsets.json` cohort: 10 eval tasks followed by
+10 train tasks. Run one attempt per task/model, effort **medium**, **100 valid
+evaluations**, **150 turns**, **7,200 seconds**, and 32,768 output tokens per
+response. Infrastructure retries follow the existing rules and retain their
+attempts; terminal outcomes are never selectively rerun. No result enters
+`results/eval-v2.json`, `results/final-eval.md`, `results/final-train.md`, or the
+main board. Report the extended results beside the 30-evaluation results; never
+pool them. `eval.card` rejects extended runs, and protocol/sampling hashes prevent
+cross-budget imports and pooling. The public Space still defaults to 30.
+At 30, prompt text and SHA-256 remain exactly
+`75fa2efb3393976c7c85209945f0ffbd97a18449cd75f2f00fdf54d2a8ce0f13`.
+The chosen evaluation budget, prompt caching and experiment marker enter the
+protocol hash and `run.json`; resume rejects changes.
+
+The credit leg is `extended-budget`: `anthropic:claude-fable-5-1` first uses the
+remaining Anthropic console credit stated by the operator as `--budget-usd`;
+`codex:gpt-6-astra` uses the ChatGPT subscription. Fable's verified standard
+USD/MTok prices are input 10, output 50, cache write 5m 12.50, write 1h 20,
+read 0.25. Source checked 2026-10-18:
+[official Anthropic pricing](https://platform.claude.com/docs/en/about-claude/pricing).
+`--prompt-cache` opts this experiment into explicit breakpoints on the system
+prompt, final tool definition and latest turn. Previous-turn breakpoints are not
+retained; signed thinking blocks remain unchanged. Caching remains off by default
+for the main protocol. Raw request bodies and categorized usage show the policy.
+
+Unlike the main run's per-request hard cap, this leg reserves an episode cost
+estimate before launch and never interrupts an admitted episode for budget.
+Committed charges plus concurrent episode reservations plus the next episode's
+estimate must fit. The initial conservative estimate is $60: reprice the
+maximum-cost Opus token record from final-medium3 at Fable rates ($7.59872),
+scale by 100/30 and double ($50.6581333), then round upward to the next $10.
+The command above saves the source path/hash and arithmetic to
+`internal/reports/WP2.11-evidence/main-budget-and-prior.json`.
+After the first completed API episode, use the maximum measured episode cost;
+unknown charges retain their full launch reservation, including after resume.
+This is an empirical cost estimate, **not a mathematical invoice ceiling**;
+an unusually expensive admitted episode can exceed its reservation. No request
+receives the main protocol's budget cutoff in this experiment. An unaffordable
+task is left unstarted for the subscription leg; it is never recorded as a
+budget-truncated episode. Astra continues independently.
+
+Once the credit leg finishes with no affordable Fable launches left, it writes
+`extended-budget/remaining-tasks.json`. Only then run `extended-budget-sub` with
+`claudecode:claude-fable-5-1` and that file. The launcher checks its source run is
+finished and its tasks match the authoritative credit records. It may leave a
+small credit balance that cannot admit another episode. Each Fable result carries
+its provider/harness prefix; API and Claude Code results appear side by side,
+never silently pooled. Subscription harnesses only are used for Astra and the
+Fable subscription leg; Fable's explicit initial console-credit leg is the sole
+API exception in this experiment. Subscription USD is null.
+
+Claude Code 2.1.302 is launched with the flags verified in `claude --help` on this
+host: `-p --model --effort --system-prompt --tools "" --mcp-config
+--strict-mcp-config --allowedTools --output-format stream-json --verbose
+--max-turns --no-session-persistence --disable-slash-commands --setting-sources
+--settings`. The working directory is empty. `CLAUDE_CONFIG_DIR` points to an
+isolated directory initially containing only a mode-0600 copy of the subscription
+OAuth credential. No user/project settings, hooks, memory, installed plugins,
+skills or other MCP configurations are copied; hooks and memory are disabled.
+The child strips API keys, auth tokens and inherited provider configuration.
+An isolated `claude auth status --json` must report `claude.ai`, first-party,
+no API-key source. The recording proxy also refuses every API-key-authenticated
+request, filters host context, pins the system prompt, effort and four tools,
+and validates returned calls before releasing them. Authorization headers are
+never captured. The MCP gateway/session recording is the same as Codex's.
+
+`ANTHROPIC_BASE_URL` works with OAuth on this host: the installed CLI test uses
+fake subscription credentials and a local fake provider, captures the first
+filtered request and executes `get_scenario` then `submit_design` through the
+real MCP gateway with fake physics. That request contains only our system prompt
+and the four public tools. Stream JSON records returned thinking and tool calls;
+raw requests, SSE, stderr, argv and MCP config are retained. `--bare` cannot be
+used because it disables OAuth. `--safe-mode` cannot be used because it disables
+explicit MCP too. Two compiled-in plugins are still listed by this CLI; the
+individual controls and provider boundary remove their context and tool effects.
+They are not operator-installed plugins. These limitations are exposed in the
+saved init event, not described as an entirely plugin-free binary.
+Sources checked 2026-10-18: [CLI flags](https://code.claude.com/docs/en/cli-reference),
+[configuration isolation](https://code.claude.com/docs/en/authentication),
+[settings](https://code.claude.com/docs/en/settings).
+
+Operator-only launch commands (do not execute during implementation). Set
+`PERMIT_CONSOLE_CREDIT_USD` to the remaining console credit before the credit leg;
+the existing maximum of $190 still applies. Episode/native concurrency is kept
+within four. The second command is only for the finished credit leg's remainder:
+
+```sh
+export PERMIT_FIELDS_CACHE_GB=64
+ENABLE_WEB_INTERFACE=false PERMIT_FIELDS_JOBS=4 MAX_CONCURRENT_ENVS=4 \
+PERMIT_NATIVE_VERIFY_SLOTS=4 uv run --project envs/permit/openenv --no-sync python -m eval.run_eval \
+  --run extended-budget --models codex:gpt-6-astra anthropic:claude-fable-5-1 \
+  --subsets results/subsets.json --split both --repeats 1 --order round-robin \
+  --effort medium --evaluate-budget 100 --max-turns 150 --wall-clock 7200 \
+  --max-tokens 32768 --prompt-cache --codex-concurrency 1 --anthropic-concurrency 1 \
+  --budget-usd "${PERMIT_CONSOLE_CREDIT_USD:?set remaining console credit}"
+
+ENABLE_WEB_INTERFACE=false PERMIT_FIELDS_JOBS=4 MAX_CONCURRENT_ENVS=4 \
+PERMIT_NATIVE_VERIFY_SLOTS=4 uv run --project envs/permit/openenv --no-sync python -m eval.run_eval \
+  --run extended-budget-sub --models claudecode:claude-fable-5-1 \
+  --subsets results/subsets.json --split both --repeats 1 --order round-robin \
+  --effort medium --evaluate-budget 100 --max-turns 150 --wall-clock 7200 \
+  --max-tokens 32768 --claudecode-concurrency 1 \
+  --remaining-tasks results/rollouts/extended-budget/remaining-tasks.json
+```
+
+Add `--dry-run` to either command to print schedules/settings without provider
+preflight, server startup, cache computation or model episodes. For a preparation
+preview before credit sampling, the subscription dry run alone may consume a
+clearly labelled preview remainder without a source run. Actual subscription
+launches require the authoritative remainder file. Offline tests use fake
+binaries/providers, including an installed-CLI check against a fake endpoint.

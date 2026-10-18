@@ -31,8 +31,9 @@ def utc_now() -> str:
 
 
 class Episode:
-    def __init__(self, task: Task, episode_id: str):
+    def __init__(self, task: Task, episode_id: str, *, evaluate_budget: int = 30):
         self.task, self.episode_id = task, episode_id
+        self.evaluate_budget = evaluate_budget
         self.started_at = utc_now()
         self.started = time.monotonic()
         self.finished_at: str | None = None
@@ -79,7 +80,8 @@ class Episode:
             'schema_version': 1, 'task_id': self.task.task_id, 'split': self.task.split,
             'station': self.task.scenario.station, 'model': model, 'prompt_version': PROMPT_VERSION,
             'started_at': self.started_at, 'finished_at': self.finished_at,
-            'scenario': self.task.view(), 'geometry': geometry(self.task), 'steps': self.steps,
+            'scenario': self.task.view(self.evaluate_budget), 'geometry': geometry(self.task), 'steps': self.steps,
+            'evaluate_budget': self.evaluate_budget,
             'evaluations_used': self.evaluations_used, 'ended': self.ended, 'final': self.final,
             'reward': self.final['reward'] if self.final else 0.0,
             'steps_dropped': self.steps_dropped, 'diagnostics': self.diagnostics,

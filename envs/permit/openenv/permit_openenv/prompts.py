@@ -17,3 +17,9 @@ A cheaper feasible design scores higher; the unchanged draft, an infeasible desi
 
 Use this design shape: {"S1": {"control": "S1_moderate", "height_m": 45.0}, ...}.
 Submit your best feasible design before you run out of turns.'''
+
+
+def instructions(evaluate_budget: int = 30) -> str:
+    if type(evaluate_budget) is not int or not 1 <= evaluate_budget <= 200:
+        raise ValueError('evaluate budget must be an integer in 1..200')
+    return INSTRUCTIONS.replace('you have 30 evaluations', f'you have {evaluate_budget} evaluations')

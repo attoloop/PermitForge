@@ -44,12 +44,25 @@ def drivers(models: list[str]) -> dict[str, Callable]:
                 raise PreflightError('codex CLI login status check failed') from exc
             if login.returncode or 'ChatGPT' not in login.stdout+login.stderr:
                 raise PreflightError('Codex requires ChatGPT subscription login')
+        elif provider == 'claudecode':
+            if not shutil.which('claude'):
+                raise PreflightError('claude CLI is not on PATH')
+            # Auth is checked again inside the isolated config before starting the CLI.
+            from pathlib import Path
+            import json
+            try:
+                source = Path(os.environ.get('CLAUDE_CONFIG_DIR', str(Path.home()/'.claude')))
+                oauth = json.loads((source/'.credentials.json').read_text()).get('claudeAiOauth', {})
+                if not oauth.get('accessToken') or oauth.get('subscriptionType') not in ('pro', 'max', 'team', 'enterprise'):
+                    raise ValueError('missing subscription credentials')
+            except (OSError, ValueError) as exc:
+                raise PreflightError('Claude Code requires subscription OAuth login') from exc
         else:
-            raise PreflightError('supported drivers: anthropic:<model>, codex:<model>')
+            raise PreflightError('supported drivers: anthropic:<model>, codex:<model>, claudecode:<model>')
     return loaded
 
 
-def server(url: str, token: str, tasks: list[dict]) -> None:
+def server(url: str, token: str, tasks: list[dict], *, evaluate_budget: int = 30) -> None:
     """Check health, authenticated recording and task selection without resetting a session."""
     try:
         with httpx.Client(timeout=10, trust_env=False) as client:
@@ -63,6 +76,8 @@ def server(url: str, token: str, tasks: list[dict]) -> None:
             data = response.json()
             if data.get('status') != 'ok' or any(task not in data['tasks'] for task in tasks):
                 raise PreflightError('requested tasks do not exist in the recording server cohort')
+            if data.get('evaluate_budget', 30) != evaluate_budget:
+                raise PreflightError('recording server evaluation budget differs from the run')
     except PreflightError:
         raise
     except Exception as exc:

@@ -13,7 +13,7 @@ import traceback
 from typing import Any
 
 from fastapi import Request
-from permit_openenv.prompts import INSTRUCTIONS, PROMPT_VERSION
+from permit_openenv.prompts import PROMPT_VERSION, instructions
 
 from .common import TOOLS, now
 from .settings import MAX_TOKENS, model_settings
@@ -37,7 +37,8 @@ class CodexBoundary:
     still name a built-in tool. Buffer and validate the response before releasing it.
     """
     def __init__(self, prompt: str, *, max_turns: int, max_tokens: int, capture: Any = None,
-                 expected_effort: str | None = None):
+                 expected_effort: str | None = None, evaluate_budget: int = 30):
+        self.instructions = instructions(evaluate_budget)
         self.prompt, self.max_turns, self.max_tokens = prompt, max_turns, max_tokens
         self.turns = 0
         self.allowed = {'mcp__permitforge__'+t for t in TOOLS}
@@ -82,7 +83,7 @@ class CodexBoundary:
             inputs.append({'role': 'user', 'content': [{'type': 'input_text', 'text': 'Last turn: submit your best feasible design now.'}]})
             if self.capture:
                 self.capture.event('user', inputs[-1]['content'])
-        result = {**body, 'tools': tools, 'instructions': INSTRUCTIONS,
+        result = {**body, 'tools': tools, 'instructions': self.instructions,
                   'input': inputs, 'parallel_tool_calls': False, 'max_output_tokens': self.max_tokens}
         for key in ('previous_response_id', 'prompt_cache_key', 'temperature'):
             result.pop(key, None)
@@ -300,13 +301,15 @@ def run_codex(session: Any, model: str, *, max_turns: int = 40, max_tokens: int 
     login = subprocess.run(['codex', 'login', 'status'], capture_output=True, text=True, timeout=10)
     if login.returncode or 'ChatGPT' not in login.stdout+login.stderr:
         raise RuntimeError('Codex requires ChatGPT subscription login; API billing is not permitted')
-    prompt = prompt or INSTRUCTIONS+'\nUse the permitforge tools. '+f'You have {max_turns} turns.'
+    evaluate_budget = session.meta.get('evaluate_budget', 30)
+    system = instructions(evaluate_budget)
+    prompt = prompt or system+'\nUse the permitforge tools. '+f'You have {max_turns} turns.'
     capture = getattr(session, 'capture', None)
     if capture:
-        capture.event('system', INSTRUCTIONS)
+        capture.event('system', system)
         capture.event('user', prompt)
     boundary = CodexBoundary(prompt, max_turns=max_turns, max_tokens=max_tokens, capture=capture,
-                             expected_effort=sampling['effort'])
+                             expected_effort=sampling['effort'], evaluate_budget=evaluate_budget)
     started = now()
     with tempfile.TemporaryDirectory(prefix='permit-eval-codex-') as work:
         with serve(gateway(session)) as endpoint, serve(proxy_app(boundary, session=session, wall_clock=wall_clock)) as proxy:
@@ -377,6 +380,6 @@ def run_codex(session: Any, model: str, *, max_turns: int = 40, max_tokens: int 
                   error_type=boundary.error, submit_attempted=session.submit_attempted, retryable=False,
                   traceback=boundary.traceback,
                   settings={**sampling, 'max_turns': max_turns, 'max_tokens': max_tokens, 'wall_clock': wall_clock,
-                            'temperature': 'provider-default', 'evaluate_budget': 30,
+                            'temperature': 'provider-default', 'evaluate_budget': evaluate_budget,
                             'isolation': 'disabled host tools + filtered/validated subscription boundary'})
     return record

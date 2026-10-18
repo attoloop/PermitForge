@@ -8,7 +8,7 @@ import tomllib
 import traceback
 from typing import Any, Callable
 
-from permit_openenv.prompts import INSTRUCTIONS, PROMPT_VERSION
+from permit_openenv.prompts import PROMPT_VERSION, instructions
 
 from .common import TOOLS, now
 from .settings import MAX_TOKENS, model_settings
@@ -59,10 +59,13 @@ def transient(exc: Exception) -> bool:
 
 def run_anthropic(session: Any, model: str, *, api: Any = None, max_turns: int = 40,
                   max_tokens: int = MAX_TOKENS, wall_clock: float = 1800, effort: str = 'xhigh',
-                  sleep: Callable[[float], None] = time.sleep, hard_budget: Any = None) -> dict:
+                  sleep: Callable[[float], None] = time.sleep, hard_budget: Any = None,
+                  prompt_cache: bool = False) -> dict:
     model_id = model.removeprefix('anthropic:')
     request_cost(model_id, {})
     sampling = model_settings(model, effort)
+    evaluate_budget = session.meta.get('evaluate_budget', 30)
+    system = instructions(evaluate_budget)
     if api is None:
         import anthropic
         api = anthropic.Anthropic(max_retries=0, timeout=min(1800, wall_clock))
@@ -74,7 +77,7 @@ def run_anthropic(session: Any, model: str, *, api: Any = None, max_turns: int =
                  f'You have {max_turns} turns; submit before the last turn ends.'}]
     capture = getattr(session, 'capture', None)
     if capture:
-        capture.event('system', INSTRUCTIONS)
+        capture.event('system', system)
         capture.event('user', messages[0]['content'])
     usage = {'input_tokens': 0, 'output_tokens': 0, 'usd': 0.0, 'requests': []}
     retries, model_trace = [], []
@@ -96,9 +99,18 @@ def run_anthropic(session: Any, model: str, *, api: Any = None, max_turns: int =
                 if remaining <= 0:
                     raise TimeoutError('episode wall clock exhausted')
                 prefix = f'anthropic-{turn:04d}-{attempt+1}'
-                request = dict(model=model_id, system=INSTRUCTIONS, tools=tools,
+                request = dict(model=model_id, system=system, tools=tools,
                                messages=messages, max_tokens=max_tokens, timeout=min(1800, remaining),
                                output_config=sampling['output_config'], thinking=sampling['thinking'])
+                if prompt_cache:
+                    import copy
+                    request = copy.deepcopy(request)
+                    request['system'] = [{'type': 'text', 'text': system, 'cache_control': {'type': 'ephemeral'}}]
+                    request['tools'][-1]['cache_control'] = {'type': 'ephemeral'}
+                    latest = request['messages'][-1]
+                    if isinstance(latest['content'], str):
+                        latest['content'] = [{'type': 'text', 'text': latest['content']}]
+                    latest['content'][-1]['cache_control'] = {'type': 'ephemeral'}
                 if capture:
                     capture.raw_json(prefix+'-request.json', request)
                 budget_key = str(capture.root) + '/' + prefix if capture else model+'/'+started+'/'+prefix
@@ -183,5 +195,6 @@ def run_anthropic(session: Any, model: str, *, api: Any = None, max_turns: int =
                              'infrastructure' if infrastructure_error else 'timeout' if error else None,
                   infrastructure_error=infrastructure_error, traceback=trace,
                   settings={**sampling, 'max_turns': max_turns, 'max_tokens': max_tokens, 'wall_clock': wall_clock,
-                            'temperature': 'provider-default', 'evaluate_budget': 30, 'prices': prices()[model_id]})
+                            'temperature': 'provider-default', 'evaluate_budget': evaluate_budget,
+                            'prompt_cache': prompt_cache, 'prices': prices()[model_id]})
     return record

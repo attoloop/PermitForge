@@ -12,11 +12,11 @@ from .tasks import TaskPack, load_pack
 
 
 def create_server(*, pack: TaskPack | None = None, evaluator: Evaluator | None = None,
-                  verifier: Evaluator | None = None):
+                  verifier: Evaluator | None = None, evaluate_budget: int = 30):
     pack = pack if pack is not None else load_pack()
 
     def factory():
-        return PermitForgeEnvironment(pack, evaluator=evaluator, verifier=verifier)
+        return PermitForgeEnvironment(pack, evaluator=evaluator, verifier=verifier, evaluate_budget=evaluate_budget)
 
     def gradio_builder(web_manager, action_fields, metadata, is_chat_env, title, quick_start_md):
         return build_ui(pack)
