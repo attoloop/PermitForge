@@ -13,8 +13,12 @@ NAMES = ('torch_chunk_gated_delta_rule', 'torch_recurrent_gated_delta_rule',
 
 
 def qualify(functions: ModuleType | SimpleNamespace, *, reference: SimpleNamespace | None = None,
-            device: str = 'cuda') -> dict:
+            device: str = 'cuda', matrix: bool = False, fast: bool = False,
+            evidence: dict | None = None) -> dict:
     """Compare identical bf16 inputs/cotangents with unwrapped, non-FLA Torch code."""
+    if matrix:
+        from .kernel_cases import qualify_matrix
+        return qualify_matrix(functions,fast=fast,device=device,evidence=evidence)
     import torch
     if reference is None:
         from transformers.models.qwen3_5 import modeling_qwen3_5 as qwen
@@ -91,7 +95,7 @@ def qualify(functions: ModuleType | SimpleNamespace, *, reference: SimpleNamespa
                 comparisons=comparisons, seconds=time.monotonic()-started)
 
 
-def probe(policy: str = 'auto') -> dict:
+def probe(policy: str = 'auto', *, output: Path | None = None) -> dict:
     import torch
     if policy not in ('auto', 'required', 'off'):
         raise ValueError('Unknown kernel policy')
@@ -115,11 +119,38 @@ def probe(policy: str = 'auto') -> dict:
         evidence['dispatch'][name] = implementation.__module__+'.'+implementation.__name__
     full = (all(evidence['dispatch'][n].startswith('fla.') for n in NAMES[:2]) and
             all(evidence['dispatch'][n].startswith('causal_conv1d.') for n in NAMES[2:]))
+    optimized = any(value.startswith(('fla.','causal_conv1d.')) for value in evidence['dispatch'].values())
+    fast_chunk = evidence['dispatch'][NAMES[0]].startswith('fla.')
     evidence['status'] = 'fast' if full else 'fallback'
     if policy == 'required' and not full:
+        evidence['status'] = 'failed'
+        if output:
+            output.write_text(json.dumps(evidence,indent=2)+'\n')
         raise RuntimeError('Required fast kernels unavailable: '+str(evidence['dispatch']))
-    evidence['numerical_agreement'] = qualify(qwen)
-    evidence['note'] = 'Tiny reference comparisons include JIT; full smoke establishes memory and step cost.'
+    candidate = evidence['numerical_agreement'] = {}
+    try:
+        evidence['numerical_agreement'] = qualify(qwen,matrix=True,fast=fast_chunk,evidence=candidate)
+    except Exception as exc:
+        candidate.update(status='failed',error=type(exc).__name__+': '+str(exc))
+        evidence['status'] = 'failed'
+        if output:
+            output.write_text(json.dumps(evidence,indent=2)+'\n')
+        if policy == 'required' or not optimized:
+            raise
+        evidence['failed_candidate'] = evidence.pop('numerical_agreement')
+        for name in NAMES:
+            setattr(qwen,name,inspect.unwrap(getattr(qwen,name)))
+        baseline = evidence['numerical_agreement'] = {}
+        evidence['fallback_dispatch'] = {name:getattr(qwen,name).__module__+'.'+name for name in NAMES}
+        try:
+            evidence['numerical_agreement'] = qualify(qwen,matrix=True,fast=False,evidence=baseline)
+            evidence['status'] = 'fallback'
+        finally:
+            if output:
+                output.write_text(json.dumps(evidence,indent=2)+'\n')
+    evidence['note'] = 'Real geometry, issue #640, seeds, padding, states and gradients; frozen tolerances.'
+    if output:
+        output.write_text(json.dumps(evidence,indent=2)+'\n')
     return evidence
 
 
@@ -128,7 +159,7 @@ def main() -> None:
     p.add_argument('--output', type=Path)
     p.add_argument('--policy', choices=('auto', 'required', 'off'), default='auto')
     args = p.parse_args()
-    result = probe(args.policy)
+    result = probe(args.policy,output=args.output)
     payload = json.dumps(result, indent=2)+'\n'
     if args.output:
         args.output.write_text(payload)

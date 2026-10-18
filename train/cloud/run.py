@@ -142,13 +142,13 @@ def main(argv: list[str] | None = None) -> None:
     if args.plan:
         print(json.dumps(dict(config=config.record(), stages=plan,
             selection=selection, stop_after_step=args.stop_after_step,
-            provider_timeout_seconds=7200 if args.recipe == 'smoke' else
+            provider_timeout_seconds=min(10800,math.floor(15*3600/config.hourly_usd)) if args.recipe == 'smoke' else
                 math.ceil(sum(s['effective_seconds'] for s in plan)+1800),
             estimated_total_usd=sum(s['estimated_usd'] for s in plan),
             cap_total_usd=sum(s['effective_seconds']*config.hourly_usd/3600 for s in plan),
             setup_prior_seconds=900, setup_prior_usd=900*config.hourly_usd/3600,
             priors='Unmeasured: 300 CPU-s/task / workers; 180 s/eval episode; '
-                   '180 s/GRPO step; smoke reload 180 s; setup 900 s. No storage/tax/idle costs.',
+                   '180 s/GRPO step; smoke reload 180 s; qualification 2400 s; setup 900 s. No storage/tax/idle costs.',
             eval_difference='WP2.9 requires three repeats; final panel uses four. Thinking disabled for this model.'), indent=2))
         return
     if not args.execute or not args.artifact_uri:

@@ -1,4 +1,4 @@
 #!/bin/sh
-# VM launcher; execute from the unpacked PermitForge root. No rental management.
+# VM launcher; install the documented frozen extras first. No rental management.
 set -eu
-exec uv run --project train/cloud --frozen python -m train.cloud.run "$@"
+exec uv run --project train/cloud --frozen --no-sync python -m train.cloud.run "$@"

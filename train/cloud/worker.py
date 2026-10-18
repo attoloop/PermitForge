@@ -105,10 +105,14 @@ def main() -> None:
     try:
         with gpu_guard(config,output):
             from .kernels import probe
-            kernels = probe(config.kernels)
+            kernels = probe(config.kernels,output=output/'kernels.json')
             write_json(output/'kernels.json', kernels)
             if config.kernels == 'required' and kernels['status'] != 'fast':
                 raise RuntimeError('Required fast kernels unavailable; see kernels.json')
+            if args.stage in ('grpo','eval','base-eval') and record.get('qualification_run'):
+                from .qualification import check_kernel_selection
+                qualified = Path(record['qualification_run'])/'smoke/kernels.json'
+                check_kernel_selection(kernels,json.loads(qualified.read_text()))
             if args.stage in ('grpo','smoke'):
                 data = Path(record['sft_data'])
                 if args.stage == 'smoke':
@@ -116,7 +120,8 @@ def main() -> None:
                     run_smoke(config,record,pack,output)
                 else:
                     train(config,args.stage,output,data=data,pack=pack,tasks=train_tasks,
-                          fields_loader=fields,stop_after_step=args.stop_after_step)
+                          fields_loader=fields,stop_after_step=args.stop_after_step,
+                          qualification_run=Path(record['qualification_run']))
             else:
                 from .evaluation import evaluate
                 adapter = args.run/'grpo/adapter' if args.stage == 'eval' else None

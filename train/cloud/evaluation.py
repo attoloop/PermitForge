@@ -80,6 +80,7 @@ def evaluate(config, model, tokenizer, pack, ids: list[str], output: Path, *, fi
                 json.dumps(task.view())+f'\nYou have {config.eval_turns} turns. Submit before your final turn ends.'}]
             model_name = 'hf:'+config.model+(':adapter' if adapter else ':base')
             usage = {'input_tokens':0,'output_tokens':0,'usd':None}
+            generation_turns = []
             started = time.monotonic()
             turn = -1
             def save_progress():
@@ -87,6 +88,7 @@ def evaluate(config, model, tokenizer, pack, ids: list[str], output: Path, *, fi
                 record.update(repeat=repeat, seed=seed, settings=sampling,
                     turns=turn+1, adapter=str(adapter) if adapter else None, model_revision=config.revision,
                     prompt_sha256=hashlib.sha256(INSTRUCTIONS.encode()).hexdigest())
+                record['generation_turns'] = generation_turns
                 write_json(folder/'progress.json', record)
                 return record
             save_progress()
@@ -107,10 +109,15 @@ def evaluate(config, model, tokenizer, pack, ids: list[str], output: Path, *, fi
                         if inputs.input_ids.shape[1]+config.eval_max_tokens > model.config.max_position_embeddings:
                             env.episode.finish('context_limit')
                             break
+                        torch.cuda.synchronize()
+                        generation_started = time.monotonic()
                         with torch.inference_mode(), torch.autocast('cuda',dtype=torch.bfloat16):
                             generated = model.generate(**inputs, max_new_tokens=config.eval_max_tokens,
                                 use_cache=True,logits_to_keep=1,pad_token_id=tokenizer.pad_token_id)
                         ids_out = generated[0,inputs.input_ids.shape[1]:].tolist()
+                        torch.cuda.synchronize()
+                        generation_turns.append(dict(turn=turn,seconds=time.monotonic()-generation_started,
+                            input_tokens=inputs.input_ids.shape[1],output_tokens=len(ids_out)))
                         usage['output_tokens'] += len(ids_out)
                         response = tokenizer.decode(ids_out,skip_special_tokens=False)
                         trace.write(json.dumps(dict(turn=turn,response=response,elapsed_seconds=time.monotonic()-started))+'\n')

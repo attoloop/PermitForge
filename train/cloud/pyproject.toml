@@ -10,6 +10,8 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+attention = ["kernels==0.16.2"]
+loss = ["liger-kernel==0.8.2"]
 fast-kernels = [
   "flash-linear-attention==0.5.2",
   "tilelang[nvcc]==0.1.15",

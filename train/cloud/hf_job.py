@@ -34,7 +34,7 @@ def main() -> None:
     p.add_argument('--bundle',type=Path,required=True)
     p.add_argument('--bundle-sha256',required=True)
     p.add_argument('--workspace',type=Path,default=Path('/workspace/permit-cloud'))
-    p.add_argument('--job-seconds',type=int,default=7200,help='Match provider timeout; includes setup')
+    p.add_argument('--job-seconds',type=int,default=10800,help='Match provider timeout; includes setup')
     args, remaining = p.parse_known_args()
     if remaining[:1] == ['--']:
         remaining = remaining[1:]
@@ -42,11 +42,13 @@ def main() -> None:
     runtime_parser.add_argument('--recipe',default='smoke')
     runtime_parser.add_argument('--kernels',default='auto')
     runtime_parser.add_argument('--trackio-space')
+    runtime_parser.add_argument('--hourly-usd',type=float,default=5.)
     runtime, _ = runtime_parser.parse_known_args(remaining)
     if args.job_seconds <= 300:
         raise ValueError('Job must reserve time for setup and final upload')
-    if runtime.recipe == 'smoke' and args.job_seconds > 7200:
-        raise ValueError('Smoke provider and bootstrap timeout must not exceed two hours ($10 on H200)')
+    if runtime.recipe == 'smoke' and (args.job_seconds > 10800 or
+                                      args.job_seconds*runtime.hourly_usd/3600 > 15):
+        raise ValueError('Smoke provider and bootstrap timeout must not exceed three hours ($15 on H200)')
     started = time.time()
     root = unpack(args.bundle,args.workspace,args.bundle_sha256)
     os.chdir(root)
@@ -66,6 +68,16 @@ def main() -> None:
             if policy == 'required':
                 raise
             subprocess.run(command+metrics,check=True,timeout=120)
+    # The loss and attention packages qualify independently of local GDN installation.
+    installed = metrics+(['--extra','fast-kernels'] if setup['kernel_install'] == 'installed' else [])
+    for extra in ('attention','loss'):
+        try:
+            subprocess.run(command+installed+['--extra',extra],check=True,timeout=180)
+            installed += ['--extra',extra]
+            setup[extra+'_install'] = 'installed'
+        except (subprocess.CalledProcessError,subprocess.TimeoutExpired) as exc:
+            setup[extra+'_install'] = type(exc).__name__
+            subprocess.run(command+installed,check=True,timeout=120)
     setup_path = root/'train/cloud/bootstrap.json'
     subprocess.run(['train/cloud/.venv/bin/python','-c',
         'from pathlib import Path; from train.cloud.bundle import verify_tree; verify_tree(Path("."), strict=False)'],

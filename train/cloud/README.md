@@ -1,6 +1,6 @@
 # Qwen3.8-27B on HF Jobs
 
-WP2.12 prepares an H200 job under **attoloop**, using **bf16 LoRA and direct
+WP2.14 prepares an H200 job under **attoloop**, using **bf16 LoRA and direct
 GRPO**. No job, upload, repository, bucket or Space has been created by this work.
 SFT utilities remain available as historical code; no SFT data is required or
 built by this workflow. GPU memory, speed and learning await the smoke.
@@ -9,20 +9,30 @@ built by this workflow. GPU memory, speed and learning await the smoke.
 
 One job performs, in order:
 
-1. Verify the input archive, install the frozen stack and attempt pinned fast kernels.
+1. Verify the input archive, install the frozen stack and independently attempt
+   the pinned GDN/convolution, attention and loss extras. Qualify the actual
+   GDN geometry and inner TileLang backward before loading the model.
 2. Prepare fields for exactly two selected train tasks and three selected eval tasks,
    with at most four native workers. No other task fields are warmed.
 3. Run the **untrained base** on the three eval tasks, one repeat each, through the
    public tools and native terminal verifier. Preserve transcripts, valid calls,
    submissions, rewards and infrastructure failures.
-4. Run **two direct GRPO optimizer steps**, on the two train tasks, without SFT.
+4. Before training, qualify persistent batched HF caches, pinned FA3 and Liger
+   independently. Replay identical fixed check-draft / submit-draft token traces
+   for each candidate, using the actual TRL loss, masks, accumulation, clipping
+   and optimizer. Compare initial and nonzero adapters, log probabilities,
+   gradients and update deltas. Record cold and warm timings; select the lowest
+   passing warm generation-plus-training time. Failed optional gates retain their
+   errors and fall back to qualified HF/SDPA/existing loss. A failed baseline stops.
+5. Run **two direct GRPO optimizer steps** with that selected configuration,
+   on the two train tasks, without SFT.
    Require finite loss/weights, changed adapter weights, both task identities and
    exact save/reload equality. Save optimizer, scheduler and RNG state too.
-5. Write `smoke/REPORT.md`, `smoke/metrics.json`, GPU/kernel evidence and projections
+6. Write `smoke/REPORT.md`, `smoke/metrics.json`, GPU/kernel evidence and projections
    for 20/50/100 steps, derived from the measured step mean.
 
-The provider timeout is **2 hours**, a **$10 GPU-compute envelope at $5/hour**.
-The stage limit is 6,600 seconds and $9.17; the launcher also subtracts setup
+The provider timeout is **3 hours**, a **$15 GPU-compute envelope at $5/hour**.
+The stage limit is 10,200 seconds and $14.17; the launcher also subtracts setup
 from a shared job deadline and reserves final-upload time. The provider timeout
 covers setup and process termination. Storage, taxes and other account activity
 are outside this compute envelope. A timeout may leave an incomplete smoke; it
@@ -39,7 +49,7 @@ longer workflow. A smoke pass establishes readiness to experiment, not learning.
 The model revision is `1d4bf0f2ff6012fd82039f2fa52739d0dd7c60c0` of
 `Qwen/Qwen3.8-27B`. The text-only `Qwen3_5ForCausalLM` loader checks every
 language weight; it omits the vision encoder. Defaults are one H200, bf16,
-full-attention q/k/v/o LoRA rank 16/alpha 32, HF generation microbatch one,
+full-attention q/k/v/o LoRA rank 16/alpha 32, baseline HF generation microbatch one,
 4 generations, accumulation 4, 8 tool turns, a 4,096-token prompt ceiling and
 12,288-token completion ceiling. Thinking and vLLM are disabled. The completion
 budget includes tool replies; its sizing follows `train/DESIGN.md`.
@@ -56,26 +66,49 @@ components at **13.2.86** (runtime **13.2.86**). Torch retains CUDA 12.8 and its
 Triton 3.6.0 dependency. FLA uses TileLang for the gated backward blocked on
 Hopper with this Triton version. The CUDA 13 nvcc wheel supplies the compiler;
 the CUDA 12 nvcc wheel supplies only ptxas. TileLang JIT compiles device code;
-the convolution extension remains prebuilt. Normal attention uses PyTorch SDPA.
+the convolution extension remains prebuilt. Baseline attention uses PyTorch SDPA.
 The base lock includes **nvidia-ml-py 13.580.82** for device memory monitoring.
 
-`--kernels auto` attempts the extra for at most 300 seconds, then restores the
-base lock on installation failure. Transformers automatically dispatches to the
-installed local packages. Hub kernel downloads are disabled with
-`USE_HUB_KERNELS=NO`. Before model loading, small bf16 probes compare outputs,
-recurrent/cache states and gradients with the non-FLA Torch references. Tensor
-errors and tolerances are recorded in `kernels.json`. Numerical mismatches and
-runtime/JIT/gradient errors abort; `--kernels required` also fails if optimized
-dispatch is missing. `--kernels off` skips the extra in the fresh job environment
-and explicitly selects the reference Torch implementations even when extras
-are already installed. Runtime failures do not trigger an automatic retry.
+`--kernels auto` attempts the fast extra for at most 300 seconds, then restores
+the base lock on installation failure. Numerical/JIT failures are recorded and
+the explicit Torch path must pass the same matrix before proceeding. `required`
+fails if fast dispatch or any fast probe fails; `off` selects Torch explicitly.
+The matrix uses the actual GDN key/value heads and dimensions, repeated Q/K heads,
+nonzero states, multiple seeds, padding and chunk boundaries, plus the issue #640
+geometry. A Python call trace proves TileLang's inner backward actually executed.
+The frozen limits remain `rtol=.03`, `atol=.002`, relative L2 `.02` for every tensor.
 
-The complete frozen cloud project and fast extra installed in a CPU-only temporary
+The independent `attention` extra pins `kernels==0.16.2`. FA3 is loaded only from
+`kernels-community/flash-attn3@3c1451f803c146c54222305a8c350f7f46bb5135`, including a
+binary digest check. Actual GQA prefill, variable-length padding and decode
+outputs/gradients must match FP32 math SDPA, followed by full-model comparisons.
+`USE_HUB_KERNELS=NO` disables broad automatic replacements; the explicit pinned
+attention loader remains available. The independent `loss` extra pins
+`liger-kernel==0.8.2`; only its TRL GRPO loss is enabled after qualification.
+No RMSNorm/SwiGLU replacement or auxiliary loss is enabled.
+
+Persistent HF candidates compare microbatches 1, 2 and 4 without changing the
+group size. Each rollout owns attention KV, recurrent and convolution state.
+Prefix edits/truncation rebuild state; tool suffixes consume the final token
+left outside HF's returned cache. Equal-length suffix buckets avoid decaying a
+nonzero GDN state through padding. Decode batches stop at the first EOS, split
+state, remove finished rows and continue the others. All state is freed before
+training and invalidated after every policy update or model/configuration change.
+
+`smoke/grpo/qualification.json` records gates, cold/warm times, fixed-trajectory
+hash and selected settings; `qualification-trajectories.json` contains the
+diagnostic tokens and masks. Fixed diagnostic advantages never enter real GRPO.
+`generation-timings.json` records real training time per tool turn, token counts,
+active batch size, prefix reuse, prefill and decode time for the cache path.
+Base evaluation records generation time per turn in each episode. Turn limits,
+task selection, prompts, sampling settings, rewards and verifier are unchanged.
+
+The complete frozen cloud project and kernel/attention/loss extras installed in a CPU-only local
 environment; the exact TileLang backend imports and Transformers resolves all four
 functions to FLA/causal-conv1d. This does not establish Hopper numerical agreement,
 driver compatibility or training speed. The reference implementation warns of more than an
 order-of-magnitude GDN slowdown on H100; that is an upstream kernel observation,
-not a measured H200 training multiplier. Fallback may exhaust the same $10 cap.
+not a measured H200 training multiplier. Fallback may exhaust the same $15 cap.
 No numerical H200 fallback-cost prediction is available before a measured run.
 See [DESIGN.md](DESIGN.md) for source links and local reproduction commands.
 
@@ -99,7 +132,9 @@ without installing a second CUDA stack):
 
 ```sh
 uv lock --project train/cloud --check
-CUDA_VISIBLE_DEVICES='' uv run --project train --no-sync python -m pytest \
+uv sync --project train/cloud --frozen --extra fast-kernels --extra attention --extra loss
+CUDA_VISIBLE_DEVICES='' USE_HUB_KERNELS=NO OMP_NUM_THREADS=4 \
+  uv run --project train/cloud --no-sync python -m pytest \
   -c train/cloud/pyproject.toml train/cloud/tests train/tests -q
 uv run --project train --no-sync ruff check train/cloud
 uv run --project train --no-sync python -m train.cloud.bundle \
@@ -126,7 +161,7 @@ commands (`estimated_total_usd + setup_prior_usd`):
 
 | Recipe | Estimated compute USD | Provider timeout seconds | Provider compute envelope USD |
 |---|---:|---:|---:|
-| Smoke | 3.35 | 7,200 | 10.00 |
+| Smoke | 6.69 | 10,800 | 15.00 |
 | Stop at 20, target 100 | 17.92 | 27,000 | 37.50 |
 | Fresh 50, base + final eval | 33.33 | 49,500 | 68.75 |
 | Fresh 100, base + final eval | 45.83 | 67,500 | 93.75 |
@@ -134,7 +169,10 @@ commands (`estimated_total_usd + setup_prior_usd`):
 Full plans are fields → base eval → GRPO → final eval → adapter export. The
 20-step check omits final eval/export. Priors assume 300 CPU-seconds per field
 task divided by four workers, 180 seconds per eval episode, and 180 seconds per
-GRPO step. They are planning inputs, not throughput claims. Use smoke measurements
+GRPO step, plus 2,400 seconds for the expanded smoke qualification. The optional
+candidate loop checks that allowance between candidates; the supervisor/provider
+enforce the hard wall/dollar limits, including a slow baseline or JIT. They are
+planning inputs, not throughput claims. Use smoke measurements
 before choosing new caps or launching longer work. `--wall-cap STAGE=SECONDS` and
 `--usd-cap STAGE=USD` may tighten caps; resumed attempts consume the same cumulative
 allowance. Unknown crash charges consume the full reservation.
@@ -148,7 +186,7 @@ fields/base episodes are skipped and training continues from 20. Do not change
 `--grpo-steps` from 20 to 100: immutable run fingerprints reject that change.
 A separate fresh 50-step run uses its own output and artifact prefix.
 
-Longer jobs pass `--qualification-run /previous/smoke-v1`, with the run bucket
+Longer jobs pass `--qualification-run /previous/smoke-wp214`, with the run bucket
 mounted read-only at `/previous`. Their `--job-seconds` must match the provider
 `--timeout` printed by the plan. All jobs use the same workspace path. `run.json`
 freezes code/data/settings, and payloads upload before completion markers. Failed
@@ -179,14 +217,14 @@ uvx --from 'huggingface-hub==1.33.0' hf upload \
 
 # One smoke Job, including setup. Trackio is off.
 JOB_ID="$(uvx --from 'huggingface-hub==1.33.0' hf jobs uv run \
-  --namespace attoloop --flavor h200 --timeout 2h --secrets HF_TOKEN \
+  --namespace attoloop --flavor h200 --timeout 3h --secrets HF_TOKEN \
   --name permitforge-qwen38-smoke --detach --quiet \
   --volume hf://datasets/Attoloop/permitforge-qwen38-inputs:/inputs:ro \
   train/cloud/hf_job.py --bundle /inputs/cloud-bundle.tar.gz \
   --bundle-sha256 "$BUNDLE_SHA" --workspace /workspace/permit-cloud \
-  --job-seconds 7200 -- --execute --recipe smoke --hourly-usd 5.00 \
-  --precision bf16 --kernels auto --output train/cloud/runs/smoke-v1 \
-  --artifact-uri hf://buckets/Attoloop/permitforge-qwen38-runs/smoke-v1)"
+  --job-seconds 10800 -- --execute --recipe smoke --hourly-usd 5.00 \
+  --precision bf16 --kernels auto --output train/cloud/runs/smoke-wp214 \
+  --artifact-uri hf://buckets/Attoloop/permitforge-qwen38-runs/smoke-wp214)"
 
 # Keep a local log copy; inspect the final Job status after the stream ends.
 uvx --from 'huggingface-hub==1.33.0' hf jobs logs \
@@ -198,7 +236,7 @@ uvx --from 'huggingface-hub==1.33.0' hf jobs cancel --namespace attoloop "$JOB_I
 
 # Read back artifacts after completion; destination must be a fresh directory.
 uvx --from 'huggingface-hub==1.33.0' hf sync \
-  hf://buckets/Attoloop/permitforge-qwen38-runs/smoke-v1 train/cloud/data/smoke-result
+  hf://buckets/Attoloop/permitforge-qwen38-runs/smoke-wp214 train/cloud/data/smoke-result
 cat train/cloud/data/smoke-result/smoke/REPORT.md
 ```
 
@@ -210,3 +248,6 @@ as FineEnvs does. Static Space export is disabled. Trackio can create/update the
 named Space/bucket; omitting the flag means no Trackio initialization or writes.
 No Space name has been chosen by this work. The private run bucket independently
 retains training logs, checkpoints, traces, GPU/kernel evidence and smoke reports.
+
+vLLM is excluded from this lock. The exact later upgrade and integration gates
+are listed in [DESIGN.md](DESIGN.md#later-vllm-option); it needs a separate smoke.

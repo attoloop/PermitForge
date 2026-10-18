@@ -41,6 +41,8 @@ def load_model(config: CloudConfig, adapter: Path | None = None, *, trainable: b
     original = AutoConfig.from_pretrained(config.model, revision=config.revision)
     if original.model_type != 'qwen3_5':
         raise ValueError('Unexpected checkpoint architecture')
+    from .kernel_cases import check_model_geometry
+    check_model_geometry(original.text_config)
     # Transformers 5.17's qwen3_5_text PrefixChange removes language_model.
     # CPU test compares every tensor with a tiny conditional-generation checkpoint.
     model, info = Qwen3_5ForCausalLM.from_pretrained(config.model, revision=config.revision,
@@ -109,7 +111,7 @@ def stop_callback(step: int):
 
 def train(config: CloudConfig, kind: str, output: Path, *, data: Path, pack,
           tasks: list, fields_loader, adapter: Path | None = None, smoke: bool = False,
-          stop_after_step: int | None = None) -> dict:
+          stop_after_step: int | None = None, qualification_run: Path | None = None) -> dict:
     import torch
     from datasets import Dataset
     from peft import get_peft_model_state_dict
@@ -172,7 +174,7 @@ def train(config: CloudConfig, kind: str, output: Path, *, data: Path, pack,
                         {'role':'user','content':'Optimize the plant and submit your design.\n'}]
             expanded = [messages[0], {'role':'user','content':messages[1]['content']+scenario_text(task)}]
             ids = tokenizer.apply_chat_template(expanded,tools=tool_schemas(),enable_thinking=False,
-                                                add_generation_prompt=True)
+                                                add_generation_prompt=True,return_dict=False)
             if len(ids) > config.max_prompt_length:
                 raise ValueError(task.task_id+': prompt exceeds cloud limit')
             rows.append(dict(prompt=messages, split='train',task_id=task.task_id))
@@ -184,11 +186,27 @@ def train(config: CloudConfig, kind: str, output: Path, *, data: Path, pack,
         # The local chunked loss is Qwen3-specific and deliberately disabled here.
         cls = memory_trainer_class(GRPOTrainer, SimpleNamespace(generation_microbatch_size=1,
                                     empty_cache_after_generation=True, loss_chunk_size=0))
+        from .generation import cached_trainer_class
+        cls = cached_trainer_class(cls,microbatch=1,persistent=False)
         trainer = cls(model=model, processing_class=tokenizer, args=GRPOConfig(**options),
             train_dataset=Dataset.from_list(rows), environment_factory=partial(PermitTrainingEnv,
                 pack=pack, fields_loader=fields_loader, trace_sink=capture))
         if trainer.chat_template is not None:
             raise ValueError('TRL attempted to replace the qualified Qwen inference template')
+
+        from .qualification import apply_configuration, load_selection, qualify_stack
+        try:
+            if smoke:
+                qualify_stack(trainer,tasks,config,output)
+            elif qualification_run is not None:
+                selected = load_selection(qualification_run/'smoke/grpo/qualification.json')
+                apply_configuration(trainer,selected)
+            else:
+                raise ValueError('Cloud GRPO requires a qualified stack from the smoke')
+        except BaseException:
+            trace.close()
+            raise
+        write_json(output/'selected-stack.json',trainer.stack_settings)
 
     initial_path = output/'initial-adapter.safetensors'
     if not initial_path.exists():
@@ -246,6 +264,10 @@ def train(config: CloudConfig, kind: str, output: Path, *, data: Path, pack,
             elapsed_seconds=time.monotonic()-started, peak_vram_allocated_bytes=torch.cuda.max_memory_allocated(),
             peak_vram_reserved_bytes=torch.cuda.max_memory_reserved(), groups=reward_groups(traces,config.num_generations),
             tasks_seen=sorted({r['task_id'] for r in traces}))
+        if kind == 'grpo':
+            metrics['stack'] = trainer.stack_settings
+            metrics['generation_turns'] = trainer.generation_timings
+            write_json(output/'generation-timings.json',trainer.generation_timings)
         write_json(output/'metrics.json', metrics)
         # NaN reward diagnostics are retained as null in JSON.
         logs = json.loads(json.dumps(trainer.state.log_history).replace('NaN','null').replace('Infinity','null'))

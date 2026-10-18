@@ -84,9 +84,9 @@ def stage_plan(config: CloudConfig, train_count: int = 30,
     # Explicit unmeasured priors. Native work includes eval fields. No speed claim.
     steps = stop_after_step or config.grpo_steps
     estimates = {'fields': (train_count+10)*300/config.field_jobs, 'base-eval': 30*180,
-        'smoke': 5*300/config.field_jobs+3*180+2*180+180+60,
+        'smoke': 5*300/config.field_jobs+3*180+2*180+180+60+2400,
         'grpo': steps*180, 'eval':30*180, 'export':300}
-    walls = {'fields':5400, 'base-eval':10800, 'smoke':6600,
+    walls = {'fields':5400, 'base-eval':10800, 'smoke':10200,
              'grpo':config.grpo_steps*360+1800, 'eval':10800, 'export':900}
     stages = ['smoke'] if config.recipe == 'smoke' else ['fields','base-eval','grpo','eval','export']
     if stop_after_step and stop_after_step < config.grpo_steps:
@@ -98,8 +98,8 @@ def stage_plan(config: CloudConfig, train_count: int = 30,
         effective = remaining_seconds(wall, usd, config.hourly_usd, [])
         if stage == 'grpo' and stop_after_step:
             effective = min(effective, steps*360+1800)
-        if stage == 'smoke' and (wall > 6600 or usd > 10):
-            raise ValueError('Smoke caps may only be tightened (6600 seconds, $10)')
+        if stage == 'smoke' and (wall > 10200 or usd > 15):
+            raise ValueError('Smoke caps may only be tightened (10200 seconds, $15)')
         rows.append(dict(stage=stage, estimated_seconds=estimates[stage],
             estimated_usd=estimates[stage]*config.hourly_usd/3600,
             wall_seconds=wall, usd_cap=usd,
