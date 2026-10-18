@@ -279,6 +279,17 @@ def child_limits(seconds):
     resource.setrlimit(resource.RLIMIT_AS, (4096*2**20, 4096*2**20))
     signal.alarm(seconds)
 
+def case_bytes(cwd):
+    """Bytes on disk in a running case; scratch files the model deletes mid-scan (EVENT.TMP) are skipped."""
+    size = 0
+    for f in cwd.iterdir():
+        try:
+            if f.is_file():
+                size += f.stat().st_size
+        except FileNotFoundError:
+            pass
+    return size
+
 def run_native(binary, cwd, guard, report, disk_limit=20480*2**20):
     with (cwd / 'console.txt').open('wb') as log:
         with subprocess.Popen([str(binary)], cwd=cwd, stdout=log, stderr=log,
@@ -296,7 +307,7 @@ def run_native(binary, cwd, guard, report, disk_limit=20480*2**20):
                             pass
                     report['resources']['peak_live_rss_bytes'] = max(rss, report['resources'].get('peak_live_rss_bytes', 0))
                     require(rss <= 5120*2**20, 'E_RESOURCE', f'live RSS {rss} > {5120*2**20}')
-                    size = sum(f.stat().st_size for f in cwd.iterdir() if f.is_file())
+                    size = case_bytes(cwd)
                     require(size <= disk_limit, 'E_RESOURCE', f'case disk bytes {size} > {disk_limit}')
                     time.sleep(.1)
             finally:
