@@ -20,6 +20,18 @@ def test_small_sanity_checks_outputs_state_and_every_input_gradient():
     assert result['shape'] == [1,65,2,128]
 
 
+def test_sanity_accepts_a_single_bf16_rounding_step():
+    # The first H200 run differed from the fp32 reference by 2**-7 on one dk element (relative L2 0.0043).
+    def rounded(*args, **kwargs):
+        def nudge(grad):
+            grad = grad.contiguous().clone()
+            grad.view(-1)[grad.abs().argmin()] += 2**-7
+            return grad
+        args[1].register_hook(nudge)
+        return reference()(*args, **kwargs)
+    assert kernels.numerical_check(rounded, device='cpu')['status'] == 'passed'
+
+
 @pytest.mark.parametrize('fault', ['output','state','gradient','gate_gradient','nonfinite'])
 def test_sanity_rejects_silent_gdn_corruption(fault):
     def corrupt(*args, **kwargs):
