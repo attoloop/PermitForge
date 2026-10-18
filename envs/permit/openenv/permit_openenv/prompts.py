@@ -19,6 +19,11 @@ Use this design shape: {"S1": {"control": "S1_moderate", "height_m": 45.0}, ...}
 Submit your best feasible design before you run out of turns.'''
 
 
+def opening(max_turns: int = 40) -> str:
+    """First user message in our own agent loops (frontier Claude driver, cloud Qwen evaluation and training)."""
+    return f'Use the permitforge tools. You have {max_turns} turns; submit before the last turn ends.'
+
+
 def instructions(evaluate_budget: int = 30) -> str:
     if type(evaluate_budget) is not int or not 1 <= evaluate_budget <= 200:
         raise ValueError('evaluate budget must be an integer in 1..200')

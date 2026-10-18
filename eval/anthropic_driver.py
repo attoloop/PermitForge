@@ -8,7 +8,7 @@ import tomllib
 import traceback
 from typing import Any, Callable
 
-from permit_openenv.prompts import PROMPT_VERSION, instructions
+from permit_openenv.prompts import PROMPT_VERSION, instructions, opening
 
 from .common import TOOLS, now
 from .settings import MAX_TOKENS, model_settings
@@ -73,8 +73,7 @@ def run_anthropic(session: Any, model: str, *, api: Any = None, max_turns: int =
     tools = session.tools()
     if {t['name'] for t in tools} != set(TOOLS):
         raise ValueError('environment must expose exactly the four permitforge tools')
-    messages = [{'role': 'user', 'content': 'Use the permitforge tools. '
-                 f'You have {max_turns} turns; submit before the last turn ends.'}]
+    messages = [{'role': 'user', 'content': opening(max_turns)}]
     capture = getattr(session, 'capture', None)
     if capture:
         capture.event('system', system)

@@ -11,7 +11,7 @@ import threading
 import time
 from typing import Any
 
-from permit_openenv.prompts import PROMPT_VERSION, instructions
+from permit_openenv.prompts import PROMPT_VERSION, instructions, opening
 
 from .claudecode_proxy import ClaudeBoundary, proxy_app
 from .common import TOOLS, now
@@ -77,7 +77,7 @@ def run_claudecode(session: Any, model: str, *, max_turns: int = 40, max_tokens:
     sampling = model_settings(model, effort)
     budget = session.meta.get('evaluate_budget', 30)
     system = instructions(budget)
-    prompt = f'Use the permitforge tools. You have {max_turns} turns; submit before the last turn ends.'
+    prompt = opening(max_turns)
     capture = getattr(session, 'capture', None)
     boundary = ClaudeBoundary(system, prompt, max_turns=max_turns, max_tokens=max_tokens, effort=effort, capture=capture)
     started = now()
