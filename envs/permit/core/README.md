@@ -63,7 +63,7 @@ extraction by `tests/test_source_lift.py`.
 
 | Module | Lifted functions/classes | v1 origin | Adaptation |
 | --- | --- | --- | --- |
-| `native.py` | `Reject`, `require`, `dec`, `numeric`, `equivalent`, `native_lines`, `bpip_records`, `bpip_input`, `cards`, `cases`, `child_limits`, `run_native`, `bpip_results` | `environment/public_native.py` | Unchanged bodies; unused imports removed |
+| `native.py` | `Reject`, `require`, `dec`, `numeric`, `equivalent`, `native_lines`, `bpip_records`, `bpip_input`, `cards`, `cases`, `child_limits`, `run_native`, `bpip_results` | `environment/public_native.py` | Unchanged bodies, except that `run_native`'s disk scan skips files the model deletes mid-scan (`case_bytes`); unused imports removed |
 | `native.py` | `calendar`, `parse_blocks` | `environment/service.py` | Unchanged bodies; service is never imported |
 | `validate.py` | `StrictLoader`, `design`, `plot_values`, `statistics`, `admit_air_quality` | `solution/validation.py` | Unchanged bodies; common helpers imported from `native` |
 | `cost.py` | `cost`, `costs` | `tests/grade.py` | Unchanged bodies |
@@ -96,7 +96,7 @@ uv run pytest -q --evidence-dir ../../../results/evidence/faithful-lift \
 
 ## On-demand fields
 
-The native lift above is unchanged. The integrated fast evaluator uses full
+The native lift above is unchanged apart from that one scan. The integrated fast evaluator uses full
 float64 memory maps, acquired and released with an on-demand cache lease:
 
 ```python
