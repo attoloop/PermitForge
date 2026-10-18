@@ -54,7 +54,7 @@ def test_smoke_report_gates_on_model_behavior_and_gradients():
     rows = [dict(task_id=str(i), ended='submitted', reward=.1, history=[
         {'tool':'check_design', 'result':{'valid':True}}]) for i in range(3)]
     training = dict(status='passed', weights_changed=True, adapter_reload_equal=True,
-        optimizer_steps=2, seconds_per_step=100, groups=[{'reward_std':.1}])
+        optimizer_steps=2, seconds_per_step=100, groups=[{'reward_std':.1}], worst_case={'fits':True})
     result = smoke_summary(rows, training, {'peak_device_bytes':90}, elapsed_seconds=600, hourly_usd=5,
                            kernels={'status':'passed'})
     assert result['ready_for_grpo'] is True
@@ -174,7 +174,7 @@ def test_smoke_sequence_uses_only_five_tasks_untrained_base_then_direct_grpo(tmp
         order.append('grpo')
         assert kind == 'grpo' and kwargs['smoke'] is True and kwargs.get('adapter') is None
         assert len(kwargs['tasks']) == 2
-        return dict(status='passed',weights_changed=True,adapter_reload_equal=True,
+        return dict(status='passed',weights_changed=True,adapter_reload_equal=True,worst_case={'fits':True},
                     optimizer_steps=2,seconds_per_step=100,groups=[{'reward_std':.1}],
                     tasks_seen=chosen['smoke_train'])
     monkeypatch.setattr(training,'train',train)

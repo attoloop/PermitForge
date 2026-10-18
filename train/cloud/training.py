@@ -140,6 +140,43 @@ def rollout_metrics(traces: list[dict]) -> dict:
             for step in steps])
 
 
+def worst_case_step(trainer, config) -> dict:
+    """Smoke only: one loss forward and backward at the largest completion the budget allows, so the run's
+    memory headroom is measured rather than assumed from the completions two steps happened to draw."""
+    import torch
+    model = trainer.model
+    model.train()
+    model.gradient_checkpointing_enable(gradient_checkpointing_kwargs={'use_reentrant':False})
+    cuda = torch.cuda.is_available()
+    if cuda:
+        torch.cuda.synchronize()
+        torch.cuda.empty_cache()
+        torch.cuda.reset_peak_memory_stats()
+    device = next(model.parameters()).device
+    ids = torch.randint(0, model.config.vocab_size, (1, config.max_length), device=device)
+    result = dict(completion_tokens=config.max_completion_length, total_tokens=config.max_length)
+    started = time.monotonic()
+    try:
+        logps, _, _ = trainer._get_per_token_logps_and_entropies(model, ids, torch.ones_like(ids),
+                                                                 config.max_completion_length, compute_entropy=True)
+        logps.sum().backward()
+        del logps
+    except torch.OutOfMemoryError as error:
+        result['error'] = str(error)[:400]
+    finally:
+        if cuda:
+            torch.cuda.synchronize()
+        result['seconds'] = time.monotonic()-started
+        model.zero_grad(set_to_none=True)
+        del ids
+        result.update(peak_allocated_bytes=torch.cuda.max_memory_allocated() if cuda else 0,
+                      peak_reserved_bytes=torch.cuda.max_memory_reserved() if cuda else 0)
+        if cuda:
+            torch.cuda.empty_cache()
+    result['fits'] = 'error' not in result and result['peak_reserved_bytes'] <= config.max_vram_bytes
+    return result
+
+
 def latest_checkpoint(output: Path) -> Path | None:
     candidates = [p for p in output.glob('checkpoint-*') if (p/'trainer_state.json').exists()
                   and (p/'optimizer.pt').exists() and (p/'adapter_model.safetensors').exists()
@@ -166,10 +203,11 @@ def train(config: CloudConfig, kind: str, output: Path, *, data: Path, pack,
     from peft import get_peft_model_state_dict
     from safetensors.torch import load_file, save_file
     from transformers import TrainerCallback
-    from trl import GRPOConfig, GRPOTrainer, SFTConfig, SFTTrainer
+    from trl import GRPOConfig, SFTConfig, SFTTrainer
     from trl.chat_template_utils import add_response_schema
     from train.permit_env import PermitTrainingEnv
     from train.runtime import reward_groups
+    from .chunked_logps import ChunkedLogpsTrainer
     from .make_sft import validate_catalog
 
     output.mkdir(parents=True, exist_ok=True)
@@ -224,7 +262,7 @@ def train(config: CloudConfig, kind: str, output: Path, *, data: Path, pack,
             traces.append(record)
             trace.write(json.dumps(record, allow_nan=False)+'\n')
             trace.flush()
-        trainer = GRPOTrainer(model=model, processing_class=tokenizer,
+        trainer = ChunkedLogpsTrainer(model=model, processing_class=tokenizer,
             args=GRPOConfig(**options, reward_weights=[0.0]),
             reward_funcs=partial(rollout_diagnostics, config=config, tokenizer=tokenizer),
             train_dataset=Dataset.from_list(rows), environment_factory=partial(PermitTrainingEnv,
@@ -276,6 +314,8 @@ def train(config: CloudConfig, kind: str, output: Path, *, data: Path, pack,
             raise RuntimeError('Smoke qualification failed: changed/reloaded weights')
         if smoke and trainer.state.global_step != 2:
             raise RuntimeError('Smoke requires exactly two optimizer steps')
+        if smoke:
+            metrics['worst_case'] = worst_case_step(trainer, config)
         if any(r.get('grading_failed') for r in traces):
             raise RuntimeError('GRPO grading unavailable')
         if any(not math.isfinite(row[key]) for row in trainer.state.log_history

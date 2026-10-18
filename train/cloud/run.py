@@ -126,6 +126,7 @@ def parser() -> argparse.ArgumentParser:
     p.add_argument('--trackio-space', help='Explicit Attoloop/Space; omitted means no Trackio writes')
     p.add_argument('--trackio-bucket')
     p.add_argument('--qualification-run', type=Path, help='Previously passed smoke run (local or mounted read-only)')
+    p.add_argument('--base-eval-from', help='Smoke only: carry a passed run\'s hf://buckets/.../smoke/base-eval')
     p.add_argument('--stop-after-step',type=int,help='Stop and save at this step, keeping --grpo-steps scheduler target')
     p.add_argument('--wall-cap', action='append', default=[], help='stage=seconds, cumulative across resumes')
     p.add_argument('--usd-cap', action='append', default=[], help='stage=USD of compute at --hourly-usd')
@@ -177,6 +178,8 @@ def main(argv: list[str] | None = None) -> None:
         return
     if not args.execute or not args.artifact_uri:
         raise ValueError('Execution requires --execute and an existing --artifact-uri')
+    if args.base_eval_from and config.recipe != 'smoke':
+        raise ValueError('--base-eval-from applies to the smoke recipe only')
     if int(os.environ.get('WORLD_SIZE','1')) != 1:
         raise ValueError('One process/GPU only')
     if not 0 < args.field_cache_gb < float('inf'):
@@ -212,7 +215,7 @@ def run(args, config: CloudConfig, plan: list[dict], sync) -> None:
     input_manifest = ROOT/'train/cloud/input-manifest.json'
     if input_manifest.exists():
         files.append(input_manifest)
-    frozen = dict(config=config.record(), plan=plan, hashes=fingerprint(files),
+    frozen = dict(config=config.record(), plan=plan, hashes=fingerprint(files), base_eval_from=args.base_eval_from,
                   selection=selection,
                   train_tasks=[t.task_id for t in train], eval_tasks=cohort,
                   tasks_dir=str(args.tasks_dir.resolve()), sft_data=str(args.sft_data.resolve()),

@@ -153,6 +153,31 @@ Primary evidence, also captured by `internal/reports/WP2.15-evidence/sources.py`
 - [Convolution release assets](https://github.com/Dao-AILab/causal-conv1d/releases/tag/v1.7.0).
 - [Transformers Qwen implementation](https://github.com/huggingface/transformers/blob/v5.17.0/src/transformers/models/qwen3_5/modeling_qwen3_5.py).
 
+## Loss memory
+
+TRL's loss asks the model for the logits of every completion token at once. With this
+model's 248,320-token vocabulary, a 27,218-token completion is 13.5 GB of bf16 logits
+and 27 GB once `selective_log_softmax` works in fp32, on top of 54 GB of weights and the
+checkpointed activations; job `Attoloop/6ad4c41e5ccb47ba0f7c4004` needed about 153 GiB
+of the H200's 139.8 GiB and stopped at the first optimizer step. TRL 1.12 chunks that
+computation only across the batch, which is already one, and its Liger loss chunks the
+same way. `chunked_logps.py` subclasses `GRPOTrainer` and overrides one method: the
+backbone runs once (as TRL's Liger path does), then the output head and TRL's own
+`selective_log_softmax` run per 2,048 completion tokens under activation checkpointing,
+so a chunk's logits exist only while computed and are recomputed in backward. Generation,
+rewards, advantages and the loss formula are TRL's. `tests/test_chunked_logps.py` shows
+the values, entropies and LoRA gradients equal TRL's unchunked function on a tiny model
+and that the head never receives more than one chunk. Because two smoke steps only show
+the completions they happened to draw, the smoke then runs one loss forward and backward
+at the full budget (40,960 completion tokens in a 45,056-token sequence, random ids)
+through the same path and records peak memory and seconds as `worst_case`; a smoke
+qualifies a run only if that fits under the device cap.
+
+A smoke may carry a passed base evaluation instead of repeating it
+(`--base-eval-from hf://buckets/.../smoke/base-eval`): the three episode records are
+restored into `smoke/base-eval/` with `PROVENANCE.json` naming the source run, the report
+says so, and the GRPO qualification gate reads them as before.
+
 ## Numerical sanity and smoke
 
 `kernels.py` runs one bf16 case of shape `(1,65,2,128)` with a nonzero initial
@@ -194,7 +219,15 @@ untrained 40-turn evaluations feasible (58.2, 67.3 and 30.8% of draft cost saved
 peak device memory 120.4 GB, two GRPO steps with changed weights and exact reload,
 289 s per step. In those training steps six of eight rollouts ran out of the 8 turns
 before submitting, which led to training under the evaluation's rules. Those
-settings need their own passed smoke.
+settings need their own passed smoke. Under them, job `Attoloop/6ad4c41e5ccb47ba0f7c4004`
+(`smoke-evalrules-c1`) evaluated the base in three 40-turn episodes (all submitted feasible
+designs: rewards .62, .67, .45; 13-17 min each including native grading), generated one
+group of six rollouts in about 15 min (five submitted, one hit the turn limit, none cut by
+the token budget; 2.5k-27.2k completion tokens; rewards .83, .83, .74, .41, .59, 0;
+standard deviation .29; peak device memory 125.5 GB) and then ran out of memory in the
+loss, which led to the chunked log-probabilities above. Two earlier starts that day found
+H200 hosts on driver 580.178.04 whose container runtime injected no CUDA libraries; the
+GPU guard now reports that condition and a start on such a host costs about a minute.
 
 ## Preserved experiment and operations
 

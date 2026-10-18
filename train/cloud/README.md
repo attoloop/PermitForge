@@ -114,7 +114,7 @@ by the job. Large archives remain ignored by git.
 WP2.16 rebuilt and verified the retained archive against the working tree. Its
 SHA256 (`sha256sum train/cloud/data/cloud-bundle.tar.gz`):
 
-`82a6c801b0538116d371256389e38f9e21945815c39b22b193d0a4c175ad1c86`
+`9696466c807d9991a9b21eaea0e52962d967a10d30f9295f9d2cd2db531a4c1a`
 
 Run from the repository root (the existing `train` environment can run CPU checks
 without installing a second CUDA stack):
@@ -221,6 +221,9 @@ JOB_ID="$(uvx --from 'huggingface-hub==1.33.0' hf jobs uv run \
   --precision bf16 --output train/cloud/runs/smoke-evalrules \
   --artifact-uri hf://buckets/Attoloop/permitforge-qwen38-runs/smoke-evalrules)"
 
+# A GRPO-only smoke after a passed base evaluation adds
+#   --base-eval-from hf://buckets/Attoloop/permitforge-qwen38-runs/<run>/smoke/base-eval
+# to the arguments after `--`; the report names the carried run.
 # Keep a local log copy; inspect the final Job status after the stream ends.
 uvx --from 'huggingface-hub==1.33.0' hf jobs logs \
   --namespace Attoloop "$JOB_ID" --follow | tee train/cloud/data/smoke-logs.txt

@@ -6,6 +6,7 @@ from pathlib import Path
 import time
 
 from .run import write_json
+from .storage import restore, sync_command
 
 
 def smoke_summary(records: list[dict], training: dict, gpu: dict, *,
@@ -20,6 +21,7 @@ def smoke_summary(records: list[dict], training: dict, gpu: dict, *,
     ready = (len(records) == 3 and not infrastructure and valid_calls > 0 and submitted > 0 and positive > 0
         and training.get('status') == 'passed' and training.get('optimizer_steps') == 2
         and training.get('weights_changed') is True and training.get('adapter_reload_equal') is True and spread
+        and (training.get('worst_case') or {}).get('fits') is True
         and kernels is not None and kernels.get('status') == 'passed')
     seconds = training.get('seconds_per_step')
     return dict(status='passed' if ready else 'failed', ready_for_grpo=bool(ready),
@@ -50,6 +52,15 @@ def smoke_gate(path: Path, current: dict) -> None:
             raise ValueError('A passed smoke requires successful kernel sanity and GPU checks')
 
 
+def carry_base_eval(uri: str, output: Path) -> None:
+    """GRPO-only smoke: restore a passed run's base evaluation from the run bucket and record where it came from."""
+    if not uri.startswith('hf://buckets/') or not uri.endswith('/base-eval'):
+        raise ValueError('Carry a base evaluation from hf://buckets/.../smoke/base-eval')
+    sync_command(output/'base-eval', uri, restore=True)  # validates the prefix before any transfer
+    restore(output/'base-eval', uri, 300)
+    write_json(output/'base-eval/PROVENANCE.json', {'carried_from': uri})
+
+
 def run_smoke(config, record: dict, pack, output: Path) -> None:
     import torch
     from .fields import CloudFields, warm
@@ -65,14 +76,17 @@ def run_smoke(config, record: dict, pack, output: Path) -> None:
         warm(train_tasks+eval_tasks, root, output/'fields', config.field_jobs)
         fields = CloudFields(train_tasks+eval_tasks,root,tasks_dir=tasks_dir,
                              output=output/'field-misses',jobs=config.field_jobs)
-        model, tokenizer = load_model(config)
-        try:
-            evaluate(replace(config, eval_repeats=1),model,tokenizer,pack,record['eval_tasks'],
-                     output/'base-eval',fields_loader=fields,tasks_dir=tasks_dir,adapter=None)
-        finally:
-            del model, tokenizer
-            gc.collect()
-            torch.cuda.empty_cache()
+        if record.get('base_eval_from'):
+            carry_base_eval(record['base_eval_from'], output)
+        else:
+            model, tokenizer = load_model(config)
+            try:
+                evaluate(replace(config, eval_repeats=1),model,tokenizer,pack,record['eval_tasks'],
+                         output/'base-eval',fields_loader=fields,tasks_dir=tasks_dir,adapter=None)
+            finally:
+                del model, tokenizer
+                gc.collect()
+                torch.cuda.empty_cache()
         training = train(config,'grpo',output/'grpo',data=Path(record['sft_data']),pack=pack,
                          tasks=train_tasks,fields_loader=fields,smoke=True)
         if set(training.get('tasks_seen',[])) != set(record['train_tasks']):
@@ -129,7 +143,10 @@ def write_report(output: Path) -> None:
     write_json(path,report)
     text = ['# Qwen3.8 H200 smoke', '', f"Ready for GRPO: {report['ready_for_grpo']}", '',
         'Base behavior: '+json.dumps(report['base']), '',
+        *(['Base evaluation carried from '+json.loads(provenance.read_text())['carried_from'], '']
+          if (provenance := output/'base-eval/PROVENANCE.json').exists() else []),
         'Memory: '+json.dumps(report['gpu']), '',
+        'Worst-case step (full completion budget): '+json.dumps(report['training'].get('worst_case', {})), '',
         'Linear-attention sanity: '+json.dumps(report.get('kernels',{})), '',
         f"Seconds per GRPO step: {report['seconds_per_grpo_step']}", '',
         '| Steps | Projected GRPO seconds | Projected GRPO USD |', '|---|---|---|']

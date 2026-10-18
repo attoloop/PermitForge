@@ -12,9 +12,10 @@ ROOT = Path(__file__).resolve().parents[3]
 def test_standard_grpo_trainer_owns_generation_and_loss():
     tree = ast.parse((ROOT/'train/cloud/training.py').read_text())
     calls = [n for n in ast.walk(tree) if isinstance(n, ast.Call)]
-    constructors = [n for n in calls if isinstance(n.func, ast.Name) and n.func.id == 'GRPOTrainer']
-    assert len(constructors) == 1
+    constructors = [n for n in calls if isinstance(n.func, ast.Name) and n.func.id == 'ChunkedLogpsTrainer']
+    assert len(constructors) == 1  # TRL's trainer with only the log-prob computation chunked (test_chunked_logps.py)
     assert 'environment_factory' in {k.arg for k in constructors[0].keywords}
+    assert not any(isinstance(n.func, ast.Name) and n.func.id == 'GRPOTrainer' for n in calls)
     assert not any(isinstance(n.func, ast.Name) and n.func.id in (
         'memory_trainer_class', 'cached_trainer_class', 'qualify_stack') for n in calls)
     opts = training_options(CloudConfig(), 'grpo', Path('unused'), smoke=True)
