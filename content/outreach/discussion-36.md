@@ -18,7 +18,7 @@ Claude Opus 5.5 0.576, Claude Sonnet 5.5 0.507 of the draft cost saved. Every ep
 design, so the whole difference is how much cost they removed.
 
 On post-training: we ran GRPO on Qwen3.8-27B (30 steps, six rollouts, one H200) and evaluated before and
-after on the same held-out tasks. Nothing changed (0.439 both ways). The write-up in the repository keeps
+after on the same held-out tasks. No measurable change (0.439 both ways). The write-up in the repository keeps
 every failure on the way, including TRL's full-completion logits not fitting next to a 248k-vocabulary
 model, which we fixed with a one-method chunked loss that may be useful to others training Qwen3.8-class
 models on one card.

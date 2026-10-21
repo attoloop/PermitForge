@@ -72,7 +72,7 @@ with 30 evaluations 0.31, best of eight random runs 0.46, a 60-second search 0.4
 
 **Training.** Qwen3.8-27B was trained with GRPO (LoRA, 30 steps, 6 rollouts per step, one H200, $164 for the
 whole project) and evaluated before and after on the same 10 held-out tasks with the same harness. Base
-0.439, trained 0.439: no change. The per-task table, curves, every failure met on the way and the cost
+0.439, trained 0.439: no measurable change. The per-task table, curves, every failure met on the way and the cost
 ledger are in the repository's `train/cloud/RESULTS.md`. Card: [results/eval-v2-qwen.json](results/eval-v2-qwen.json).
 That harness differs from the frontier one, so the two cards are not compared.
 

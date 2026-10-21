@@ -24,7 +24,7 @@ Results on 10 held-out eval tasks, 3 repeats each: GPT-6.1 Sol 0.607, GPT-5.6 So
 unchanged draft (0.00) and cheapest-first greedy (0.33).
 
 We also trained Qwen3.8-27B with GRPO (30 steps, one H200, $164 for the whole project) and evaluated it
-before and after on the same tasks with the same harness. It is a null result, 0.439 both ways, and it is
+before and after on the same tasks with the same harness. It is a null result, no measurable change at 0.439 both ways, and it is
 reported as such in a second card (`eval-v2-qwen.json`) and in `train/cloud/RESULTS.md` in the repository,
 with every failure we met on the way (hosts without CUDA libraries, a 27 GB logits OOM and the chunked
 loss that fixed it, a watchdog death at step 15). The catalog has no training recipes for now, so the
