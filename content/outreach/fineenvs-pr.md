@@ -26,6 +26,4 @@ This is a link-only entry. If you would rather have the full code here, we are h
 - [x] The environment runs: `uv run --directory envs/permit/openenv python rollout.py --smoke`
 - [x] Read a trajectory by hand: [GPT-6.1 Sol on a kiln plant](https://huggingface.co/datasets/Attoloop/PermitForge/blob/main/rollouts/final-medium3/codex_gpt-6.1-sol-cbf796da1b7a/d50e1051dcec-s47/r1/transcript.jsonl)
 
-The training card sits next to the eval card, since the catalog has no training recipes yet. Happy to move it.
-
 🤖 Generated with [Claude Code](https://claude.com/claude-code)

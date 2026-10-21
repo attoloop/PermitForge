@@ -2,7 +2,7 @@
 name: permit-forge
 title: "PermitForge"
 tagline: "Make a synthetic plant cheaper while it still meets every air-quality standard under five years of real weather."
-order: 7.2        # after portsim-live (7.1). The code, data and Hub repos stay in the author's namespace
+order: 8
 status: wip   # environment and evals released, training in progress (a small first GRPO run, a larger one lined up)
 authors:
   - {name: Attoloop, github: attoloop, affiliation: Attoloop}
