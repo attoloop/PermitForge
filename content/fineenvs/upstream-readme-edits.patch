@@ -1,5 +1,5 @@
 diff --git a/07-simulation-environments/README.md b/07-simulation-environments/README.md
-index 03f0654..51d2ce8 100644
+index 03f0654..fedaa80 100644
 --- a/07-simulation-environments/README.md
 +++ b/07-simulation-environments/README.md
 @@ -64,6 +64,19 @@ failures: hold, short-turn or cancel so opposing trains cross safely.</p>
@@ -14,7 +14,7 @@ index 03f0654..51d2ce8 100644
 +<p>Choose emissions controls and stack heights for a synthetic plant so it meets every air-quality standard under
 +five years of real weather, at the lowest cost. Graded by EPA's own dispersion model.</p>
 +<sub>OpenEnv · 10 held-out tasks × 3 · 4 models · one GRPO run</sub><br>
-+<a href="https://huggingface.co/spaces/Attoloop/PermitForge">Play</a> ·
++<a href="https://huggingface.co/spaces/Bhuminjay/PermitForge">Play</a> ·
 +<a href="https://huggingface.co/datasets/Attoloop/PermitForge">Dataset</a> ·
 +<a href="https://github.com/attoloop/PermitForge">Code</a>
 +</td>
@@ -32,7 +32,7 @@ index 03f0654..51d2ce8 100644
  The versions are not comparable with each other: each plays its own weeks with its own harness. Each card says how
  its tasks were picked and what its grade excuses.
 diff --git a/README.md b/README.md
-index b249b8d..aeed05f 100644
+index b249b8d..dc6ea41 100644
 --- a/README.md
 +++ b/README.md
 @@ -53,6 +53,7 @@ results and README, plus the Hub repos it owns. They read in order but stand alo
@@ -51,7 +51,7 @@ index b249b8d..aeed05f 100644
 +  emissions controls and stack heights for a synthetic plant so it meets every air-quality standard under five
 +  years of real NOAA weather at the lowest cost, graded by EPA's AERMOD. GPT-6.1 Sol leads the four-model eval at
 +  0.607 of the draft cost saved, and a Qwen3.8-27B GRPO run is reported as the null result it was. Play it in the
-+  [Space](https://huggingface.co/spaces/Attoloop/PermitForge); every rollout and the whole training run are in the
++  [Space](https://huggingface.co/spaces/Bhuminjay/PermitForge); every rollout and the whole training run are in the
 +  [dataset](https://huggingface.co/datasets/Attoloop/PermitForge).
  
  Everything is in the [Simulation RL Envs collection](https://huggingface.co/collections/FineEnvs/simulation-rl-envs-6ac4eca150bd4b91790e2540),

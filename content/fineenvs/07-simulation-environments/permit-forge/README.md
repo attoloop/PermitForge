@@ -9,7 +9,7 @@
 <p>Choose emissions controls and stack heights for a synthetic industrial plant under five years of real weather.
 Thirty air-quality evaluations, then one submission, graded by EPA's own dispersion model.</p>
 
-<a href="https://huggingface.co/spaces/Attoloop/PermitForge"><img src="https://img.shields.io/badge/%F0%9F%A4%97%20Space-Play-FFD21E?style=for-the-badge&labelColor=1a1a1a" alt="Play in the Space" height="32"></a>
+<a href="https://huggingface.co/spaces/Bhuminjay/PermitForge"><img src="https://img.shields.io/badge/%F0%9F%A4%97%20Space-Play-FFD21E?style=for-the-badge&labelColor=1a1a1a" alt="Play in the Space" height="32"></a>
 <a href="https://huggingface.co/datasets/Attoloop/PermitForge"><img src="https://img.shields.io/badge/%F0%9F%A4%97%20Dataset-Tasks%2C%20rollouts%20%26%20training-4F46E5?style=for-the-badge&labelColor=1a1a1a" alt="Dataset" height="32"></a>
 <a href="https://huggingface.co/Attoloop/PermitForge-Qwen3.8-27B-GRPO"><img src="https://img.shields.io/badge/%F0%9F%A4%97%20Model-GRPO%20adapter-10B981?style=for-the-badge&labelColor=1a1a1a" alt="The trained adapter" height="32"></a>
 <a href="https://github.com/attoloop/PermitForge"><img src="https://img.shields.io/badge/GitHub-attoloop%2FPermitForge-181717?style=for-the-badge&logo=github&labelColor=1a1a1a" alt="PermitForge on GitHub" height="32"></a>
@@ -78,7 +78,7 @@ That harness differs from the frontier one, so the two cards are not compared.
 
 ## Links
 
-- [Space](https://huggingface.co/spaces/Attoloop/PermitForge): the playground and the MCP endpoint.
+- [Space](https://huggingface.co/spaces/Bhuminjay/PermitForge): the playground and the MCP endpoint.
 - [Dataset](https://huggingface.co/datasets/Attoloop/PermitForge): tasks, weather, every rollout with its transcript, and the whole training run.
 - [Model](https://huggingface.co/Attoloop/PermitForge-Qwen3.8-27B-GRPO): the GRPO adapter and its checkpoints.
 - [Code](https://github.com/attoloop/PermitForge): environment, verifier, evaluation harness, protocol and training recipe.

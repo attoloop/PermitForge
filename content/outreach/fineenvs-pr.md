@@ -15,7 +15,7 @@ This is a link-only entry: `project.yaml`, a README card and two eval cards. Cod
 stay in our namespace.
 
 - Code: https://github.com/attoloop/PermitForge
-- Space: https://huggingface.co/spaces/Attoloop/PermitForge
+- Space: https://huggingface.co/spaces/Bhuminjay/PermitForge
 - Dataset (tasks, weather, every rollout with its transcript, the whole training run): https://huggingface.co/datasets/Attoloop/PermitForge
 - Model (the GRPO adapter): https://huggingface.co/Attoloop/PermitForge-Qwen3.8-27B-GRPO
 

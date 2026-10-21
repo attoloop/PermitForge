@@ -4,7 +4,7 @@ Choose emissions controls and stack heights for a synthetic industrial plant,
 using real NOAA weather and EPA dispersion models. An OpenEnv environment:
 cut annualized cost while meeting every air-quality standard.
 
-[Space](https://huggingface.co/spaces/Attoloop/PermitForge) ·
+[Space](https://huggingface.co/spaces/Bhuminjay/PermitForge) ·
 [Dataset](https://huggingface.co/datasets/Attoloop/PermitForge) ·
 [Trained model](https://huggingface.co/Attoloop/PermitForge-Qwen3.8-27B-GRPO) ·
 [Eval card](results/eval-v2.json) · OpenEnv 0.7.0 · Apache-2.0
@@ -77,7 +77,7 @@ from the frontier one, so the two tables are not compared.
 
 | You want to… | Open |
 |---|---|
-| Try the playground | [The Space](https://huggingface.co/spaces/Attoloop/PermitForge), or `/web/` on a local server |
+| Try the playground | [The Space](https://huggingface.co/spaces/Bhuminjay/PermitForge), or `/web/` on a local server |
 | Connect an agent | Client snippet below, MCP endpoint `/mcp` |
 | Read the rules and reward | [CONTRACT.md](CONTRACT.md) |
 | Understand physics, fidelity and search | [DESIGN.md](DESIGN.md) |

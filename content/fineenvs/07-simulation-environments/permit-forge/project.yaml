@@ -11,7 +11,7 @@ hub:
   org: Attoloop
   collection: FineEnvs/simulation-rl-envs
   spaces:
-    - Attoloop/PermitForge
+    - Bhuminjay/PermitForge
   datasets:
     - Attoloop/PermitForge
 
@@ -23,5 +23,5 @@ envs:
     frameworks:
       openenv:
         transport: http-mcp
-        space: Attoloop/PermitForge
+        space: Bhuminjay/PermitForge
         verified: true

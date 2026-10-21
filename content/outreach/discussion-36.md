@@ -9,7 +9,7 @@ and a stack height per source, can evaluate a design's air quality 30 times, and
 grade comes from EPA's AERMOD and BPIP-PRIME over five years of real NOAA weather, so there is no judge
 and no reference solution to leak. The plants are synthetic. The weather and the models are real.
 
-- Play: https://huggingface.co/spaces/Attoloop/PermitForge
+- Play: https://huggingface.co/spaces/Bhuminjay/PermitForge
 - Code: https://github.com/attoloop/PermitForge
 - Dataset with every rollout and the training run: https://huggingface.co/datasets/Attoloop/PermitForge
 
