@@ -32,14 +32,14 @@ index 03f0654..542fc39 100644
  The versions are not comparable with each other: each plays its own weeks with its own harness. Each card says how
  its tasks were picked and what its grade excuses.
 diff --git a/README.md b/README.md
-index b249b8d..b909d3a 100644
+index b249b8d..92e09bd 100644
 --- a/README.md
 +++ b/README.md
 @@ -53,6 +53,7 @@ results and README, plus the Hub repos it owns. They read in order but stand alo
  | **06** | **[Multilingual](./06-multilingual/)** | Document OCR over a million pages in 22 languages and speech recognition over 102, each behind one OpenEnv server, and Gemma 4 trained to read and hear Kannada. | 2 | 1 | 2 | ✅ trained |
  | **07** | **[PortSimEnv v1](./07-simulation-environments/portsim-v1/)**<br><sub>by [Adithya S Kolavi](https://github.com/adithya-s-k) (Hugging Face)</sub><br><sub>`agentenv` port by [Edgar Arakelyan](https://github.com/earakely-scale) (Scale AI)</sub> | Re-plan a broken week of container-ship dockings at the Port of Barcelona, graded against a proven optimum. | 1 | 2 | 1 | 🚧 wip |
  | **07** | **[PortSimEnv v2–v5: live, marine, wind and lines](./07-simulation-environments/portsim-live/)**<br><sub>by [Edgar Arakelyan](https://github.com/earakely-scale) (Scale AI)</sub> | Run a Port of Barcelona quay through a week as it unfolds, with live news, pilots and tugs, real wind and shipping lines that answer back. | 1 | 1 | 0 | 🚧 wip |
-+| **07** | **[PermitForge](./07-simulation-environments/permit-forge/)**<br><sub>by [Attoloop](https://github.com/attoloop) (Attoloop)</sub> | Make a synthetic plant cheaper while it still meets every air-quality standard under five years of real weather. | 1 | 1 | 1 | ✅ stable |
++| **07** | **[PermitForge](./07-simulation-environments/permit-forge/)**<br><sub>by [Attoloop](https://github.com/attoloop) (Attoloop)</sub> | Make a synthetic plant cheaper while it still meets every air-quality standard under five years of real weather. | 1 | 1 | 1 | 🚧 wip |
  <!-- END:projects -->
  
  <sub>Generated from each project's `project.yaml` by `tools/build_index.py`. Adding a project means

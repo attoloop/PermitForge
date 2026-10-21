@@ -36,8 +36,7 @@ move it in.
   for example [GPT-6.1 Sol on a kiln plant in Albuquerque](https://huggingface.co/datasets/Attoloop/PermitForge/blob/main/rollouts/final-medium3/codex_gpt-6.1-sol-cbf796da1b7a/d50e1051dcec-s47/r1/transcript.jsonl).
 - [x] **Training run.** We trained Qwen3.8-27B with GRPO in TRL (LoRA, 30 steps, 6 rollouts each) on one
   H200 on HF Jobs. The setup and launch commands are in
-  [train/cloud/README.md](https://github.com/attoloop/PermitForge/blob/main/train/cloud/README.md). Training
-  cost $82, and all cloud jobs together $164.
+  [train/cloud/README.md](https://github.com/attoloop/PermitForge/blob/main/train/cloud/README.md).
 - [x] **Results, the honest version.** On 10 held-out tasks, 3 runs each, the models saved this share of the
   draft's cost: GPT-6.1 Sol 0.607, GPT-5.6 Sol 0.586, Claude Opus 5.5 0.576, Claude Sonnet 5.5 0.507. Every
   episode ended with a design that passes. Simple policies get 0.00 (keep the draft) and 0.33 (greedy).
