@@ -70,10 +70,11 @@ Model-free policies on the same tasks: the unchanged draft 0.00, cheapest-first 
 with 30 evaluations 0.31, best of eight random runs 0.46, a 60-second search 0.48. Card:
 [results/eval-v2.json](results/eval-v2.json).
 
-**Training.** Qwen3.8-27B was trained with GRPO (LoRA, 30 steps, 6 rollouts per step, one H200)
-and evaluated before and after on the same 10 held-out tasks with the same harness. Base
-0.439, trained 0.439: no measurable change. The per-task table, curves, every failure met on the way and the cost
-ledger are in the repository's `train/cloud/RESULTS.md`. Card: [results/eval-v2-qwen.json](results/eval-v2-qwen.json).
+**Training.** As a small first experiment, Qwen3.8-27B was trained with GRPO (LoRA, 30 steps on 30 train tasks,
+6 rollouts per step, one H200) and evaluated before and after on the same 10 held-out tasks with the same harness.
+At this size the score did not move: base 0.439, trained 0.439. A larger run on the full train split of 230 tasks
+is lined up next. The per-task table, curves and every failure met on the way are in the repository's
+`train/cloud/RESULTS.md`. Card: [results/eval-v2-qwen.json](results/eval-v2-qwen.json).
 That harness differs from the frontier one, so the two cards are not compared.
 
 ## Links

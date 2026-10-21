@@ -32,7 +32,7 @@ index 03f0654..929c7c9 100644
  The versions are not comparable with each other: each plays its own weeks with its own harness. Each card says how
  its tasks were picked and what its grade excuses.
 diff --git a/README.md b/README.md
-index b249b8d..df63d9e 100644
+index b249b8d..1416512 100644
 --- a/README.md
 +++ b/README.md
 @@ -53,6 +53,7 @@ results and README, plus the Hub repos it owns. They read in order but stand alo
@@ -43,14 +43,15 @@ index b249b8d..df63d9e 100644
  <!-- END:projects -->
  
  <sub>Generated from each project's `project.yaml` by `tools/build_index.py`. Adding a project means
-@@ -174,6 +175,12 @@ the same format.
+@@ -174,6 +175,13 @@ the same format.
    Qwen3.8-27B finds a valid plan in 1 of 60. Every run replays in the
    [Space](https://huggingface.co/spaces/earakely-scale/PortSimEnv-AgentEnv), and
    [the article's chapter](https://fineenvs-simulation-rl-environments.hf.space/#the-live-port-portsimenv-v2v5) walks through each version.
 +- **[PermitForge](./07-simulation-environments/permit-forge/)**, by Attoloop, on OpenEnv. The agent chooses
 +  emissions controls and stack heights for a synthetic plant so it meets every air-quality standard under five
 +  years of real NOAA weather at the lowest cost, graded by EPA's AERMOD. GPT-6.1 Sol leads the four-model eval at
-+  0.606 of the draft cost saved, and a Qwen3.8-27B GRPO run is reported as the null result it was. Play it in the
++  0.606 of the draft cost saved. A small first Qwen3.8-27B GRPO run did not move the score, and a larger one is
++  lined up. Play it in the
 +  [Space](https://huggingface.co/spaces/Bhuminjay/PermitForge). Every rollout and the whole training run are in the
 +  [dataset](https://huggingface.co/datasets/Attoloop/PermitForge).
  
