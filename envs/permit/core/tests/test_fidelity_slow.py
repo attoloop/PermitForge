@@ -4,11 +4,12 @@ import json
 from pathlib import Path
 
 import pytest
-from conftest import requires_native_binaries, requires_task_data
+from conftest import requires_native_binaries, requires_task_data, requires_v1
 
 ROOT = Path(__file__).resolve().parents[4]
 
 
+@requires_v1
 @requires_task_data
 @requires_native_binaries
 @pytest.mark.slow

@@ -1,5 +1,5 @@
 {
- "commit": "1db3978",
+ "commit": "1c652d5",
  "note": "sha256 of eval/select_tasks.py and permit_core/*.py when the probes were computed (2026-10-17)",
  "code": {
   "select_tasks.py": "cea8b6f7b101a0d4765cd9be147e784cdade3cff1010b9de3b0c94b6fc4a1342",

@@ -30,7 +30,7 @@ failures are in [RESULTS.md](RESULTS.md); the card is `results/eval-v2-qwen.json
 | Memory | 105 GB peak reserved by torch; the device guard aborts above 135 GB |
 | Cost | $163.69 for every job of the project, $82 of it training; see RESULTS.md |
 
-The run was `full-30` (commit `7e4caaf`, bundle `9696466c...`, qualified by smoke `smoke-evalrules-d1`),
+The run was `full-30` (commit `a8f301d`, bundle `9696466c...`, qualified by smoke `smoke-evalrules-d1`),
 as separate HF jobs so that a dead job loses little:
 
 | Phase | Arguments after `--execute --recipe grpo --grpo-steps 30 ...` | Outcome |

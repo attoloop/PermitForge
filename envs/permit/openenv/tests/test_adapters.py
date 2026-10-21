@@ -1,6 +1,9 @@
 from dataclasses import replace
 from decimal import Decimal
 
+import pytest
+
+from permit_core.model import extraction_root
 from permit_core.verify import Verification, DesignValue
 from permit_openenv.evaluator import VerifyEvaluator, select_evaluator
 from permit_openenv.geometry import wind_rose
@@ -8,6 +11,10 @@ from permit_openenv.tasks import load_pack, height_menu
 
 
 def test_v1_fallback_and_menu(tmp_path):
+    try:
+        extraction_root()
+    except FileNotFoundError:
+        pytest.skip('needs the v1 source extraction (convert/v1-src), which a checkout does not have')
     pack = load_pack(tmp_path)
     task = pack.get('003bd328a392-s47')
     assert task.split == 'train' and not hasattr(task, 'anchors')

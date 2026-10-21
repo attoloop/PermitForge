@@ -269,7 +269,7 @@ These use fast-field selection probes, verified by the saved search `verificatio
 
 Measurement issues and handling:
 
-- The discarded final-medium2 run’s verifier counted long-lived server RSS, including resident memory-mapped fields. Nine environment logs record E_RESOURCE; public final results sanitize this to E_INFRA, so the logs establish the cause. The contemporaneous snapshot was described as 9 of 75; the retained directory contains 80 submissions and the same nine resource failures. None contributes to final-medium3. Commit `348404f` moved verification into a fresh spawned process. The adapter regression `test_verify_adapter_forces_arm2` asserts that spawn context and the ARM2 call.
+- The discarded final-medium2 run’s verifier counted long-lived server RSS, including resident memory-mapped fields. Nine environment logs record E_RESOURCE; public final results sanitize this to E_INFRA, so the logs establish the cause. The contemporaneous snapshot was described as 9 of 75; the retained directory contains 80 submissions and the same nine resource failures. None contributes to final-medium3. Commit `f70e1e2` moved verification into a fresh spawned process. The adapter regression `test_verify_adapter_forces_arm2` asserts that spawn context and the ARM2 call.
 - A missing/stale selected field pack was caught before episodes at launch. The preflight error named 07b4e4050840-s47; no episode ran in that failed launch.
 - Two GPT-6.1 Sol r1 train attempts (6b3a997f0ce8-s47 and 8e62c1a7ddb2-s47) failed before submission. CLI events record incomplete responses/502; upstream SSE names service_unavailable_error. The protocol permitted fresh attempts on resume. Failed attempts remain preserved and are excluded from grades, not silently zeroed.
 
@@ -278,7 +278,7 @@ Reproduce the measurement checks without new physics:
 ```sh
 export PERMIT_FIELDS_CACHE_GB=64
 uv run --project envs/permit/openenv --no-sync python -m eval.card final-medium3 --issues
-git show --stat 348404f
+git show --stat f70e1e2
 uv run --project envs/permit/openenv --no-sync python -m pytest envs/permit/openenv/tests/test_adapters.py::test_verify_adapter_forces_arm2 -q
 ```
 

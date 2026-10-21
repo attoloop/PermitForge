@@ -344,7 +344,7 @@ HOW_RUN = (
     'including resident memory-mapped fields. Nine submissions in the discarded final-medium2 run '
     'failed E_RESOURCE rather than physics (the contemporaneous report said 9 of 75; the retained '
     'directory now has 80 submissions, with the same nine failures). Final verification was moved '
-    'to a fresh spawned process in commit 348404f; regression: '
+    'to a fresh spawned process in commit f70e1e2; regression: '
     'envs/permit/openenv/tests/test_adapters.py::test_verify_adapter_forces_arm2. '
     'That discarded run is excluded. A field-cache eviction was also caught by preflight before '
     'any episode in the failed launch; the preflight error named the missing/stale '
@@ -396,7 +396,7 @@ def audit_markdown(run: Path, subsets: dict, audit: dict) -> str:
               'results sanitize this to E_INFRA, so the logs establish the cause. The contemporaneous '
               'snapshot was described as 9 of 75; the retained directory contains 80 submissions '
               'and the same nine resource failures. None contributes to final-medium3. Commit '
-              '`348404f` moved verification into a fresh spawned process. The adapter regression '
+              '`f70e1e2` moved verification into a fresh spawned process. The adapter regression '
               '`test_verify_adapter_forces_arm2` asserts that spawn context and the ARM2 call.',
               '- A missing/stale selected field pack was caught before episodes at launch. The '
               'preflight error named 07b4e4050840-s47; no episode ran in that failed launch.',
@@ -407,7 +407,7 @@ def audit_markdown(run: Path, subsets: dict, audit: dict) -> str:
               'Reproduce the measurement checks without new physics:', '',
               '```sh', 'export PERMIT_FIELDS_CACHE_GB=64',
               'uv run --project envs/permit/openenv --no-sync python -m eval.card final-medium3 --issues',
-              'git show --stat 348404f',
+              'git show --stat f70e1e2',
               'uv run --project envs/permit/openenv --no-sync python -m pytest envs/permit/openenv/tests/test_adapters.py::test_verify_adapter_forces_arm2 -q',
               '```', '',
               'This is an observational evaluation audit. It does not close the historical '
