@@ -68,7 +68,7 @@ Every rollout is in the dataset.
 **Training.** We trained Qwen3.8-27B with GRPO (LoRA, 30 steps, 6 rollouts per
 step, one H200, $164 for the whole project) and evaluated base and trained model
 on the same 10 held-out tasks with the same cloud harness. Base 0.439, trained
-0.439: no change. The per-task table, curves, failures and cost are in
+0.439: no measurable change. The per-task table, curves, failures and cost are in
 [train/cloud/RESULTS.md](train/cloud/RESULTS.md); the card is
 [results/eval-v2-qwen.json](results/eval-v2-qwen.json). That harness differs
 from the frontier one, so the two tables are not compared.

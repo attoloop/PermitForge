@@ -11,7 +11,7 @@ Run `full-30`: 30 GRPO steps, 6 rollouts per step, LoRA rank 16 on one H200. Bas
 
 Paired difference (trained minus base) over 10 tasks: mean -0.0004, sd 0.0379, se 0.0120, station-clustered 95% CI -0.0280 to +0.0264; 5 tasks up, 5 down, 0 unchanged.
 
-Training did not change held-out performance. The difference is far inside the noise of three repeats.
+No measurable change in the mean. The largest per-task moves are about four points either way, inside what three repeats can resolve for most tasks, and nothing in the pattern says the model learned to find cheaper designs.
 
 ## Per task
 
@@ -30,7 +30,7 @@ Training did not change held-out performance. The difference is far inside the n
 
 ## Training
 
-204 rollouts were generated for 30 optimizer steps. Steps whose row shows 12 rollouts were generated twice: the first job died at step 15 and training resumed from checkpoint 10, so those steps were sampled again. Rewards are the training grade (fast evaluator); zero means an infeasible, invalid or missing submission.
+204 rollouts were generated for 30 optimizer steps. Steps whose row shows 12 rollouts were generated twice: the first job died at step 15 and training resumed from checkpoint 10, so those steps were sampled again (only step 11's two groups come from the same checkpoint). Rewards are the training grade (fast evaluator); zero means an infeasible, invalid or missing submission.
 
 | Steps | Mean reward | Rollouts | Zero reward | Turn limit | Submitted without evaluating | Budget cut |
 |---|---:|---:|---:|---:|---:|---:|
@@ -75,7 +75,7 @@ Peak device memory 105.0 GB reserved by torch; mean 1450 s per step in the last 
 
 ## Cost
 
-Every HF job of this project, billed per second at $5 per H200 hour: 46 jobs, $163.69 in all.
+Every HF job of this project, billed per second at $5 per H200 hour: 46 jobs, $163.69 in all. 1 job(s) have no recorded duration and count as zero; the frontier panel's API cost is separate.
 
 | Phase | Jobs | Not completed | Hours | USD |
 |---|---:|---:|---:|---:|
@@ -108,7 +108,7 @@ Every HF job of this project, billed per second at $5 per H200 hour: 46 jobs, $1
 
 ## Reading
 
-The base model already submits a feasible design in every held-out episode, so the only skill training removed on the train tasks (turn-limit endings and submitting without evaluating) had nothing to fix on the eval tasks. The skill that would move the score, finding cheaper feasible designs in 30 evaluations, got little signal: small reward spread inside most groups, 180 rollouts in the final lineage, a learning rate decayed to zero by step 30, and held-out weather stations the model never trained on. Three repeats give a noise floor of about 0.03 per task, and the differences are below it.
+Three guesses, none established. The base model already submits a feasible design in every held-out episode, so the failure modes training could remove on the train tasks (turn-limit endings and submitting without evaluating) had nothing to fix on the eval tasks. The skill that would move the score, finding cheaper feasible designs in 30 evaluations, got a weak signal: little reward spread inside many groups, 180 rollouts in the final lineage, and a learning rate near zero by step 30. And the held-out stations have weather the model never trained on.
 
 ## Next experiment
 

@@ -195,7 +195,9 @@ def results_markdown(run: Path, card: dict, jobs: list[dict] | None) -> str:
              f"Paired difference (trained minus base) over {pairs['n']} tasks: mean {pairs['mean_diff']:+.4f}, "
              f"sd {f(pairs['sd'], 4)}, se {f(pairs['se'], 4)}, station-clustered 95% CI {ci}; "
              f"{pairs['wins']} tasks up, {pairs['losses']} down, {pairs['ties']} unchanged.", '',
-             'Training did not change held-out performance. The difference is far inside the noise of three repeats.', '',
+             'No measurable change in the mean. The largest per-task moves are about four points either way, inside '
+             'what three repeats can resolve for most tasks, and nothing in the pattern says the model learned to find '
+             'cheaper designs.', '',
              '## Per task', '',
              '| Task | Station | Base r1 / r2 / r3 | Trained r1 / r2 / r3 | Base mean | Trained mean | Diff |',
              '|---|---|---|---|---:|---:|---:|']
@@ -205,8 +207,9 @@ def results_markdown(run: Path, card: dict, jobs: list[dict] | None) -> str:
     lines += ['', '## Training', '',
               f"{train['rollouts']} rollouts were generated for {len(train['steps'])} optimizer steps. "
               f"Steps whose row shows 12 rollouts were generated twice: the first job died at step 15 and training "
-              f"resumed from checkpoint 10, so those steps were sampled again. Rewards are the training grade "
-              f"(fast evaluator); zero means an infeasible, invalid or missing submission.", '',
+              f"resumed from checkpoint 10, so those steps were sampled again (only step 11's two groups come from "
+              f"the same checkpoint). Rewards are the training grade (fast evaluator); zero means an infeasible, "
+              f"invalid or missing submission.", '',
               '| Steps | Mean reward | Rollouts | Zero reward | Turn limit | Submitted without evaluating | Budget cut |',
               '|---|---:|---:|---:|---:|---:|---:|']
     for third in train['thirds']:
@@ -222,8 +225,10 @@ def results_markdown(run: Path, card: dict, jobs: list[dict] | None) -> str:
               f"{json.dumps(grpo['ending_counts'])}.", '']
     if jobs:
         led = ledger(jobs, run.name)
+        unknown = sum(j.get('seconds') is None for j in jobs)
         lines += ['## Cost', '', f"Every HF job of this project, billed per second at $5 per H200 hour: "
-                  f"{led['total_jobs']} jobs, ${led['total_usd']:.2f} in all.", '',
+                  f"{led['total_jobs']} jobs, ${led['total_usd']:.2f} in all. {unknown} job(s) have no recorded "
+                  f"duration and count as zero; the frontier panel's API cost is separate.", '',
                   '| Phase | Jobs | Not completed | Hours | USD |', '|---|---:|---:|---:|---:|']
         for r in sorted(led['rows'], key=lambda r: -r['usd']):
             lines.append(f"| {r['phase']} | {r['jobs']} | {r['failed']} | {r['seconds']/3600:.2f} | {r['usd']:.2f} |")
@@ -240,12 +245,12 @@ def results_markdown(run: Path, card: dict, jobs: list[dict] | None) -> str:
               'torch reported 118 GB reserved. The cause of the gap is not known. Training resumed from checkpoint 10 '
               'in 5-step jobs (`--restore --stop-after-step N`) and the gap never grew that large again.', '',
               '## Reading', '',
-              'The base model already submits a feasible design in every held-out episode, so the only skill '
-              'training removed on the train tasks (turn-limit endings and submitting without evaluating) had nothing '
-              'to fix on the eval tasks. The skill that would move the score, finding cheaper feasible designs in 30 '
-              'evaluations, got little signal: small reward spread inside most groups, 180 rollouts in the final '
-              'lineage, a learning rate decayed to zero by step 30, and held-out weather stations the model never '
-              'trained on. Three repeats give a noise floor of about 0.03 per task, and the differences are below it.', '',
+              'Three guesses, none established. The base model already submits a feasible design in every held-out '
+              'episode, so the failure modes training could remove on the train tasks (turn-limit endings and '
+              'submitting without evaluating) had nothing to fix on the eval tasks. The skill that would move the '
+              'score, finding cheaper feasible designs in 30 evaluations, got a weak signal: little reward spread '
+              'inside many groups, 180 rollouts in the final lineage, and a learning rate near zero by step 30. And '
+              'the held-out stations have weather the model never trained on.', '',
               '## Next experiment', '',
               'If this is run again: start from a supervised fit on the frontier trajectories of the train split, keep '
               'the learning rate constant, use 8 to 16 rollouts per step for a usable spread, train for 100 or more '
