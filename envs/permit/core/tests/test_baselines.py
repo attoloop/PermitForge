@@ -117,7 +117,7 @@ def test_none_alias_when_public_menu_omits_explicit_none_rows():
 def test_real_draft_with_verify_evaluator(tmp_path, evidence_dir):
     from permit_core.model import load_v2_instance
     from permit_core.baselines import verify_evaluation
-    from conftest import requires_native_binaries, requires_task_data, REPO
+    from conftest import REPO
     task = load_v2_instance(REPO / 'envs/permit/tasks', '074897d0f159-s47')
     result = POLICIES['draft'](scenario_view(task), lambda d: verify_evaluation(task, d, tmp_path))
     assert result['feasible'] and result['usd_saved'] == 0
