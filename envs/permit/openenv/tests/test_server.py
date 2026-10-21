@@ -3,6 +3,7 @@ import threading
 import time
 
 import httpx
+import pytest
 import uvicorn
 from openenv.core.mcp_client import MCPToolClient
 from openenv.core.env_server.mcp_types import CallToolAction
@@ -63,3 +64,21 @@ def test_standard_gradio_playground(pack, monkeypatch):
         assert 'Open the replay viewer' not in config.text
         for path in ('/play/', '/api/play/tasks', '/api/tasks', '/api/episodes'):
             assert client.get(path).status_code in (404, 405)
+
+
+def test_playground_parses_arguments_and_resets_to_a_showcase(pack, monkeypatch):
+    from fastapi.testclient import TestClient
+    from permit_openenv.gradio_ui import SHOWCASES
+    monkeypatch.setenv('ENABLE_WEB_INTERFACE', 'true')
+    app = create_server(pack=pack, evaluator=StubEvaluator(), verifier=StubEvaluator())
+    with TestClient(app) as client:
+        config = client.get('/web/config').text
+        assert 'Play one episode' in config and 'MCPToolClient' in config and 'Share of draft cost saved' in config
+        assert 'openenv fork' not in config and 'No README available' not in config
+        reset = client.post('/web/reset', json={}).json()
+        assert reset['observation']['metadata']['task_id'] in SHOWCASES
+        step = client.post('/web/step', json={'action': {'tool_name': 'get_scenario', 'arguments': '{}'}})
+        assert step.status_code == 200
+        assert 'draft_design' in step.json()['observation']['result']['structured_content']['result']
+        with pytest.raises(ValueError, match='Arguments must be JSON'):
+            client.post('/web/step', json={'action': {'tool_name': 'get_scenario', 'arguments': '{oops'}})

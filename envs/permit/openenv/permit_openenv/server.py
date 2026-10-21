@@ -19,14 +19,14 @@ def create_server(*, pack: TaskPack | None = None, evaluator: Evaluator | None =
         return PermitForgeEnvironment(pack, evaluator=evaluator, verifier=verifier, evaluate_budget=evaluate_budget)
 
     def gradio_builder(web_manager, action_fields, metadata, is_chat_env, title, quick_start_md):
-        return build_ui(pack)
+        return build_ui(pack, web_manager, action_fields, metadata, is_chat_env)
 
     os.environ.setdefault('ENABLE_WEB_INTERFACE', 'true')
     os.environ.setdefault('GRADIO_ANALYTICS_ENABLED', 'false')
     app = create_app(factory, CallToolAction, CallToolObservation, env_name='permitforge',
                      max_concurrent_envs=min(16, int(os.environ.get('MAX_CONCURRENT_ENVS', '4'))),  # eval harness raises it; Space default 4
-                     gradio_builder=gradio_builder, custom_tab_name='Guide', show_default_tab=True,
-                     title_override='PermitForge v2', state_cls=PermitState)
+                     gradio_builder=gradio_builder, show_default_tab=False,
+                     title_override='PermitForge', state_cls=PermitState)
     app.add_middleware(RequestLimits)
 
     @app.get('/healthz', include_in_schema=False)

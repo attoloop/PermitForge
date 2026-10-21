@@ -2,6 +2,7 @@
 title: PermitForge
 sdk: docker
 app_port: 7860
+license: apache-2.0
 short_description: Optimize plant emissions controls and stack heights.
 tags:
   - openenv
@@ -13,41 +14,36 @@ tags:
 
 # PermitForge
 
-Choose emissions controls and stack heights for a synthetic industrial plant,
-using real NOAA weather and EPA AERMOD/BPIP-PRIME. Cut annualized cost while
-meeting every task air-quality standard.
+Make a synthetic plant cheaper while it still meets every air-quality standard under five years of real weather.
 
-Open `/web/` for the standard OpenEnv Gradio playground and task guide, and
-`/healthz` for health. The MCP endpoint is **`/mcp`**, and the
-repository README has a client example.
-The shared playground is a demo, not a scored endpoint. Scored runs use the eval
-harness, which forces `ENABLE_WEB_INTERFACE=false`.
+The agent picks one control and one stack height for each source. It can price designs for free, evaluate
+their air quality 30 times, and then submits once. EPA's BPIP-PRIME and AERMOD grade the submission.
 
-The image prepares float64 fields for the eval tasks listed in
-`space_root/bake_showcases.py`. Other tasks prepare fields on their first
-evaluation, which may take minutes on a CPU Space. Later calls reuse an
-evictable cache. Submission always runs full native BPIP/AERMOD verification
-and may also take minutes. Use a local server for heavy evaluation runs.
+| Tool | What it does |
+|---|---|
+| `get_scenario()` | Sources, controls, height menus, standards and the draft design |
+| `check_design(design)` | Validity and exact annualized cost, free |
+| `evaluate_design(design)` | Each standard's value, margin and binding receptor, 30 per episode |
+| `submit_design(design)` | Ends the episode and grades once with the native models |
 
-All source tasks are admitted after native ARM2 draft verification. Reproduce
-counts with `python3 envs/permit/openenv/space_root/report_evidence.py` from the
-repository root. Model results are in the [repository README](https://github.com/attoloop/PermitForge#results).
-Reward is feasible USD/year saved divided by draft cost. The draft and failed or
-absent submissions score zero. A score of 1.0 means zero annualized cost, which
-is unreachable because the uncontrolled design fails an air-quality standard.
-Raw USD/year and percentage savings are also returned. No calibration is needed.
+**Reward.** The fraction of the draft's annualized cost that a feasible design saves. The unchanged draft,
+an infeasible design and no submission score zero.
 
-Facilities are synthetic. Weather comes from the selected NOAA station.
-Concentrations are NAAQS design values across the task years. Code is Apache-2.0.
-NOAA/EPA provenance and government-work terms are in the repository `SOURCES.md`.
+**Data.** 360 tasks, 230 train and 130 eval, at 15 US weather stations. Weather is NOAA ISD and IGRA2,
+2020 to 2024, processed by EPA AERMET. Plants, emissions and prices are synthetic.
 
-Build from the repository root with converted task/met data present:
+**Results.** Share of draft cost saved on 10 held-out eval tasks, 3 repeats each: GPT-6.1 Sol 0.607,
+GPT-5.6 Sol 0.586, Claude Opus 5.5 0.576, Claude Sonnet 5.5 0.507.
+
+**Use it.** The Playground tab runs one episode by hand, and the Guide tab shows how. Agents connect over
+MCP at `/mcp`. A submission runs the native models and takes 2 to 3 minutes on this free CPU, so use your
+own server for many episodes:
 
 ```sh
-podman build -f envs/permit/openenv/Dockerfile -t permitforge-space .
-podman run --rm --name permitforge-space -p 127.0.0.1:7860:7860 permitforge-space
+podman build -f envs/permit/openenv/Dockerfile -t permitforge-space .   # from a checkout with the task data
+podman run --rm -p 127.0.0.1:7860:7860 permitforge-space
 ```
 
-This is the image the Space runs.
-A Space export must put this card at its root, retain the repository-root build
-context, and supply a root Dockerfile copied from `envs/permit/openenv/Dockerfile`.
+[Code](https://github.com/attoloop/PermitForge) · [Dataset](https://huggingface.co/datasets/Attoloop/PermitForge) ·
+[Trained model](https://huggingface.co/Attoloop/PermitForge-Qwen3.8-27B-GRPO). Code is Apache-2.0. NOAA and
+EPA inputs are U.S. Government works.

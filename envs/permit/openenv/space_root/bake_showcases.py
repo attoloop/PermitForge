@@ -10,10 +10,8 @@ import time
 import numpy as np
 
 from permit_core.fields import ensure_pack
+from permit_openenv.gradio_ui import SHOWCASES
 from permit_openenv.tasks import load_pack
-
-
-SHOWCASES = ('040cd27878ef-s47', '0558a6a6c25d-s47')
 
 
 def bake(task_ids: list[str], *, jobs: int) -> None:
