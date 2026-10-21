@@ -1,6 +1,6 @@
 <div align="center">
 
-<a href="https://github.com/attoloop/PermitForge"><img src="https://raw.githubusercontent.com/attoloop/PermitForge/main/docs/banner.jpg" alt="PermitForge: a synthetic plant's stacks and buildings inside its fence, every receptor coloured by how much room the submitted design left under the hourly NO2 standard" width="100%"></a>
+<a href="https://github.com/attoloop/PermitForge"><img src="https://raw.githubusercontent.com/attoloop/PermitForge/55d4425/docs/banner.jpg" alt="PermitForge: a synthetic plant's stacks and buildings inside its fence, every receptor coloured by how much room the submitted design left under the hourly NO2 standard" width="100%"></a>
 
 <h1>PermitForge</h1>
 
