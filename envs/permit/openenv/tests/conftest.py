@@ -1,6 +1,16 @@
 import copy
 
+from pathlib import Path
+
 import pytest
+
+TASK_DATA = Path(__file__).resolve().parents[2] / "tasks/data"
+
+
+def pytest_collection_modifyitems(config, items):
+    if not TASK_DATA.exists():
+        for item in items:
+            item.add_marker(pytest.mark.skip(reason="task data is not in a checkout; download tasks/data and tasks/met from the dataset (README, Run it locally)"))
 
 from permit_core.cost import cost
 from permit_openenv.environment import PermitForgeEnvironment

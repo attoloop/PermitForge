@@ -6,6 +6,10 @@ import pytest
 REPO = Path(__file__).resolve().parents[4]
 EXTRACT = REPO / "convert/v1-src"
 requires_v1 = pytest.mark.skipif(not EXTRACT.exists(), reason="convert/v1-src (the v1 extraction) is not in a public checkout")
+TASK_DATA = REPO / "envs/permit/tasks/data"
+requires_task_data = pytest.mark.skipif(not TASK_DATA.exists(), reason="task data is not in a checkout; download tasks/data and tasks/met from the dataset (README, Run it locally)")
+BINARIES = REPO / "envs/permit/core/native_build/bin"
+requires_native_binaries = pytest.mark.skipif(not (BINARIES / "aermod").exists(), reason="native binaries are not built; run sh envs/permit/core/native_build/build.sh")
 
 
 def pytest_addoption(parser):

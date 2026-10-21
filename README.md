@@ -9,6 +9,8 @@ cut annualized cost while meeting every air-quality standard.
 [Trained model](https://huggingface.co/Attoloop/PermitForge-Qwen3.8-27B-GRPO) ·
 [Eval card](results/eval-v2.json) · OpenEnv 0.7.0 · Apache-2.0
 
+![A plant inside its fence: buildings, stacks at their submitted heights, and every receptor coloured by how much room the submitted design left under the hourly NO2 limit](docs/banner.jpg)
+
 ## The task
 
 Choose a compatible control and one menu height for every source. Meet each NO2,

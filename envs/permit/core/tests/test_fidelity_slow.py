@@ -4,10 +4,13 @@ import json
 from pathlib import Path
 
 import pytest
+from conftest import requires_native_binaries, requires_task_data
 
 ROOT = Path(__file__).resolve().parents[4]
 
 
+@requires_task_data
+@requires_native_binaries
 @pytest.mark.slow
 @pytest.mark.native
 def test_fidelity_slow(tmp_path):

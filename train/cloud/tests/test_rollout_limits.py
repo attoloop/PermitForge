@@ -7,6 +7,7 @@ import pytest
 
 from train.cloud.config import CloudConfig
 from train.cloud.tests.replay import replay_episodes
+from train.cloud.tests.checkout import requires_task_data  # noqa: E402
 
 
 def test_complete_base_episodes_fit_with_headroom_through_submission():
@@ -21,6 +22,7 @@ def test_complete_base_episodes_fit_with_headroom_through_submission():
         assert row['reply_tokens'] <= config.eval_max_tokens
 
 
+@requires_task_data
 @pytest.mark.parametrize('mode', ['stopped_tools', 'budget_feedback', 'budget_reply', 'turn_limit',
                                  'submitted', 'submitted_budget', 'multiple_calls', 'unknown_tool'])
 def test_installed_loop_reports_termination_and_keeps_budget_cut_targets(mode):

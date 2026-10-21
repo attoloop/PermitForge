@@ -3,24 +3,20 @@
   "endpoints": {
     "/healthz": {
       "status": 200,
-      "seconds": 0.002673240000149235
-    },
-    "/play/": {
-      "status": 200,
-      "seconds": 0.0023381930077448487
+      "seconds": 0.002390275003563147
     },
     "/web/": {
       "status": 200,
-      "seconds": 0.0018402630084892735
+      "seconds": 0.011704698001267388
     }
   },
   "tasks": {
     "040cd27878ef-s47": {
       "seconds": {
-        "reset": 0.00213034100306686,
-        "get_scenario": 0.003284153004642576,
-        "evaluate_design": 0.826160445009009,
-        "submit_design": 59.235073221992934
+        "reset": 0.0011083940044045448,
+        "get_scenario": 0.0031183440005406737,
+        "evaluate_design": 1.9170246120047523,
+        "submit_design": 49.32059927999944
       },
       "evaluation": {
         "valid": true,
@@ -126,7 +122,7 @@
           }
         ],
         "backend": "fast evaluator",
-        "note": "Fields are cached on demand. The first evaluation of a task may take about 40 seconds; later evaluations reuse the cache.",
+        "note": "Fields are cached on demand. The first evaluation may take minutes; later evaluations reuse the cache.",
         "evaluations_left": 29
       },
       "submission": {
@@ -236,21 +232,14 @@
         "backend": "full AERMOD",
         "reward": 0.0,
         "prescore_usd_saved": 0.0,
-        "pct_saved": 0.0,
-        "anchors": {
-          "worst": 0,
-          "best": null,
-          "saturation": null,
-          "source": "none"
-        },
-        "best_known_search_cost": null
+        "pct_saved": 0.0
       }
     },
     "0558a6a6c25d-s47": {
       "seconds": {
-        "reset": 0.037673068000003695,
-        "get_scenario": 0.004459482996026054,
-        "evaluate_design": 3.5474376310012303
+        "reset": 0.10368936199665768,
+        "get_scenario": 0.004763579003338236,
+        "evaluate_design": 1.268964025999594
       },
       "evaluation": {
         "valid": true,
@@ -356,7 +345,7 @@
           }
         ],
         "backend": "fast evaluator",
-        "note": "Fields are cached on demand. The first evaluation of a task may take about 40 seconds; later evaluations reuse the cache.",
+        "note": "Fields are cached on demand. The first evaluation may take minutes; later evaluations reuse the cache.",
         "evaluations_left": 29
       },
       "submission": null

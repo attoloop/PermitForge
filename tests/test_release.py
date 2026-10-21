@@ -108,6 +108,8 @@ def test_space_copy_sources_exist_without_custom_ui():
         if not line.startswith('COPY ') or '--from=' in line:
             continue
         for source in shlex.split(line)[1:-1]:
+            if source.startswith('envs/permit/tasks/') and not (ROOT / source).exists():
+                pytest.skip('task data is not in a checkout; download it from the dataset (README, Run it locally)')
             assert (ROOT / source).exists(), source
     server = (SPACE / 'permit_openenv/server.py').read_text()
     assert 'mount_viewer' not in server and 'mount_play' not in server

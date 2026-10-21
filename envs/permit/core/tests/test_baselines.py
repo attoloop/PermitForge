@@ -9,6 +9,7 @@ from permit_core.baselines import POLICIES, scenario_view, v1_coordinate_descent
 from permit_core.evaluate import evaluate
 from permit_core.reward import reward
 from wp14_fixtures import synthetic
+from conftest import requires_native_binaries, requires_task_data
 
 
 @pytest.mark.parametrize('name', ['draft', 'all_none_at_gep', 'uniform_moderate_at_gep',
@@ -110,11 +111,13 @@ def test_none_alias_when_public_menu_omits_explicit_none_rows():
     assert result['cost'] == 4 and result['usd_saved'] == -1
 
 
+@requires_task_data
+@requires_native_binaries
 @pytest.mark.native
 def test_real_draft_with_verify_evaluator(tmp_path, evidence_dir):
     from permit_core.model import load_v2_instance
     from permit_core.baselines import verify_evaluation
-    from conftest import REPO
+    from conftest import requires_native_binaries, requires_task_data, REPO
     task = load_v2_instance(REPO / 'envs/permit/tasks', '074897d0f159-s47')
     result = POLICIES['draft'](scenario_view(task), lambda d: verify_evaluation(task, d, tmp_path))
     assert result['feasible'] and result['usd_saved'] == 0

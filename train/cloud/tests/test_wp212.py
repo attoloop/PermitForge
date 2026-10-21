@@ -4,6 +4,7 @@ from pathlib import Path
 import pytest
 
 from train.cloud.config import CloudConfig, stage_plan
+from train.cloud.tests.checkout import requires_task_data  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[3]
 
@@ -20,6 +21,7 @@ def test_h200_bf16_direct_grpo_and_smoke_envelope():
     assert [r['stage'] for r in full] == ['fields', 'base-eval', 'grpo', 'eval', 'export']
 
 
+@requires_task_data
 def test_selection_is_repeatable_station_balanced_and_smoke_is_small():
     from permit_openenv.tasks import load_pack
     from train.cloud.selection import selection_manifest
@@ -86,6 +88,7 @@ def test_trackio_is_explicit_and_preserves_live_space():
     assert opts['trackio_static_space_id'] is False
 
 
+@requires_task_data
 def test_bundle_verifies_contents_without_sft_data(tmp_path):
     from train.cloud.bundle import create_bundle, verify_bundle
     destination = tmp_path/'input.tar.gz'
@@ -140,6 +143,7 @@ def test_qualification_rejects_changed_model_or_failed_smoke(tmp_path):
         smoke_gate(tmp_path,current)
 
 
+@requires_task_data
 def test_smoke_sequence_uses_only_five_tasks_untrained_base_then_direct_grpo(tmp_path, monkeypatch):
     from permit_openenv.tasks import load_pack
     from train.cloud.selection import selection_manifest

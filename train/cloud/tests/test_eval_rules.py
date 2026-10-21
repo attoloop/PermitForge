@@ -6,6 +6,7 @@ import pytest
 from train.cloud.config import CloudConfig
 from train.cloud.training import training_options
 from train.cloud.tests.checkout import requires_smoke_base_eval  # noqa: E402
+from train.cloud.tests.checkout import requires_task_data  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[3]
 
@@ -21,6 +22,7 @@ def test_training_turns_and_context_follow_the_evaluation():
         CloudConfig(train_turns=8)
 
 
+@requires_task_data
 def test_training_opening_equals_the_shared_evaluation_opening():
     from permit_openenv.prompts import INSTRUCTIONS, opening
     from permit_openenv.tasks import load_pack
@@ -38,6 +40,7 @@ def test_training_opening_equals_the_shared_evaluation_opening():
     assert 'messages = opening_messages(config.eval_turns)' in (ROOT/'train/cloud/evaluation.py').read_text()
 
 
+@requires_task_data
 def test_local_trainer_keeps_its_compact_opening():
     from permit_openenv.tasks import load_pack
     from train.permit_env import PermitTrainingEnv, scenario_text
@@ -46,6 +49,7 @@ def test_local_trainer_keeps_its_compact_opening():
     assert env.reset(task_id='074897d0f159-s47') == scenario_text(pack.get('074897d0f159-s47'))
 
 
+@requires_task_data
 def test_training_tool_names_and_descriptions_equal_the_evaluation_server():
     import asyncio
     pytest.importorskip('fastmcp', reason='the evaluation MCP server is part of the cloud lock, not train/.venv')
@@ -61,6 +65,7 @@ def test_training_tool_names_and_descriptions_equal_the_evaluation_server():
     assert trained == served
 
 
+@requires_task_data
 def test_rendered_opening_fits_the_prompt_limit():
     # Rendered as TRL does (bound environment methods as tools); measured 983 tokens.
     from permit_openenv.tasks import load_pack

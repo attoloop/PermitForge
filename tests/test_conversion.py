@@ -42,6 +42,8 @@ def test_bad_bounds(low, high):
 
 @pytest.fixture
 def converted(tmp_path):
+    if not ARCHIVE.exists():
+        pytest.skip('convert/v1-src (the v1 extraction) is not in a public checkout')
     src, out = tmp_path / 'archive', tmp_path / 'tasks'
     src.mkdir()
     archive_manifest = json.loads((ARCHIVE / 'EXTRACT_MANIFEST.json').read_text())
