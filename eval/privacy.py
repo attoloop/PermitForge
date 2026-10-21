@@ -20,6 +20,18 @@ def redact_text(text: str) -> str:
     return _TOKEN.sub('[REDACTED]', _BEARER.sub('Bearer [REDACTED]', text))
 
 
+_HOME = re.compile(r'/home/[^/\s"\'\\]+')
+_SCRATCH = re.compile(r'/tmp/claude-[0-9]+/[^/\s"\'\\]+/[^/\s"\'\\]+/scratchpad')
+
+
+def scrub_paths(text: str, hostname: str | None = None) -> str:
+    """Local paths and the host name say nothing about an episode; drop them before publishing."""
+    text = _SCRATCH.sub('/tmp/scratch', _HOME.sub('/home/user', text))
+    if hostname:
+        text = text.replace(f'"{hostname}"', '"host"')
+    return text
+
+
 def redact(value: Any) -> Any:
     if isinstance(value, dict):
         return {str(k): '[REDACTED]' if _SECRET_KEY.search(str(k)) else redact(v) for k, v in value.items()}
