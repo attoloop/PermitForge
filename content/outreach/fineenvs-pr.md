@@ -38,5 +38,3 @@ Changes: the new folder, a tile and two rows in the 07 README, one bullet in the
 and the regenerated root table (`python3 tools/build_index.py --check` passes).
 
 🤖 Generated with [Claude Code](https://claude.com/claude-code)
-
-https://claude.ai/code/session_01AQcY4paZ4u4Dqo3SKReWMZ
