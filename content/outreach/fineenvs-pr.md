@@ -1,40 +1,63 @@
 # PR to adithya-s-k/FineEnvs
 
-Title: `07-simulation-environments: PermitForge, an air-permit design environment (link-only entry)`
+Title: `Add PermitForge, an air-permit design environment (link-only entry)`
 
 Body:
 
-PermitForge is an OpenEnv environment where an agent chooses emissions controls and stack heights for
-a synthetic industrial plant so that it meets every air-quality standard under five years of real NOAA
-weather, at the lowest annualized cost. Every submission is graded by EPA's own dispersion models
-(BPIP-PRIME and AERMOD), so there is no judge model and no answer key to leak. The agent explores with a
-fast evaluator built from precomputed unit fields (checked against the native model on 1,920 values to
-five decimals) and gets 30 evaluations per episode.
+This adds PermitForge to the simulation catalog.
 
-Two differences from the other 07 entries: there is no solver reference or proven optimum, since the
-reward is the share of the draft's cost saved, and the plants are synthetic while the weather is real.
+In PermitForge, an agent gets a plant that already meets its air-quality limits, with every stack on full
+control at full height. Its job is to make the plant cheaper without breaking any limit. It picks a control
+and a stack height for each source, can test a design's air quality 30 times, and then submits once. EPA's
+own dispersion model, AERMOD, grades the submission over five years of real weather, so there is no judge
+model and no answer to leak.
 
-This is a link-only entry: `project.yaml`, a README card and two eval cards. Code, data and Hub repos
-stay in our namespace. If you would rather have the full code in this repo, as the PortSimEnv entries do,
-we are happy to move it in.
+We wrote up the whole project, from the idea to the training run, here:
+https://attoloop.com/research/permitforge/
+
+It differs from the other 07 entries in two ways. There is no proven optimum to compare against: the score
+is the share of the draft's cost the agent saves. And the plants are synthetic, while the weather is real.
+
+This is a link-only entry: a manifest, a README card and two eval cards. The code, data and models stay in
+our own repos. If you would rather have the full code here, like the PortSimEnv entries, we are happy to
+move it in.
 
 - Code: https://github.com/attoloop/PermitForge
 - Space: https://huggingface.co/spaces/Bhuminjay/PermitForge
-- Dataset (tasks, weather, every rollout with its transcript, the whole training run): https://huggingface.co/datasets/Attoloop/PermitForge
-- Model (the GRPO adapter): https://huggingface.co/Attoloop/PermitForge-Qwen3.8-27B-GRPO
+- Dataset: https://huggingface.co/datasets/Attoloop/PermitForge (tasks, weather, every rollout with its transcript, and the whole training run)
+- Model: https://huggingface.co/Attoloop/PermitForge-Qwen3.8-27B-GRPO
 
-Results on 10 held-out eval tasks, 3 repeats each: GPT-6.1 Sol 0.607, GPT-5.6 Sol 0.586, Claude Opus 5.5
-0.576, Claude Sonnet 5.5 0.507 of the draft cost saved, every episode feasible. The naive policies are the
-unchanged draft (0.00) and cheapest-first greedy (0.33).
+## End-to-end recipe
 
-We also trained Qwen3.8-27B with GRPO (30 steps, one H200, $164 in cloud jobs) and evaluated it
-before and after on the same tasks with the same harness. It is a null result, no measurable change at 0.439 both ways, and it is
-reported as such in a second card (`eval-v2-qwen.json`) and in `train/cloud/RESULTS.md` in the repository,
-with every failure we met on the way (hosts without CUDA libraries, a 27 GB logits OOM and the chunked
-loss that fixed it, a watchdog death at step 15). The catalog has no training recipes for now, so the
-training card sits beside the panel card rather than in a `train/` folder. Happy to move it if you prefer.
+- [x] **Environment.** Four tools: read the scenario, check a design's cost, test its air quality, and
+  submit. Each test shows every standard's value, how close it is to the limit, and where. The rules are in
+  [CONTRACT.md](https://github.com/attoloop/PermitForge/blob/main/CONTRACT.md).
+- [x] **A working rollout you can read.** Every frontier episode is in the dataset with its full transcript,
+  for example [GPT-6.1 Sol on a kiln plant in Albuquerque](https://huggingface.co/datasets/Attoloop/PermitForge/blob/main/rollouts/final-medium3/codex_gpt-6.1-sol-cbf796da1b7a/d50e1051dcec-s47/r1/transcript.jsonl).
+- [x] **Training run.** We trained Qwen3.8-27B with GRPO in TRL (LoRA, 30 steps, 6 rollouts each) on one
+  H200 on HF Jobs. The setup and launch commands are in
+  [train/cloud/README.md](https://github.com/attoloop/PermitForge/blob/main/train/cloud/README.md). Training
+  cost $82, and all cloud jobs together $164.
+- [x] **Results, the honest version.** On 10 held-out tasks, 3 runs each, the models saved this share of the
+  draft's cost: GPT-6.1 Sol 0.607, GPT-5.6 Sol 0.586, Claude Opus 5.5 0.576, Claude Sonnet 5.5 0.507. Every
+  episode ended with a design that passes. Simple policies get 0.00 (keep the draft) and 0.33 (greedy).
+  Training made no measurable difference: 0.4394 before and 0.4390 after. The curve, the per-task table and
+  every problem we hit are in [RESULTS.md](https://github.com/attoloop/PermitForge/blob/main/train/cloud/RESULTS.md).
+  We also checked every transcript for calls outside the four tools, draft submissions and tests past the
+  limit, and found none ([audit](https://github.com/attoloop/PermitForge/blob/main/results/reward-hacks.md)).
+- [x] **Hub artifacts.** The Space, the dataset and the trained model, linked above.
 
-Changes: the new folder, a tile and two rows in the 07 README, one bullet in the root README's 07 section,
-and the regenerated root table (`python3 tools/build_index.py --check` passes).
+## Before opening this PR
+
+- [x] `python3 tools/build_index.py --check` passes.
+- [x] The environment runs. `uv run --directory envs/permit/openenv python rollout.py --smoke --task-id 040cd27878ef-s47`
+  finishes with a graded submission from a fresh clone. The same check passes on the live Space.
+- [x] We read one trajectory by hand, the GPT-6.1 Sol episode above. The model reads the scenario and tests
+  28 designs. The first ones fail badly, and each result shows which standard fails and where. 11 designs
+  pass, and it submits the cheapest: $1,376,183 a year instead of $3,569,382. The final check agrees, and
+  the reward is 0.614.
+
+The PR adds the new folder, a tile and two rows in the 07 README, and one entry in the root README. Since
+the catalog has no training recipes yet, the training card sits next to the main eval card. Happy to move it.
 
 🤖 Generated with [Claude Code](https://claude.com/claude-code)
