@@ -16,9 +16,16 @@ import statistics
 
 from .attempts import infrastructure
 from .common import ROOT, TOOLS, failure_category, model_slug, records, run_path, saved_fraction, write_json
-from .report import build_report
+from .report import build_report, metrics
 
 
+GITHUB = 'https://github.com/attoloop/PermitForge'
+HUB_DATASET = 'https://huggingface.co/datasets/Attoloop/PermitForge'
+ROLLOUTS_URL = HUB_DATASET + '/blob/main/rollouts'
+DISPLAY = {'anthropic:claude-opus-5-5': ('Claude Opus 5.5', 'Anthropic'),
+           'anthropic:claude-sonnet-5-5': ('Claude Sonnet 5.5', 'Anthropic'),
+           'codex:gpt-6.1-sol': ('GPT-6.1 Sol', 'OpenAI (Codex CLI)'),
+           'codex:gpt-5.6-sol': ('GPT-5.6 Sol', 'OpenAI (Codex CLI)')}
 BASELINES = ('draft', 'cheapest_first_greedy', 'v1_coordinate_descent',
              'random_30 (mean over 8 seeds)', 'best of 8 random 30-evaluation runs',
              'search (60 seconds; not proven optimal)')
@@ -68,31 +75,36 @@ def build_card(run: Path, subsets_path: Path) -> dict:
     ids = {t['task_id'] for t in subsets['eval']}
     expected = {(model, tid, repeat) for model in manifest['models'] for tid in ids
                 for repeat in range(1, manifest['repeats']+1)}
-    actual = {(r['model'], r['task_id'], r['repeat']) for _, r in records([run]) if r['split'] == 'eval'}
+    episodes = [r for _, r in records([run]) if r['split'] == 'eval']
+    actual = {(r['model'], r['task_id'], r['repeat']) for r in episodes}
     if actual != expected:
         raise ValueError('eval coverage differs from frozen cohort/repeats')
+    feasible = Counter()
+    for record in episodes:
+        feasible[record['model']] += metrics(record)['feasible']
     return {
         'env': 'permitforge', 'version': 'v2',
         'authors': [{'name': 'Attoloop', 'github': 'attoloop', 'affiliation': 'Attoloop'}],
         'framework': 'openenv',
         'tasks': {'split': 'eval', 'n': len(ids),
-                  'source': 'NOAA ISD + IGRA2 2020–24 weather; synthetic facilities; EPA AERMOD 26135 / '
+                  'source': 'NOAA ISD + IGRA2 2020-2024 weather; synthetic facilities; EPA AERMOD 26135 / '
                             'BPIPPRM 04274. V2 uses ARM2 for every NO2 case and discrete height menus; '
                             'v1 scenarios have been public since 2026-10-16. Flat terrain, one control '
                             'ladder per source, one stack price per facility; five archetypes across '
                             '15 weather stations in the full task collection (five eval stations).',
                   'selection': subsets['eval_card_selection']},
-        'harness': {'agent': 'Anthropic Messages API with our tool loop, adaptive summarized thinking '
-                            'returned unchanged; Codex CLI codex exec on a ChatGPT subscription, base '
-                            'instructions replaced by our prompt, only PermitForge MCP tools. GPT gets '
-                            'the prompt again as its first user message; Claude gets a one-line start. '
-                            'GPT makes one tool call per response; Claude may make several. '
-                            'Codex text.verbosity=low; provider-default temperature.',
+        'harness': {'agent': 'permitforge eval harness (eval/run_eval.py)',
                     'tools': list(TOOLS), 'max_turns': settings['max_turns'],
                     'evaluate_budget': settings['evaluate_budget'], 'effort': settings['effort'],
-                    'repeats': manifest['repeats']},
+                    'repeats': manifest['repeats'],
+                    'notes': 'Claude: Anthropic Messages API with our tool loop, adaptive summarized '
+                             'thinking returned unchanged, several tool calls per response allowed, a '
+                             'one-line start message. GPT: Codex CLI (codex exec) on a ChatGPT '
+                             'subscription, base instructions replaced by our prompt, only the '
+                             'PermitForge MCP tools, the prompt repeated as the first user message, one '
+                             'tool call per response, text.verbosity=low. Provider-default temperature.'},
         'grading': {'reference': 'Reward is the feasible saved fraction of the draft '
-                                '(all-maximum-control at GEP) design’s annualized cost. Invalid, '
+                                "(all-maximum-control at GEP) design's annualized cost. Invalid, "
                                 'infeasible or no submission scores zero. No proven optimum and no '
                                 'model/search ceiling; 1.0 would require zero cost and is unreachable. '
                                 'Best observed feasible model design per task is reported beside '
@@ -107,13 +119,21 @@ def build_card(run: Path, subsets_path: Path) -> dict:
                               'Best of eight has eight times the random evaluation budget.',
                     'excused': 'nothing', 'judge': False},
         'baselines': baseline_scores(subsets['eval']),
-        'models': [{key: row[key] for key in ('model', 'provider', 'runs', 'mean', 'ci95',
-                                             'feasible', 'usd_per_episode')} for row in report['models']],
-        'links': {'runs': 'planned: https://huggingface.co/datasets/attoloop/PermitForge-Eval',
-                  'replay': 'planned: https://huggingface.co/datasets/attoloop/PermitForge-Eval/viewer',
-                  'code': 'https://github.com/attoloop/PermitForge'},
+        'models': [card_model(row, feasible[row['model']]) for row in report['models']],
+        'links': {'runs': HUB_DATASET + '/viewer/episodes',
+                  'replay': HUB_DATASET + '/tree/main/rollouts/' + run.name,
+                  'code': GITHUB},
         'date': manifest['finished_at'][:10],
     }
+
+
+def card_model(row: dict, feasible: int) -> dict:
+    """One FineEnvs card row: display names, counts, four decimals."""
+    name, provider = DISPLAY[row['model']]
+    usd = row['usd_per_episode']
+    return {'model': name, 'provider': provider, 'runs': row['runs'], 'mean': round(row['mean'], 4),
+            'ci95': [round(x, 4) for x in row['ci95']], 'feasible': feasible,
+            'usd_per_episode': None if usd is None else round(usd, 4)}
 
 
 def design_key(design: object) -> str:
@@ -278,7 +298,7 @@ def report_supplement(run: Path, split: str, tasks: list[dict]) -> str:
         baselines = baseline_scores([task])
         best = report['best_observed'][tid]['saved_fraction']
         observation = report['best_observed'][tid]['observations'][0]
-        ledger = f"rollouts/{run.name}/{model_slug(observation['model'])}/{tid}/r{observation['repeat']}/episode.json"
+        ledger = f"{ROLLOUTS_URL}/{run.name}/{model_slug(observation['model'])}/{tid}/r{observation['repeat']}/episode.json"
         best_cell = f"[{100*best:.2f} ({observation['model']} r{observation['repeat']})]({ledger})"
         lines.append(f"| `{tid}` | {task['station']} | {task['n_sources']} | {task['archetype']} | "+
                      ' | '.join(cells)+f" | {100*baselines[1]['mean']:.2f} | {100*baselines[4]['mean']:.2f} | {best_cell} |")
@@ -332,7 +352,7 @@ HOW_RUN = (
 
 
 def audit_markdown(run: Path, subsets: dict, audit: dict) -> str:
-    lines = ['## Evaluation audit — final-medium3', '',
+    lines = ['## Evaluation audit: final-medium3', '',
              'Canonical completed episodes and their append-only transcripts were scanned once each; '
              'compatibility snapshots and successful-attempt capture copies are not double-counted. '
              'Counts describe observed calls and responses, not inferred intent or proof against '
@@ -441,7 +461,7 @@ def main() -> None:
         (ROOT/'results/variance-final.md').write_text(variance_markdown(run))
         path = ROOT/'results/reward-hacks.md'
         text = path.read_text()
-        start = text.index('## Evaluation audit') if '## Evaluation audit' in text else text.index('**Evaluation audit — pending.')
+        start = text.index('## Evaluation audit')
         end = text.index('## Regeneration and limits', start)
         path.write_text(text[:start]+audit_markdown(run, subsets, audit_run(run))+'\n'+text[end:])
     else:

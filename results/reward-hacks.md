@@ -202,14 +202,14 @@ updated to the current saved-fraction contract; the other rows remain historical
 
 | Surface | Review finding | Disposition recorded by that review |
 |---|---|---|
-| Reset disclosure | Reset returns full geometry, including receptor coordinates, beyond the review's narrower allowed initial view. Coordinates are not concentration fields or a hidden best design. | Open boundary finding; explicit decision or regression-backed fix is needed. |
+| Reset disclosure | Reset returns full geometry, including receptor coordinates, beyond the review's narrower allowed initial view. Coordinates are not concentration fields or a hidden best design. | Closed: reset returns only the public scenario; geometry stays in the private record (CONTRACT.md, `test_public_boundary.py`). |
 | Ordinary successful tool results | No observed pre-submit baseline/search or private field-array disclosure. | Limited historical observation and static allowlist review; not a fresh boundary audit. |
 | Error details | Raw native/exception details may reveal backend paths or implementation information. | Open static risk; not dynamically induced. |
 | Sessions and shared playground | Ordinary independent MCP sessions worked; that did not establish shared playground isolation or resistance to hostile session access. | Untested deployment boundary. |
 | Request/history size | No application-level bound was established for request/record retention. | Open defensive resource risk; no exhaustion probe was run. |
-| Reset and disconnect | Reset starts a new budget as documented; scored-attempt harnesses must own reset. Disconnect did not finalize the private no-submit record. | Ordinary reset behavior observed; disconnect accounting remains open. |
+| Reset and disconnect | Reset starts a new budget as documented; scored-attempt harnesses must own reset. At that time disconnect did not finalize the private no-submit record. | Closed: disconnect now finalizes `no_submit` with zero reward (CONTRACT.md). |
 | Native authority | Sampled submitted fast/native standard summaries agreed; final grades used native verification. | Sample evidence, not a proof over all designs or a new fidelity measurement. |
-| Reward (current saved-fraction rule) | A feasible graded submission earns `(draft_cost - submitted_cost) / draft_cost`; invalid, infeasible and missing submissions earn zero. Raw savings retain the failure sentinel. | The old coherence receipts predate this rule. Current arithmetic and failure gating are covered by [test_reward.py](../envs/permit/core/tests/test_reward.py) and [repeat/report tests](../eval/tests/test_saved_fraction_repeats.py); no new model results are claimed. |
+| Reward (current saved-fraction rule) | A feasible graded submission earns `(draft_cost - submitted_cost) / draft_cost`; invalid, infeasible and missing submissions earn zero. Raw savings retain the failure sentinel. | The old coherence receipts predate this rule. Current arithmetic and failure gating are covered by [test_reward.py](../envs/permit/core/tests/test_reward.py) and [repeat/report tests](../eval/tests/test_saved_fraction_repeats.py). |
 
 The review source is the local coherence report and its saved tool receipts.
 This is a review snapshot. Concurrent application changes and newly added
@@ -221,13 +221,7 @@ uv run --directory envs/permit/core --no-sync pytest tests/test_reward.py -q
 uv run --project envs/permit/openenv --no-sync python -m pytest eval/tests/test_saved_fraction_repeats.py -q
 ```
 
-Reproduce the source review without new physics runs:
-
-```sh
-sed -n '1,27p;147,211p' internal/reports/*-coherence.md
-```
-
-## Evaluation audit — final-medium3
+## Evaluation audit: final-medium3
 
 Canonical completed episodes and their append-only transcripts were scanned once each; compatibility snapshots and successful-attempt capture copies are not double-counted. Counts describe observed calls and responses, not inferred intent or proof against untried shortcuts. Reproduce every count in this section (including per-model totals and finding locations) with:
 
@@ -309,5 +303,5 @@ include complete intermediate git history. Defect status/events and final source
 support the closure descriptions above. Missing narratives, missing initial
 attempt IDs, related findings under distinct fingerprints and unresolved specification conflicts
 are retained as recorded. File-shape probes are indexed coverage, not invented
-defect IDs. Full historical probe replays, new adversarial execution, application
-fixes and model evaluation are outside this ledger.
+defect IDs. Full historical probe replays and new adversarial execution are outside
+this ledger; the model evaluation audit is the section above.

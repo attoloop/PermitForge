@@ -8,8 +8,8 @@ Reward is the saved fraction. Raw USD means include the -1 gate-failure sentinel
 |---|---:|---:|---|---:|---:|---:|---:|---:|---:|---:|
 | anthropic:claude-opus-5-5@medium | 10 | 30 | 0.5755 (0.5005, 0.6602) | 100.00% | 0.9354 | 1860804.21 | 57.55 | 21.4000 | 21.8333 | 1.7119 |
 | anthropic:claude-sonnet-5-5@medium | 10 | 30 | 0.5071 (0.4239, 0.6000) | 100.00% | 0.8151 | 1617124.33 | 50.71 | 16.0667 | 12.7000 | 0.3670 |
-| codex:gpt-5.6-sol@medium | 10 | 30 | 0.5858 (0.5186, 0.6634) | 100.00% | 0.9563 | 1889132.04 | 58.58 | 26.4667 | 28.8333 | — |
-| codex:gpt-6.1-sol@medium | 10 | 30 | 0.6065 (0.5423, 0.6768) | 100.00% | 0.9942 | 1957808.60 | 60.65 | 24.9667 | 26.9667 | — |
+| codex:gpt-5.6-sol@medium | 10 | 30 | 0.5858 (0.5186, 0.6634) | 100.00% | 0.9563 | 1889132.04 | 58.58 | 26.4667 | 28.8333 | n/a |
+| codex:gpt-6.1-sol@medium | 10 | 30 | 0.6065 (0.5423, 0.6768) | 100.00% | 0.9942 | 1957808.60 | 60.65 | 24.9667 | 26.9667 | n/a |
 
 | Model | Station | n | Reward | USD saved | Feasible |
 |---|---|---:|---:|---:|---:|
@@ -46,21 +46,14 @@ codex:gpt-5.6-sol@medium: ended without submission 0; categories `{"submitted": 
 codex:gpt-6.1-sol@medium: ended without submission 0; categories `{"submitted": 30}`; coverage 5 station clusters; GRPO signal 0.5000 over 10 repeated tasks; mean pairwise spread 0.0036; best-observed reference available for 10 tasks.
 
 
-| Pair (left − right) | Matched tasks | USD saved difference | Reward difference |
+| Pair (left minus right) | Matched tasks | USD saved difference | Reward difference |
 |---|---:|---:|---:|
-| anthropic:claude-opus-5-5 − anthropic:claude-sonnet-5-5 | 10 | 243679.8831 | 0.0684 |
-| anthropic:claude-opus-5-5 − codex:gpt-5.6-sol | 10 | -28327.8252 | -0.0102 |
-| anthropic:claude-opus-5-5 − codex:gpt-6.1-sol | 10 | -97004.3837 | -0.0310 |
-| anthropic:claude-sonnet-5-5 − codex:gpt-5.6-sol | 10 | -272007.7083 | -0.0786 |
-| anthropic:claude-sonnet-5-5 − codex:gpt-6.1-sol | 10 | -340684.2668 | -0.0994 |
-| codex:gpt-5.6-sol − codex:gpt-6.1-sol | 10 | -68676.5585 | -0.0207 |
-
-Infrastructure attempts (excluded from graded metrics):
-
-| Model | Task | Repeat | Attempt | Retry on resume |
-|---|---|---:|---:|---|
-| codex:gpt-6.1-sol | 6b3a997f0ce8-s47 | 1 | 1 | yes |
-| codex:gpt-6.1-sol | 8e62c1a7ddb2-s47 | 1 | 1 | yes |
+| anthropic:claude-opus-5-5 minus anthropic:claude-sonnet-5-5 | 10 | 243679.8831 | 0.0684 |
+| anthropic:claude-opus-5-5 minus codex:gpt-5.6-sol | 10 | -28327.8252 | -0.0102 |
+| anthropic:claude-opus-5-5 minus codex:gpt-6.1-sol | 10 | -97004.3837 | -0.0310 |
+| anthropic:claude-sonnet-5-5 minus codex:gpt-5.6-sol | 10 | -272007.7083 | -0.0786 |
+| anthropic:claude-sonnet-5-5 minus codex:gpt-6.1-sol | 10 | -340684.2668 | -0.0994 |
+| codex:gpt-5.6-sol minus codex:gpt-6.1-sol | 10 | -68676.5585 | -0.0207 |
 
 Baseline coverage incomplete; see JSON missing_baselines.
 
@@ -70,16 +63,16 @@ Each model cell lists r1 / r2 / r3 (% of draft cost saved). Baselines use frozen
 
 | Task | Station | Sources | Archetype | anthropic:claude-opus-5-5 | anthropic:claude-sonnet-5-5 | codex:gpt-5.6-sol | codex:gpt-6.1-sol | Greedy % | Best-of-8 random % | Best observed model % |
 |---|---|---:|---|---:|---:|---:|---:|---:|---:|---:|
-| `d50e1051dcec-s47` | KABQ | 6 | kiln | 57.89 / 59.52 / 56.20 | 52.19 / 39.25 / 48.14 | 55.02 / 60.44 / 57.82 | 61.44 / 61.44 / 59.52 | 23.98 | 45.39 | [61.44 (codex:gpt-6.1-sol r1)](rollouts/final-medium3/codex_gpt-6.1-sol-cbf796da1b7a/d50e1051dcec-s47/r1/episode.json) |
-| `e1375aee7217-s47` | KABQ | 5 | process_heaters | 36.37 / 34.57 / 38.60 | 28.33 / 28.44 / 28.39 | 44.40 / 43.57 / 39.04 | 43.67 / 44.21 / 44.40 | 17.03 | 26.30 | [44.40 (codex:gpt-6.1-sol r3)](rollouts/final-medium3/codex_gpt-6.1-sol-cbf796da1b7a/e1375aee7217-s47/r3/episode.json) |
-| `93b53359f60e-s47` | KDDC | 6 | gas_boilers | 59.52 / 64.48 / 59.65 | 44.67 / 48.36 / 44.86 | 63.22 / 59.65 / 61.76 | 64.37 / 64.61 / 64.61 | 30.93 | 48.11 | [64.61 (codex:gpt-6.1-sol r2)](rollouts/final-medium3/codex_gpt-6.1-sol-cbf796da1b7a/93b53359f60e-s47/r2/episode.json) |
-| `9b1cffc36b20-s47` | KDDC | 5 | kiln | 54.71 / 55.71 / 55.71 | 52.71 / 54.13 / 54.01 | 56.67 / 57.53 / 57.66 | 60.96 / 60.96 / 60.84 | 18.80 | 44.82 | [60.96 (codex:gpt-6.1-sol r1)](rollouts/final-medium3/codex_gpt-6.1-sol-cbf796da1b7a/9b1cffc36b20-s47/r1/episode.json) |
-| `4528c31805f3-s47` | KJAX | 5 | process_heaters | 72.53 / 72.53 / 72.53 | 63.10 / 67.50 / 67.41 | 72.53 / 72.53 / 70.70 | 72.53 / 72.53 / 72.53 | 72.53 | 59.41 | [72.53 (anthropic:claude-opus-5-5 r1)](rollouts/final-medium3/anthropic_claude-opus-5-5-d6e321e50001/4528c31805f3-s47/r1/episode.json) |
-| `5a86424e2861-s47` | KJAX | 6 | simple_cycle_turbine | 69.37 / 70.87 / 69.22 | 60.97 / 68.60 / 68.50 | 70.87 / 69.93 / 69.21 | 70.87 / 70.87 / 70.87 | 29.47 | 56.76 | [70.87 (anthropic:claude-opus-5-5 r2)](rollouts/final-medium3/anthropic_claude-opus-5-5-d6e321e50001/5a86424e2861-s47/r2/episode.json) |
-| `07b4e4050840-s47` | KOMA | 6 | simple_cycle_turbine | 63.25 / 57.73 / 64.24 | 64.24 / 57.28 / 54.85 | 64.24 / 64.24 / 63.25 | 63.25 / 63.25 / 63.25 | 34.70 | 43.21 | [64.24 (anthropic:claude-opus-5-5 r3)](rollouts/final-medium3/anthropic_claude-opus-5-5-d6e321e50001/07b4e4050840-s47/r3/episode.json) |
-| `c90f3d90f654-s47` | KOMA | 5 | gas_boilers | 35.31 / 40.30 / 28.72 | 27.62 / 23.45 / 23.45 | 35.15 / 36.12 / 35.58 | 40.39 / 38.53 / 40.88 | 15.60 | 31.78 | [40.88 (codex:gpt-6.1-sol r3)](rollouts/final-medium3/codex_gpt-6.1-sol-cbf796da1b7a/c90f3d90f654-s47/r3/episode.json) |
-| `660f38096246-s47` | KTOP | 5 | small_refinery_mix | 67.77 / 70.89 / 70.89 | 66.31 / 66.24 / 66.31 | 70.48 / 68.01 / 70.89 | 70.89 / 70.89 / 70.89 | 64.40 | 54.91 | [70.89 (anthropic:claude-opus-5-5 r2)](rollouts/final-medium3/anthropic_claude-opus-5-5-d6e321e50001/660f38096246-s47/r2/episode.json) |
-| `6d3f0a5005fd-s47` | KTOP | 6 | kiln | 58.68 / 51.14 / 57.67 | 56.38 / 45.97 / 49.74 | 58.68 / 49.40 / 58.68 | 58.68 / 58.68 / 58.68 | 23.33 | 45.04 | [58.68 (anthropic:claude-opus-5-5 r1)](rollouts/final-medium3/anthropic_claude-opus-5-5-d6e321e50001/6d3f0a5005fd-s47/r1/episode.json) |
+| `d50e1051dcec-s47` | KABQ | 6 | kiln | 57.89 / 59.52 / 56.20 | 52.19 / 39.25 / 48.14 | 55.02 / 60.44 / 57.82 | 61.44 / 61.44 / 59.52 | 23.98 | 45.39 | [61.44 (codex:gpt-6.1-sol r1)](https://huggingface.co/datasets/Attoloop/PermitForge/blob/main/rollouts/final-medium3/codex_gpt-6.1-sol-cbf796da1b7a/d50e1051dcec-s47/r1/episode.json) |
+| `e1375aee7217-s47` | KABQ | 5 | process_heaters | 36.37 / 34.57 / 38.60 | 28.33 / 28.44 / 28.39 | 44.40 / 43.57 / 39.04 | 43.67 / 44.21 / 44.40 | 17.03 | 26.30 | [44.40 (codex:gpt-6.1-sol r3)](https://huggingface.co/datasets/Attoloop/PermitForge/blob/main/rollouts/final-medium3/codex_gpt-6.1-sol-cbf796da1b7a/e1375aee7217-s47/r3/episode.json) |
+| `93b53359f60e-s47` | KDDC | 6 | gas_boilers | 59.52 / 64.48 / 59.65 | 44.67 / 48.36 / 44.86 | 63.22 / 59.65 / 61.76 | 64.37 / 64.61 / 64.61 | 30.93 | 48.11 | [64.61 (codex:gpt-6.1-sol r2)](https://huggingface.co/datasets/Attoloop/PermitForge/blob/main/rollouts/final-medium3/codex_gpt-6.1-sol-cbf796da1b7a/93b53359f60e-s47/r2/episode.json) |
+| `9b1cffc36b20-s47` | KDDC | 5 | kiln | 54.71 / 55.71 / 55.71 | 52.71 / 54.13 / 54.01 | 56.67 / 57.53 / 57.66 | 60.96 / 60.96 / 60.84 | 18.80 | 44.82 | [60.96 (codex:gpt-6.1-sol r1)](https://huggingface.co/datasets/Attoloop/PermitForge/blob/main/rollouts/final-medium3/codex_gpt-6.1-sol-cbf796da1b7a/9b1cffc36b20-s47/r1/episode.json) |
+| `4528c31805f3-s47` | KJAX | 5 | process_heaters | 72.53 / 72.53 / 72.53 | 63.10 / 67.50 / 67.41 | 72.53 / 72.53 / 70.70 | 72.53 / 72.53 / 72.53 | 72.53 | 59.41 | [72.53 (anthropic:claude-opus-5-5 r1)](https://huggingface.co/datasets/Attoloop/PermitForge/blob/main/rollouts/final-medium3/anthropic_claude-opus-5-5-d6e321e50001/4528c31805f3-s47/r1/episode.json) |
+| `5a86424e2861-s47` | KJAX | 6 | simple_cycle_turbine | 69.37 / 70.87 / 69.22 | 60.97 / 68.60 / 68.50 | 70.87 / 69.93 / 69.21 | 70.87 / 70.87 / 70.87 | 29.47 | 56.76 | [70.87 (anthropic:claude-opus-5-5 r2)](https://huggingface.co/datasets/Attoloop/PermitForge/blob/main/rollouts/final-medium3/anthropic_claude-opus-5-5-d6e321e50001/5a86424e2861-s47/r2/episode.json) |
+| `07b4e4050840-s47` | KOMA | 6 | simple_cycle_turbine | 63.25 / 57.73 / 64.24 | 64.24 / 57.28 / 54.85 | 64.24 / 64.24 / 63.25 | 63.25 / 63.25 / 63.25 | 34.70 | 43.21 | [64.24 (anthropic:claude-opus-5-5 r3)](https://huggingface.co/datasets/Attoloop/PermitForge/blob/main/rollouts/final-medium3/anthropic_claude-opus-5-5-d6e321e50001/07b4e4050840-s47/r3/episode.json) |
+| `c90f3d90f654-s47` | KOMA | 5 | gas_boilers | 35.31 / 40.30 / 28.72 | 27.62 / 23.45 / 23.45 | 35.15 / 36.12 / 35.58 | 40.39 / 38.53 / 40.88 | 15.60 | 31.78 | [40.88 (codex:gpt-6.1-sol r3)](https://huggingface.co/datasets/Attoloop/PermitForge/blob/main/rollouts/final-medium3/codex_gpt-6.1-sol-cbf796da1b7a/c90f3d90f654-s47/r3/episode.json) |
+| `660f38096246-s47` | KTOP | 5 | small_refinery_mix | 67.77 / 70.89 / 70.89 | 66.31 / 66.24 / 66.31 | 70.48 / 68.01 / 70.89 | 70.89 / 70.89 / 70.89 | 64.40 | 54.91 | [70.89 (anthropic:claude-opus-5-5 r2)](https://huggingface.co/datasets/Attoloop/PermitForge/blob/main/rollouts/final-medium3/anthropic_claude-opus-5-5-d6e321e50001/660f38096246-s47/r2/episode.json) |
+| `6d3f0a5005fd-s47` | KTOP | 6 | kiln | 58.68 / 51.14 / 57.67 | 56.38 / 45.97 / 49.74 | 58.68 / 49.40 / 58.68 | 58.68 / 58.68 / 58.68 | 23.33 | 45.04 | [58.68 (anthropic:claude-opus-5-5 r1)](https://huggingface.co/datasets/Attoloop/PermitForge/blob/main/rollouts/final-medium3/anthropic_claude-opus-5-5-d6e321e50001/6d3f0a5005fd-s47/r1/episode.json) |
 
 Best observed is the highest feasible model result across these repeats, never a proven optimum or a reward ceiling. Each best-observed cell links to its design ledger in a canonical episode; the first recorded observation is shown for ties.
 

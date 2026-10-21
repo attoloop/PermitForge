@@ -5,7 +5,7 @@ import statistics
 
 import pytest
 
-from eval.card import audit_markdown, audit_run, baseline_scores, build_card, scan_episode, variance_markdown
+from eval.card import DISPLAY, audit_markdown, audit_run, baseline_scores, build_card, scan_episode, variance_markdown
 from eval.common import ROOT
 
 
@@ -90,13 +90,17 @@ def test_card_matches_board_and_schema_deterministically():
     assert card['tasks']['selection'] == json.loads(SUBSETS.read_text())['eval_card_selection']
     assert card['harness']['repeats'] == 3  # Run overrides stale subsets.repeats=4.
     assert card['harness']['evaluate_budget'] == 30
+    assert list(card['harness'])[:3] == ['agent', 'tools', 'max_turns'] and len(card['harness']['agent']) < 60
     board = json.loads((RUN / 'board-eval.json').read_text())
     for row, expected in zip(card['models'], board['models'], strict=True):
         assert list(row) == ['model', 'provider', 'runs', 'mean', 'ci95', 'feasible', 'usd_per_episode']
-        for field in ('model', 'provider', 'runs', 'mean', 'ci95', 'feasible', 'usd_per_episode'):
-            assert row[field] == expected[field]
-        assert row['runs'] == 30
-    assert all('planned' in card['links'][k] for k in ('runs', 'replay'))
+        assert (row['model'], row['provider']) == DISPLAY[expected['model']]
+        assert row['runs'] == 30 and row['feasible'] == 30  # a count of feasible episodes, as upstream
+        assert row['mean'] == round(expected['mean'], 4) and len(str(row['mean']).split('.')[1]) <= 4
+        assert row['ci95'] == [round(x, 4) for x in expected['ci95']]
+        assert row['usd_per_episode'] == (None if expected['usd_per_episode'] is None
+                                          else round(expected['usd_per_episode'], 4))
+    assert all(card['links'][k].startswith('https://') for k in ('runs', 'replay', 'code'))
     assert json.loads((ROOT / 'results/eval-v2.json').read_text()) == card
 
 

@@ -182,7 +182,7 @@ def markdown(report: dict) -> str:
              '| Model | Tasks | Episodes | Mean saved fraction (95% CI) | Feasible | Fraction of best observed | USD saved | % saved | Evaluations | Turns | USD/episode |',
              '|---|---:|---:|---|---:|---:|---:|---:|---:|---:|---:|']
     def fmt(x):
-        return '—' if x is None else f'{x:.4f}'
+        return 'n/a' if x is None else f'{x:.4f}'
     for row in report['models']+report.get('baselines', []):
         interval = row['ci95']
         reward = fmt(row['mean']) + (f' ({fmt(interval[0])}, {fmt(interval[1])})' if interval else '')
@@ -199,9 +199,9 @@ def markdown(report: dict) -> str:
                   f"over {row['repeated_tasks']} repeated tasks; mean pairwise spread {fmt(row['mean_pairwise_spread'])}; "
                   f"best-observed reference available for {row['best_observed_tasks']} tasks.", '']
     if report['paired']:
-        lines += ['', '| Pair (left − right) | Matched tasks | USD saved difference | Reward difference |', '|---|---:|---:|---:|']
+        lines += ['', '| Pair (left minus right) | Matched tasks | USD saved difference | Reward difference |', '|---|---:|---:|---:|']
         for p in report['paired']:
-            lines.append(f"| {p['left']} − {p['right']} | {p['n']} | {fmt(p['mean_usd_saved_delta'])} | {fmt(p['mean_reward_delta'])} |")
+            lines.append(f"| {p['left']} minus {p['right']} | {p['n']} | {fmt(p['mean_usd_saved_delta'])} | {fmt(p['mean_reward_delta'])} |")
     if report.get('infrastructure_attempts'):
         lines += ['', 'Infrastructure attempts (excluded from graded metrics):', '',
                   '| Model | Task | Repeat | Attempt | Retry on resume |', '|---|---|---:|---:|---|']
@@ -264,7 +264,9 @@ def main() -> None:
     baseline, missing = baseline_rows(items, baseline_root)
     report = build_report(items, baseline)
     from .attempts import infrastructure
-    report['infrastructure_attempts'] = [r for run in args.runs for r in infrastructure(run_path(run))]
+    tasks = {r['task_id'] for r in items}
+    report['infrastructure_attempts'] = [r for run in args.runs for r in infrastructure(run_path(run))
+                                         if r['task_id'] in tasks]
     report['missing_baselines'] = missing
     write_json(args.output.with_suffix('.json'), report)
     write_variance(args.output.with_name(args.output.stem+'-variance'), report)
