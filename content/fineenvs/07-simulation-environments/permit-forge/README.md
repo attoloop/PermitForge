@@ -61,7 +61,7 @@ a station-clustered bootstrap. Every episode submitted a feasible design.
 
 | Model | Mean saved fraction | 95% CI | USD per episode |
 |---|---:|---|---:|
-| GPT-6.1 Sol | 0.607 | 0.542 to 0.677 | subscription |
+| GPT-6.1 Sol | 0.606 | 0.542 to 0.677 | subscription |
 | GPT-5.6 Sol | 0.586 | 0.519 to 0.663 | subscription |
 | Claude Opus 5.5 | 0.576 | 0.501 to 0.660 | 1.71 |
 | Claude Sonnet 5.5 | 0.507 | 0.424 to 0.600 | 0.37 |

@@ -13,7 +13,7 @@ and no reference solution to leak. The plants are synthetic. The weather and the
 - Code: https://github.com/attoloop/PermitForge
 - Dataset with every rollout and the training run: https://huggingface.co/datasets/Attoloop/PermitForge
 
-Four frontier models on 10 held-out tasks, three repeats each: GPT-6.1 Sol 0.607, GPT-5.6 Sol 0.586,
+Four frontier models on 10 held-out tasks, three repeats each: GPT-6.1 Sol 0.606, GPT-5.6 Sol 0.586,
 Claude Opus 5.5 0.576, Claude Sonnet 5.5 0.507 of the draft cost saved. Every episode found a feasible
 design, so the whole difference is how much cost they removed.
 

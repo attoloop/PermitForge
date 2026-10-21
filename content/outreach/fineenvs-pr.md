@@ -38,7 +38,7 @@ move it in.
   H200 on HF Jobs. The setup and launch commands are in
   [train/cloud/README.md](https://github.com/attoloop/PermitForge/blob/main/train/cloud/README.md).
 - [x] **Results, the honest version.** On 10 held-out tasks, 3 runs each, the models saved this share of the
-  draft's cost: GPT-6.1 Sol 0.607, GPT-5.6 Sol 0.586, Claude Opus 5.5 0.576, Claude Sonnet 5.5 0.507. Every
+  draft's cost: GPT-6.1 Sol 0.606, GPT-5.6 Sol 0.586, Claude Opus 5.5 0.576, Claude Sonnet 5.5 0.507. Every
   episode ended with a design that passes. Simple policies get 0.00 (keep the draft) and 0.33 (greedy).
   Training made no measurable difference: 0.4394 before and 0.4390 after. The curve, the per-task table and
   every problem we hit are in [RESULTS.md](https://github.com/attoloop/PermitForge/blob/main/train/cloud/RESULTS.md).

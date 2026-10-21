@@ -32,7 +32,7 @@ an infeasible design and no submission score zero.
 **Data.** 360 tasks, 230 train and 130 eval, at 15 US weather stations. Weather is NOAA ISD and IGRA2,
 2020 to 2024, processed by EPA AERMET. Plants, emissions and prices are synthetic.
 
-**Results.** Share of draft cost saved on 10 held-out eval tasks, 3 repeats each: GPT-6.1 Sol 0.607,
+**Results.** Share of draft cost saved on 10 held-out eval tasks, 3 repeats each: GPT-6.1 Sol 0.606,
 GPT-5.6 Sol 0.586, Claude Opus 5.5 0.576, Claude Sonnet 5.5 0.507.
 
 **Use it.** The Playground tab runs one episode by hand, and the Guide tab shows how. Agents connect over
