@@ -1,9 +1,10 @@
 # Cloud training decisions
 
-WP2.15 supersedes the cloud kernel/cache machinery from WP2.12–WP2.14. It uses
-ordinary TRL `GRPOTrainer`, `GRPOConfig`, `environment_factory` and PEFT LoRA.
-There is no custom trainer subclass or generation/loss override. Transformers
-chooses its attention implementation and resolves installed FLA automatically.
+The cloud path uses ordinary TRL `GRPOTrainer`, `GRPOConfig`, `environment_factory`
+and PEFT LoRA. One method is overridden: `ChunkedLogpsTrainer` computes per-token
+log-probabilities in chunks (see Loss memory below); generation, rewards and the
+loss formula are TRL's. Transformers chooses its attention implementation and
+resolves installed FLA automatically.
 The model, tasks, reward, native evaluation verifier and LoRA targets are unchanged;
 training now follows the evaluation's rules (below). Local small-model experiments
 in `train/` remain separate and keep their compact opening.
@@ -19,7 +20,7 @@ the dataset row's empty user message, so the rendered opening equals the
 evaluation's; `tests/test_eval_rules.py` checks that, the tool descriptions against
 the live MCP server, and that the rendered opening (983 tokens) fits.
 
-The operator's WP2.16 decision scopes this experiment to learnability: base Qwen
+This experiment is scoped to learnability: base Qwen
 versus trained Qwen on the same unchanged cloud evaluation, with no frontier-panel
 comparison. Standard TRL is retained. The remaining differences are:
 
@@ -145,7 +146,7 @@ use TRL's default Transformers generation, as allowed by the brief, without
 writing a new synchronization or revision-mapping layer. This is a source-based
 compatibility decision, not a measured vLLM failure or speed comparison.
 
-Primary evidence, also captured by `internal/reports/WP2.15-evidence/sources.py`:
+Primary evidence:
 
 - [Torch 2.12.1 metadata](https://pypi.org/pypi/torch/2.12.1/json) declares the exact Triton dependency and CUDA runtime family.
 - [Triton 3.7.1 release](https://github.com/triton-lang/triton/releases/tag/v3.7.1) and [FLA Hopper guard](https://github.com/fla-org/flash-linear-attention/blob/v0.5.2/fla/ops/common/chunk_o.py).
@@ -228,6 +229,10 @@ standard deviation .29; peak device memory 125.5 GB) and then ran out of memory 
 loss, which led to the chunked log-probabilities above. Two earlier starts that day found
 H200 hosts on driver 580.178.04 whose container runtime injected no CUDA libraries; the
 GPU guard now reports that condition and a start on such a host costs about a minute.
+With the chunked loss, `smoke-evalrules-d1` (job `Attoloop/6ad4dbbac6628814522749b6`) passed:
+12 of 12 rollouts submitted, 1,506 and 608 s per step, worst-case loss step 105.4 GB
+reserved. The 30-step run that followed, its phases, failures and costs are in
+[README.md](README.md) and [RESULTS.md](RESULTS.md).
 
 ## Preserved experiment and operations
 
@@ -253,8 +258,8 @@ retried. Field concurrency stays at most four, and cache limits are unchanged.
 A single frozen install replaces independent optional-kernel attempts. Setup
 failure stops the launcher. README commands use the `Attoloop` namespace.
 
-The smoke's provider limit remains 10,800 seconds and $15 at the operator's
-$5/hour rate, including setup. Its stage allowance remains 10,200 seconds and
+The smoke's provider limit remains 10,800 seconds and $15 at $5 per hour,
+including setup. Its stage allowance remains 10,200 seconds and
 $14.1667, with cleanup/upload time reserved. Planning inputs come from the passed
 smoke (field preparation, complete 40-turn evaluation episodes including native
 grading, kernel check). Evaluation uses ceil(mean complete time) = 816 s (mean
@@ -264,16 +269,6 @@ evaluation-rules GRPO step (1,700 s for six rollouts, capped at 3,400 s) is an e
 smoke measures it, and evaluation stages are capped at 30 × 1,200 s. Reproduce them
 with `python -m train.cloud.run --plan --recipe smoke` in the cloud environment.
 
-Reproduce CPU checks, lock validation, bundle rebuild and verification:
-
-```sh
-python3 internal/reports/WP2.16-evidence/reproduce.py
-python3 internal/reports/WP2.16-evidence/reproduce.py --summary
-```
-
-The WP2.15 reproducer now checks an explicit reviewed-source SHA256 manifest,
-independent of git HEAD, and installed distribution versions against the lock
-(including Torch’s CUDA local-version suffix). Its default environment is
-`train/cloud/.venv-verify`. WP2.16 evidence is kept separately from the old smoke.
-
-No HF write, paid call, GPU job, commit or publication is part of this package.
+The CPU checks, lock validation, bundle rebuild and verification commands are in
+[README.md](README.md#commands). The run itself, with every job and its cost, is in
+[RESULTS.md](RESULTS.md).

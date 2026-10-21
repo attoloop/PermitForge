@@ -1,5 +1,9 @@
 # Training implementation decisions
 
+This folder is the local small-model path (Qwen3 0.6B and 1.7B on an 8 GB GPU). It was
+prepared and tested on CPU but never produced a trained model; the release run is the
+27B cloud path in [cloud/](cloud/README.md). The notes below describe the local package as built.
+
 Domain validation, exact cost, field evaluation and saved-fraction reward remain in
 `permit_core`. `PermitTrainingEnv` reuses `permit_openenv.tasks` and the public
 instructions. Its only public methods beyond TRL's `reset` and `get_reward`
@@ -8,8 +12,7 @@ return the established JSON payloads. Training instructions substitute the
 trainer's tool-turn budget for the larger environment evaluation budget; the
 environment itself still enforces invalid-is-free and submit-once accounting.
 
-The implementation follows these pinned FineEnvs references because the checkout
-path named in WP2.0 was unavailable in this sandbox:
+The implementation follows these pinned FineEnvs references:
 
 - [GeoGuesser contract, reset, reward and GRPO configuration](https://github.com/adithya-s-k/FineEnvs/blob/410fb3454a903646f814bb752513c56fed3eae78/03-geoguesser/train/grpo_geoguesser.py).
 - [Whitebox trainer](https://github.com/adithya-s-k/FineEnvs/blob/410fb3454a903646f814bb752513c56fed3eae78/05-multi-harness-rl/train/whitebox.py).
@@ -19,7 +22,7 @@ No v1 source code was lifted into this package. The adapter deliberately does
 not import the OpenEnv HTTP server or fall back to native verification during
 training.
 
-Dependencies are confined to this work package. `pyproject.toml`, `uv.lock` and
+Dependencies are confined to this package. `pyproject.toml`, `uv.lock` and
 the generated `requirements.lock` pin the complete resolved stack. PyTorch
 provides CUDA/bfloat16 and gradient checkpointing; TRL provides SFT and
 `GRPOTrainer(environment_factory=...)`; Transformers provides the pinned Qwen
@@ -29,8 +32,8 @@ single-process trainer backend; Datasets stores prepared examples. NumPy and
 PyYAML are existing core dependencies; pytest and Ruff are development checks.
 No additional training framework is introduced.
 
-The selected execution path is the WP's TRL + bitsandbytes + HF-generation
-fallback, with `use_vllm=False`. Unsloth's environment-factory integration could
+The selected execution path is TRL + bitsandbytes + HF generation, with
+`use_vllm=False`. Unsloth's environment-factory integration could
 not be established on the unavailable GPU, so it is not installed or represented
 as tested. This is an uncertainty, not a claim that Unsloth is incompatible.
 There is no colocated vLLM model copy. The lock selects the official CUDA wheel;
@@ -51,25 +54,24 @@ scale (apart from numerical stabilizers); zero-spread groups still carry no
 relative learning signal. Unavailable grading remains NaN, distinct from a
 policy that scores zero. No model calibration is required.
 
-This WP does not generate fields. Read-only memory maps let the training process
+This package does not generate fields. Read-only memory maps let the training process
 reuse field inputs across rollouts without changing the concurrently owned
 shared cache. A small shared cache bounds retained task packs. The selected
 native fields, baseline files, actual CUDA execution and Unsloth integration
 remain external prerequisites or unmeasured limitations, not silent fallbacks.
 
-## WP2.3c: local memory controls and token measurements
+## Local memory controls and token measurements
 
-The GPU run recorded in `internal/reports/gpu-smoke.log` failed inside SDPA
-during GRPO generation. This work adds opt-in tensor scheduling controls to the
+The one GPU run tried on the local 8 GB card failed inside SDPA during GRPO
+generation. This work adds opt-in tensor scheduling controls to the
 existing TRL recipe. `permit_env.py`, observations, tool schemas and physics
 are unchanged. There are no new dependencies, model copies, or field writes.
 
 ### CPU tokenizer measurements
 
 The following tables and suggested limits are historical, before removal of the
-anchor payload. Inspect those recorded measurements with
-`python3 -m json.tool train/evidence/token-budget.json`. Regenerate measurements
-for the current payload (which can differ) with:
+anchor payload. Regenerate measurements for the current payload (which can differ)
+with:
 
 ```bash
 train/.venv/bin/python -m train.token_budget --output train/evidence/token-budget.json --markdown train/evidence/token-budget.md
@@ -89,7 +91,7 @@ followed by a short acknowledgment. Calls reuse the draft design; evaluate and
 submit payloads use stored ARM2 draft verification values from
 `convert/cache/drafts-arm2/<id>.json`. Current submission sizing uses saved fraction
 and percentage savings with no anchors. The historical table below predates that
-payload change and has not been remeasured in this work package. The
+payload change and has not been remeasured. The
 JSON includes input and draft-evidence hashes. These representative payloads
 record the earlier tool reply sizes without running native models or
 field computation. Longer reasoning, different values, errors and numeric
@@ -217,7 +219,7 @@ rg -n 'def _generate_single_turn|def _tool_call_loop|def _get_last_hidden_state|
 rg -n 'use_gqa_in_sdpa|repeat_kv|scaled_dot_product_attention' train/.venv/lib/python3.12/site-packages/transformers/integrations/sdpa_attention.py
 ```
 
-Run the reviewer's actual sweep with the command in `README.md`. It records
+Run the sweep with the command in `README.md`. It records
 model-loading OOMs as well as training failures, peak allocated/reserved bytes,
 whole-trial and step timing, full completion lengths (including tool replies),
 assistant-only lengths, and per-task reward spread. Failed trials do not stop
@@ -227,6 +229,5 @@ and reloading remain the normal smoke's responsibility, not the memory probe.
 
 No GPU sweep, throughput claim or fitting configuration is asserted here.
 Successful short or unproductive completions do not establish useful GRPO
-training or worst-case context fit. GPU measurements and model learning remain
-for the reviewer; the CPU evidence and runnable sweep are this work package's
-handoff.
+training or worst-case context fit. The CPU evidence and the runnable sweep are
+what this package provides; the release used the cloud path instead.

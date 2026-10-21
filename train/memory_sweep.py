@@ -144,7 +144,7 @@ def main() -> int:
     parser.add_argument('--tasks', nargs=2, default=['074897d0f159-s47', '01addc2a86f1-s47'])
     parser.add_argument('--fields-dir', type=Path, required=True)
     parser.add_argument('--tasks-dir', type=Path, default=Path('envs/permit/tasks'))
-    parser.add_argument('--diagnostics-dir', type=Path, default=Path('convert/cache/wp110-batch'))
+    parser.add_argument('--diagnostics-dir', type=Path, default=Path('convert/cache/local-batch'))
     parser.add_argument('--token-budget', type=Path, default=Path('train/evidence/token-budget.json'))
     parser.add_argument('--output', type=Path, default=Path('train/evidence/memory-sweep.json'))
     parser.add_argument('--runs-dir', type=Path, default=Path('train/runs/memory-sweep') /

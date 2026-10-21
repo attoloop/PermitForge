@@ -1,5 +1,10 @@
 # PermitForge training
 
+Two paths live here. `train/cloud/` is the one that ran: Qwen3.8-27B GRPO on an H200,
+with its result in [cloud/RESULTS.md](cloud/RESULTS.md). The rest of this folder is the
+local small-model path (Qwen3 0.6B and 1.7B on an 8 GB GPU), prepared and tested on
+CPU, never trained to a result. Its commands are kept so they can be rerun.
+
 The training adapter uses `permit_core.evaluate` for both evaluation and final
 submission. Native verification remains the evaluation harness's responsibility.
 Only eligible train tasks enter GRPO or regular SFT. Reward is feasible savings
@@ -30,7 +35,7 @@ core and lightweight OpenEnv task/prompt modules from this checkout. See
 The bounded GPU smoke commands are:
 
 ```bash
-smoke_args=(--smoke --tasks 074897d0f159-s47 01addc2a86f1-s47 --fields-dir convert/cache/fields --diagnostics-dir convert/cache/wp110-batch)
+smoke_args=(--smoke --tasks 074897d0f159-s47 01addc2a86f1-s47 --fields-dir convert/cache/fields --diagnostics-dir convert/cache/local-batch)
 train/.venv/bin/python -m train.grpo "${smoke_args[@]}" --model Qwen/Qwen3-0.6B --output train/runs/grpo-06b
 train/.venv/bin/python -m train.grpo "${smoke_args[@]}" --model Qwen/Qwen3-1.7B --output train/runs/grpo-17b
 train/.venv/bin/python -m train.sft --smoke --synthetic --model Qwen/Qwen3-1.7B --output train/runs/sft-17b
@@ -78,7 +83,7 @@ The default GRPO settings are defined in `config_values()`; reproduce them with
 the preparation command's `config.json`. Cloud/default settings are unchanged.
 For the local memory investigation use the opt-in sweep below.
 
-## Local GPU memory sweep (WP2.3c)
+## Local GPU memory sweep
 
 First reproduce the CPU token measurements and commands without training:
 
@@ -87,10 +92,10 @@ train/.venv/bin/python -m train.token_budget --output train/evidence/token-budge
 train/.venv/bin/python -m train.memory_sweep --fields-dir convert/cache/fields --prepare-only --output train/evidence/memory-sweep-plan.json
 ```
 
-On the reviewer's GPU-visible host, with both existing field packs available:
+On a host with a visible GPU, with both field packs available:
 
 ```bash
-train/.venv/bin/python -m train.memory_sweep --models Qwen/Qwen3-0.6B Qwen/Qwen3-1.7B --tasks 074897d0f159-s47 01addc2a86f1-s47 --fields-dir convert/cache/fields --diagnostics-dir convert/cache/wp110-batch --token-budget train/evidence/token-budget.json --output train/evidence/memory-sweep.json
+train/.venv/bin/python -m train.memory_sweep --models Qwen/Qwen3-0.6B Qwen/Qwen3-1.7B --tasks 074897d0f159-s47 01addc2a86f1-s47 --fields-dir convert/cache/fields --diagnostics-dir convert/cache/local-batch --token-budget train/evidence/token-budget.json --output train/evidence/memory-sweep.json
 ```
 
 The default runs every configuration sequentially, each in a fresh process for

@@ -1,5 +1,8 @@
 # Local smoke status
 
+This is the status of the local small-model path. The release run is the cloud path:
+see [cloud/RESULTS.md](cloud/RESULTS.md).
+
 The sandbox cannot communicate with the NVIDIA driver. No GRPO or SFT optimizer
 step was run, and no trained adapter or GPU performance result is claimed.
 Peak VRAM, seconds/step, episodes/hour, reward spread and actual LoRA change/reload
