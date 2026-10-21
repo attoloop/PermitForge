@@ -11,6 +11,7 @@ from train.cloud.run import run_guarded
 
 ROOT = Path(__file__).resolve().parents[3]
 SMOKE = ROOT / 'results/rollouts/wp2.0b-smoke'
+from train.cloud.tests.checkout import requires_smoke_rollouts  # noqa: E402
 
 
 def test_plan_is_pinned_bounded_and_covers_all_stages():
@@ -48,6 +49,7 @@ def test_supervisor_kills_entire_stage_on_time_cap(tmp_path):
     assert result['elapsed_seconds'] < 5
 
 
+@requires_smoke_rollouts
 def test_smoke_handoff_is_deduplicated_and_train_only(tmp_path):
     rows, stats = build_dataset([SMOKE], ROOT/'envs/permit/tasks')
     assert len(rows) == 1
@@ -59,6 +61,7 @@ def test_smoke_handoff_is_deduplicated_and_train_only(tmp_path):
     assert len(list(episode_files([SMOKE]))) == 1
 
 
+@requires_smoke_rollouts
 def test_catalog_and_forged_record_leakage_fail_closed(tmp_path):
     with pytest.raises(ValueError, match='station'):
         validate_catalog([{'task_id':'a', 'split':'train', 'station':'X'},
@@ -73,6 +76,7 @@ def test_catalog_and_forged_record_leakage_fail_closed(tmp_path):
             build_dataset([path], ROOT/'envs/permit/tasks')
 
 
+@requires_smoke_rollouts
 def test_data_filters_failures_and_no_submit(tmp_path):
     record = json.loads(next(SMOKE.glob('*/**/episode.json')).read_text())
     for change in [dict(ended='no_submit'), dict(grading_failed=True), dict(synthetic=True),

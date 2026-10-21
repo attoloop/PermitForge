@@ -60,16 +60,44 @@ def test_release_file_hygiene():
     'README.md', 'DESIGN.md', 'CONTRACT.md', 'SOURCES.md', 'docs/SCHEMAS.md',
     'convert/README.md', 'envs/permit/core/README.md', 'envs/permit/openenv/README.md',
     'envs/permit/openenv/DESIGN.md', 'envs/permit/openenv/space_root/README.md',
+    'train/README.md', 'train/cloud/README.md', 'train/cloud/RESULTS.md', 'train/cloud/DESIGN.md',
+    'train/cloud/ops/README.md', 'eval/REPEATS.md',
 ])
 def test_public_docs_are_self_contained(name):
     text = (ROOT / name).read_text()
-    assert not re.search(r'\bWP\d|\bCodex\b|\breviewers?\b|\boperators?\b|\bPhase[ -]2\b|docs/(PLAN|tasks|reports)|internal/', text, re.I)
+    # Work-package labels in prose are banned; a hyphenated artifact name such as smoke-wp215 is data.
+    assert not re.search(r'(?<![-\w])WP\d|\bCodex\b|\breviewers?\b|\boperators?\b|\bPhase[ -]2\b|docs/(PLAN|tasks|reports)|internal/', text, re.I)
     assert not re.search(r'viewer|play_api|/play/|web/play|web/vendor', text, re.I)
-    for target in re.findall(r'\]\(([^)]+)\)', text):
-        target = target.split('#')[0]
-        if not target or '://' in target or target.startswith('/'):
+
+
+def slug(heading: str) -> str:
+    text = re.sub(r'[`*_]', '', heading.strip().lower())
+    return re.sub(r'[^a-z0-9 -]', '', text).replace(' ', '-')
+
+
+def test_tracked_docs_use_plain_dashes_and_their_links_resolve():
+    """Every tracked Markdown file: no em or en dashes, every relative link and anchor exists."""
+    violations = []
+    for path in release_files():
+        if path.suffix != '.md':
             continue
-        assert (ROOT / name).parent.joinpath(target).exists(), (name, target)
+        name = path.relative_to(ROOT).as_posix()
+        text = path.read_text()
+        for char, label in (('—', 'em dash'), ('–', 'en dash')):
+            if char in text:
+                violations.append(f'{name}: {label}')
+        for target in re.findall(r'\]\(([^)\s]+)\)', text):
+            file, _, anchor = target.partition('#')
+            if '://' in file or file.startswith('/') or file.startswith('mailto:'):
+                continue
+            resolved = path.parent.joinpath(file) if file else path
+            if not resolved.exists():
+                violations.append(f'{name}: missing link target {target}')
+            elif anchor and resolved.suffix == '.md':
+                headings = [slug(line.lstrip('#')) for line in resolved.read_text().splitlines() if line.startswith('#')]
+                if anchor not in headings:
+                    violations.append(f'{name}: missing anchor {target}')
+    assert not violations, '\n'.join(violations)
 
 
 def test_space_copy_sources_exist_without_custom_ui():

@@ -16,6 +16,7 @@ from permit_core.model import load_v2_instance
 
 REPO = Path(__file__).resolve().parents[1]
 ARCHIVE = REPO / 'convert/v1-src'
+requires_archive = pytest.mark.skipif(not ARCHIVE.exists(), reason='convert/v1-src (the v1 extraction) is not in a public checkout')
 IDS = ['003bd328a392-s47', '01addc2a86f1-s47', '0c0f1dfdc277-s47']
 
 
@@ -223,6 +224,7 @@ def test_job_limit_and_unknown_ids(converted, tmp_path):
         run_drafts(out, tmp_path / 'cache', jobs=1, only=['unknown'])
 
 
+@requires_archive
 def test_converted_archive_integrity():
     out = REPO / 'envs/permit/tasks'
     rows = read_rows(out)

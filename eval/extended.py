@@ -7,7 +7,7 @@ import json
 import math
 from pathlib import Path
 
-from .common import ROOT, records, write_json
+from .common import ROOT, records
 
 EXPERIMENT = 'extended-budget'
 FABLE_API = 'anthropic:claude-fable-5-1'
@@ -66,9 +66,7 @@ def consume_remaining(path: Path, tasks: list[dict], *, preview: bool = False) -
 
 
 def main() -> None:
-    result = evidence()
-    write_json(ROOT/'internal/reports/WP2.11-evidence/main-budget-and-prior.json', result)
-    print(json.dumps(result, indent=2))
+    print(json.dumps(evidence(), indent=2))
 
 
 if __name__ == '__main__':

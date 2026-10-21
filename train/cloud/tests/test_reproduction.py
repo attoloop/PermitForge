@@ -6,6 +6,8 @@ import tomllib
 import pytest
 
 ROOT = Path(__file__).resolve().parents[3]
+REPRODUCER = ROOT/'internal/reports/WP2.15-evidence/reproduce.py'
+requires_reproducer = pytest.mark.skipif(not REPRODUCER.exists(), reason='the stack reproducer is a local review tool, not part of the checkout')
 
 
 def test_bundle_excludes_the_readme_that_records_its_digest():
@@ -15,6 +17,7 @@ def test_bundle_excludes_the_readme_that_records_its_digest():
     assert ROOT/'train/cloud/DESIGN.md' in files
 
 
+@requires_reproducer
 def test_reproducer_requires_the_locked_torch_distribution():
     reproduce = runpy.run_path(str(ROOT/'internal/reports/WP2.15-evidence/reproduce.py'))
     check = reproduce['check_versions']
@@ -24,6 +27,7 @@ def test_reproducer_requires_the_locked_torch_distribution():
         check({'torch':'2.12.1', 'triton':'3.7.1'}, lock)
 
 
+@requires_reproducer
 def test_reproducer_uses_reviewed_hashes_and_rejects_changed_files(tmp_path):
     import hashlib
     reproduce = runpy.run_path(str(ROOT/'internal/reports/WP2.15-evidence/reproduce.py'))

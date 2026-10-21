@@ -24,7 +24,7 @@ def test_rollout_smoke_with_verify(tmp_path):
     assert record['final']['feasible'] and record['final']['reward'] == 0.0
     assert record['final']['prescore_usd_saved'] == 0
     assert record['evaluations_used'] == 1
-    evidence = package.parents[2] / 'internal/reports/native-smoke'
+    evidence = tmp_path / 'native-smoke'
     evidence.mkdir(parents=True, exist_ok=True)
     (evidence / 'smoke.json').write_text(output.read_text())
     (evidence / 'smoke-trajectory.txt').write_text(result.stdout)

@@ -5,6 +5,7 @@ import pytest
 from train.cloud.config import CloudConfig
 from train.cloud.training import training_options, validate_loading_info
 from train.cloud.storage import sync_command
+from train.cloud.tests.checkout import requires_smoke_rollouts  # noqa: E402
 
 
 def test_cloud_training_never_loads_a_second_generator():
@@ -56,13 +57,14 @@ def test_text_backbone_mapping_matches_multimodal_checkpoint_on_cpu(tmp_path):
     assert not any('visual' in name for name,_ in text.named_parameters())
 
 
+@requires_smoke_rollouts
 def test_recorded_tokenizer_masks_and_trl_parser():
     from train.cloud.check_tokens import audit
-    from train.cloud.formatting import load_tokenizer
+    from train.cloud.tests.checkout import cached_tokenizer
     from train.cloud.make_sft import build_dataset
     root = Path(__file__).resolve().parents[3]
     rows, _ = build_dataset([root/'results/rollouts/wp2.0b-smoke'], root/'envs/permit/tasks')
-    result = audit(rows, load_tokenizer(local_files_only=True))
+    result = audit(rows, cached_tokenizer())
     assert result['template_prefix_preserving'] is True
     assert result['episodes'][0]['trl_roundtrips'] == 10
     assert result['episodes'][0]['assistant_tokens'] < result['episodes'][0]['episode_tokens']

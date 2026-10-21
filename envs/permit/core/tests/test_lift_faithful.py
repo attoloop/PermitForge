@@ -4,12 +4,17 @@ from decimal import Decimal as D
 
 import pytest
 
-from conftest import EXTRACT
+from conftest import EXTRACT, requires_v1
 from permit_core.model import load_v1_instance
 from permit_core.verify import verify
 
 
+pytestmark = requires_v1
+
+
 def evidence_cases():
+    if not EXTRACT.exists():
+        return []
     found = {}
     for prefix in ("bind_verify/7369", "mechanical_matrix/7355"):
         for report in sorted((EXTRACT / "evidence" / prefix).rglob("report.json")):

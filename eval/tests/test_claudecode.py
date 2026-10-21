@@ -3,12 +3,15 @@ import json
 import os
 from pathlib import Path
 import shutil
+import subprocess
 import time
 
 import pytest
 
 from eval.common import TOOLS
 from eval.tests.test_contract import Session
+
+VALIDATED_CLI = '2.1.302'  # eval/PROTOCOL.md: the flags and events the driver relies on were checked on this version
 
 
 @pytest.fixture
@@ -114,6 +117,9 @@ def test_installed_cli_oauth_proxy_isolation(tmp_path, monkeypatch, credentials)
     """Real CLI + fake OAuth + local fake provider; no real credential leaves the host."""
     if not shutil.which('claude'):
         pytest.skip('installed Claude CLI unavailable')
+    version = subprocess.run(['claude', '--version'], capture_output=True, text=True).stdout.strip()
+    if not version.startswith(VALIDATED_CLI):
+        pytest.skip(f'the Claude Code driver was validated with CLI {VALIDATED_CLI}; installed: {version}')
     from eval import claudecode_driver as driver
     from eval.capture import EpisodeCapture
     from eval.transport import load_eval_pack, recording_app, serve, Session as RealSession

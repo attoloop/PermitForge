@@ -1,5 +1,6 @@
 convert/v1-src/
-convert/cache/
+convert/cache/*
+!convert/cache/drafts-arm2/
 .venv/
 __pycache__/
 .pytest_cache/
@@ -8,6 +9,9 @@ __pycache__/
 *.npz
 *.zst
 results/rollouts/
+results/hub/
+results/final-*.json
+results/final-*-variance.csv
 envs/permit/core/native_build/bin/
 *.egg-info/
 build/

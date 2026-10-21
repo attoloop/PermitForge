@@ -5,6 +5,7 @@ import pytest
 
 from train.cloud.config import CloudConfig
 from train.cloud.training import training_options
+from train.cloud.tests.checkout import requires_smoke_base_eval  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[3]
 
@@ -63,13 +64,14 @@ def test_training_tool_names_and_descriptions_equal_the_evaluation_server():
 def test_rendered_opening_fits_the_prompt_limit():
     # Rendered as TRL does (bound environment methods as tools); measured 983 tokens.
     from permit_openenv.tasks import load_pack
-    from train.cloud.formatting import load_tokenizer
+    from train.cloud.tests.checkout import cached_tokenizer
     from train.cloud.training import opening_ids
     config = CloudConfig()
-    ids = opening_ids(config, load_tokenizer(local_files_only=True), load_pack(ROOT/'envs/permit/tasks'))
+    ids = opening_ids(config, cached_tokenizer(), load_pack(ROOT/'envs/permit/tasks'))
     assert len(ids) <= config.max_prompt_length
 
 
+@requires_smoke_base_eval
 def test_plan_caps_fit_the_measured_evaluation_timings():
     import math
     import statistics

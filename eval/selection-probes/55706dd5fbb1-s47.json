@@ -1,0 +1,481 @@
+{
+  "split": "train",
+  "station": "KSHV",
+  "n_sources": 6,
+  "archetype": "simple_cycle_turbine",
+  "eligible": true,
+  "task_id": "55706dd5fbb1-s47",
+  "near_binding": 0,
+  "uncontrolled_exceedance": 2.5098449725032848,
+  "uncontrolled_gep_upper_ratios": {
+    "NO2_1h": 3.5098449725032848,
+    "NO2_annual": 0.6377880791939763,
+    "PM25_24h": 0.28091628571428573,
+    "PM25_annual_primary": 0.2525057777777777,
+    "PM25_annual_secondary": 0.15150346666666664,
+    "SO2_1h": 0.27646572325414415,
+    "SO2_3h": 0.3886609736334405,
+    "SO2_annual": 0.36035337074267154
+  },
+  "structure_source": "convert/cache/drafts-arm2/55706dd5fbb1-s47.json",
+  "structure_sha256": "c9c882c71a181b3db0e024d6bf343b234e366d7511764d9269ca90454a19a742",
+  "draft_cost": 3711045.3916,
+  "policies": {
+    "draft": {
+      "design": {
+        "S1": {
+          "control": "S1_maximum",
+          "height_m": 65.0
+        },
+        "S2": {
+          "control": "S2_maximum",
+          "height_m": 65.0
+        },
+        "S3": {
+          "control": "S3_maximum",
+          "height_m": 65.0
+        },
+        "S4": {
+          "control": "S4_maximum",
+          "height_m": 65.0
+        },
+        "S5": {
+          "control": "S5_maximum",
+          "height_m": 65.0
+        },
+        "S6": {
+          "control": "S6_maximum",
+          "height_m": 65.0
+        }
+      },
+      "feasible": true,
+      "cost": 3711045.3916,
+      "usd_saved": 0.0,
+      "evaluations_used": 1
+    },
+    "cheapest_first_greedy": {
+      "design": {
+        "S1": {
+          "control": "S1_none",
+          "height_m": 44.5
+        },
+        "S2": {
+          "control": "S2_maximum",
+          "height_m": 20.11
+        },
+        "S3": {
+          "control": "S3_maximum",
+          "height_m": 19.58
+        },
+        "S4": {
+          "control": "S4_maximum",
+          "height_m": 65.0
+        },
+        "S5": {
+          "control": "S5_maximum",
+          "height_m": 65.0
+        },
+        "S6": {
+          "control": "S6_maximum",
+          "height_m": 65.0
+        }
+      },
+      "feasible": true,
+      "cost": 2691340.2568,
+      "usd_saved": 1019705.1348,
+      "evaluations_used": 30
+    },
+    "v1_coordinate_descent": {
+      "design": {
+        "S1": {
+          "control": "S1_moderate",
+          "height_m": 31.0
+        },
+        "S2": {
+          "control": "S2_moderate",
+          "height_m": 46.0
+        },
+        "S3": {
+          "control": "S3_moderate",
+          "height_m": 65.0
+        },
+        "S4": {
+          "control": "S4_moderate",
+          "height_m": 65.0
+        },
+        "S5": {
+          "control": "S5_moderate",
+          "height_m": 65.0
+        },
+        "S6": {
+          "control": "S6_moderate",
+          "height_m": 65.0
+        }
+      },
+      "feasible": true,
+      "cost": 2511189.4616,
+      "usd_saved": 1199855.93,
+      "evaluations_used": 25
+    },
+    "search": {
+      "design": {
+        "S1": {
+          "control": "S1_none",
+          "height_m": 44.5
+        },
+        "S2": {
+          "control": "S2_maximum",
+          "height_m": 20.11
+        },
+        "S3": {
+          "control": "S3_maximum",
+          "height_m": 19.58
+        },
+        "S4": {
+          "control": "S4_maximum",
+          "height_m": 65.0
+        },
+        "S5": {
+          "control": "S5_maximum",
+          "height_m": 65.0
+        },
+        "S6": {
+          "control": "S6_maximum",
+          "height_m": 65.0
+        }
+      },
+      "feasible": true,
+      "verified": false,
+      "cost": 2691340.2568,
+      "usd_saved": 1019705.1348,
+      "nodes": 125,
+      "closed": false,
+      "evaluations_used": 30,
+      "search_seconds": 60.04755914100315,
+      "bound_receptors": {
+        "NO2": 184,
+        "PM25": 125,
+        "SO2": 116
+      },
+      "verification_reused": true,
+      "verification": {
+        "valid": true,
+        "errors": [],
+        "feasible": true,
+        "cost": 2691340.2568,
+        "standards": [
+          {
+            "id": "NO2_1h",
+            "value": 103.73492,
+            "background": 70.498485,
+            "limit": 188.16155419222906,
+            "margin": 13.92814919222906,
+            "binding_receptor": {
+              "index": 111,
+              "x_m": 250.0,
+              "y_m": -500.0
+            }
+          },
+          {
+            "id": "NO2_annual",
+            "value": 5.10761,
+            "background": 34.480894,
+            "limit": 99.72562372188139,
+            "margin": 60.13711972188139,
+            "binding_receptor": {
+              "index": 94,
+              "x_m": 0.0,
+              "y_m": 500.0
+            }
+          },
+          {
+            "id": "PM25_24h",
+            "value": 0.12724,
+            "background": 9.12607,
+            "limit": 35.0,
+            "margin": 25.74669,
+            "binding_receptor": {
+              "index": 94,
+              "x_m": 0.0,
+              "y_m": 500.0
+            }
+          },
+          {
+            "id": "PM25_annual_primary",
+            "value": 0.02701,
+            "background": 2.124552,
+            "limit": 9.0,
+            "margin": 6.848438,
+            "binding_receptor": {
+              "index": 94,
+              "x_m": 0.0,
+              "y_m": 500.0
+            }
+          },
+          {
+            "id": "PM25_annual_secondary",
+            "value": 0.02701,
+            "background": 2.124552,
+            "limit": 15.0,
+            "margin": 12.848438,
+            "binding_receptor": {
+              "index": 94,
+              "x_m": 0.0,
+              "y_m": 500.0
+            }
+          },
+          {
+            "id": "SO2_1h",
+            "value": 1.03832,
+            "background": 51.107951,
+            "limit": 196.52147239263803,
+            "margin": 144.37520139263802,
+            "binding_receptor": {
+              "index": 111,
+              "x_m": 250.0,
+              "y_m": -500.0
+            }
+          },
+          {
+            "id": "SO2_3h",
+            "value": 0.95483,
+            "background": 506.223012,
+            "limit": 1310.1431492842537,
+            "margin": 802.9653072842538,
+            "binding_receptor": {
+              "index": 121,
+              "x_m": 250.0,
+              "y_m": 200.0
+            }
+          },
+          {
+            "id": "SO2_annual",
+            "value": 0.04092,
+            "background": 9.30129,
+            "limit": 26.202862985685076,
+            "margin": 16.860652985685075,
+            "binding_receptor": {
+              "index": 94,
+              "x_m": 0.0,
+              "y_m": 500.0
+            }
+          }
+        ]
+      },
+      "seconds": 60.047609727000236,
+      "verification_seconds": 5.058599708718248e-05,
+      "verification_source": "fast-field selection probe"
+    }
+  },
+  "random_30": [
+    {
+      "design": null,
+      "feasible": false,
+      "cost": null,
+      "usd_saved": -1,
+      "evaluations_used": 30,
+      "seed": 0
+    },
+    {
+      "design": {
+        "S1": {
+          "control": "S1_maximum",
+          "height_m": 65.0
+        },
+        "S2": {
+          "control": "S2_none",
+          "height_m": 58.5
+        },
+        "S3": {
+          "control": "S3_maximum",
+          "height_m": 65.0
+        },
+        "S4": {
+          "control": "S4_maximum",
+          "height_m": 58.0
+        },
+        "S5": {
+          "control": "S5_maximum",
+          "height_m": 26.0
+        },
+        "S6": {
+          "control": "S6_maximum",
+          "height_m": 15.55
+        }
+      },
+      "feasible": true,
+      "cost": 2877477.1756,
+      "usd_saved": 833568.216,
+      "evaluations_used": 30,
+      "seed": 1
+    },
+    {
+      "design": {
+        "S1": {
+          "control": "S1_maximum",
+          "height_m": 51.5
+        },
+        "S2": {
+          "control": "S2_maximum",
+          "height_m": 20.11
+        },
+        "S3": {
+          "control": "S3_moderate",
+          "height_m": 32.5
+        },
+        "S4": {
+          "control": "S4_moderate",
+          "height_m": 65.0
+        },
+        "S5": {
+          "control": "S5_none",
+          "height_m": 49.5
+        },
+        "S6": {
+          "control": "S6_maximum",
+          "height_m": 36.5
+        }
+      },
+      "feasible": true,
+      "cost": 2249335.8504,
+      "usd_saved": 1461709.5412,
+      "evaluations_used": 30,
+      "seed": 2
+    },
+    {
+      "design": {
+        "S1": {
+          "control": "S1_maximum",
+          "height_m": 44.5
+        },
+        "S2": {
+          "control": "S2_maximum",
+          "height_m": 20.11
+        },
+        "S3": {
+          "control": "S3_none",
+          "height_m": 65.0
+        },
+        "S4": {
+          "control": "S4_maximum",
+          "height_m": 29.0
+        },
+        "S5": {
+          "control": "S5_maximum",
+          "height_m": 10.52
+        },
+        "S6": {
+          "control": "S6_moderate",
+          "height_m": 65.0
+        }
+      },
+      "feasible": true,
+      "cost": 2371451.132,
+      "usd_saved": 1339594.2596,
+      "evaluations_used": 30,
+      "seed": 3
+    },
+    {
+      "design": null,
+      "feasible": false,
+      "cost": null,
+      "usd_saved": -1,
+      "evaluations_used": 30,
+      "seed": 4
+    },
+    {
+      "design": null,
+      "feasible": false,
+      "cost": null,
+      "usd_saved": -1,
+      "evaluations_used": 30,
+      "seed": 5
+    },
+    {
+      "design": {
+        "S1": {
+          "control": "S1_moderate",
+          "height_m": 51.5
+        },
+        "S2": {
+          "control": "S2_moderate",
+          "height_m": 33.0
+        },
+        "S3": {
+          "control": "S3_maximum",
+          "height_m": 45.5
+        },
+        "S4": {
+          "control": "S4_moderate",
+          "height_m": 50.5
+        },
+        "S5": {
+          "control": "S5_maximum",
+          "height_m": 49.5
+        },
+        "S6": {
+          "control": "S6_maximum",
+          "height_m": 22.5
+        }
+      },
+      "feasible": true,
+      "cost": 2473125.7516,
+      "usd_saved": 1237919.64,
+      "evaluations_used": 30,
+      "seed": 6
+    },
+    {
+      "design": {
+        "S1": {
+          "control": "S1_maximum",
+          "height_m": 58.0
+        },
+        "S2": {
+          "control": "S2_moderate",
+          "height_m": 39.5
+        },
+        "S3": {
+          "control": "S3_maximum",
+          "height_m": 45.5
+        },
+        "S4": {
+          "control": "S4_moderate",
+          "height_m": 50.5
+        },
+        "S5": {
+          "control": "S5_maximum",
+          "height_m": 34.0
+        },
+        "S6": {
+          "control": "S6_moderate",
+          "height_m": 51.0
+        }
+      },
+      "feasible": true,
+      "cost": 2600164.0816,
+      "usd_saved": 1110881.31,
+      "evaluations_used": 30,
+      "seed": 7
+    }
+  ],
+  "best_saved": 1461709.5412,
+  "greedy_saved": 1019705.1348,
+  "best_saved_fraction": 0.3938808036432534,
+  "hardness": 0.3023886715804931,
+  "variance_proxy": 0.1627120586101799,
+  "random_saved_fractions": [
+    0.0,
+    0.22461816766962553,
+    0.3938808036432534,
+    0.36097490551643185,
+    0.0,
+    0.0,
+    0.33357706774539786,
+    0.29934457619798843
+  ],
+  "field_identity": "0151c649c4f7f7da784bb9c8bdacb8f0451c88dc0fb72d03eecabd8f7d7a30b8",
+  "evaluated_designs": 292,
+  "seconds": 398.3263234039987,
+  "grading": "fast-field diagnostic, not model grade",
+  "fingerprint": "b7f99ca3c4b71b3d7b1c7b83f03682103aeb9bb7eb5ca9916e512d675e750a37"
+}

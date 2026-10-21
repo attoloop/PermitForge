@@ -121,8 +121,8 @@ def test_check_detects_stale_output_without_rewriting(archive, tmp_path):
 
 
 def test_committed_json_regenerates_byte_identically():
-    if not default_database().exists():
-        pytest.skip('historical database is not distributed with the public checkout')
+    if not default_database().exists() or not (ROOT / 'convert/v1-src').exists():
+        pytest.skip('the historical database and v1 extraction are not in a public checkout')
     data = extract(default_database(), ROOT / 'convert/v1-src/evidence/adversarial_probes.json',
                    ROOT / 'convert/v1-src/EXTRACT_MANIFEST.json')
     assert encode(data) == (ROOT / 'results/evidence/reward-hacks.json').read_bytes()

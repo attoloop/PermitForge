@@ -1,0 +1,22 @@
+{
+ "commit": "1db3978",
+ "note": "sha256 of eval/select_tasks.py and permit_core/*.py when the probes were computed (2026-10-17)",
+ "code": {
+  "select_tasks.py": "cea8b6f7b101a0d4765cd9be147e784cdade3cff1010b9de3b0c94b6fc4a1342",
+  "__init__.py": "1b21f8b6f050609cf2bfc1fd8b134ff5acdefdede4a4d190568ae9fe4a03635b",
+  "baselines.py": "c2ee5ee4782cf60ded4ceab6ef660518aaa21a1ff8ea16f3a5aef0455ed1b7ee",
+  "cost.py": "11f73dbc554e950e20489bd0a8b7a82d1f52734ad0b4a723869b75cc71d49882",
+  "evaluate.py": "b8e67b1ded8ce2af1328705a68165f62931d0f82a5d1f3abc82bd82cf115f405",
+  "field_cache.py": "c65501410bf8189056228bfff171a90fd0d89748329008f1236b0c8a91471f28",
+  "fields.py": "6c31ed7e801fcf9d9edbf4b0dca74fee78510cd0a1f9380cf104054159bdd41c",
+  "menu.py": "ce1c3433c998c6976e07b994ef0bb38026ef7b09a8df20ebe739120d10be12ae",
+  "model.py": "aadb8fba18c01f84c20b3c145a4872c642d3f2b13dc84a1ba16c488bccaf9341",
+  "native.py": "d022091b09811cd139883d4690c9be26a3099aba16d13fcc8e5139e4a5acfcae",
+  "native_pool.py": "56f85069a7abb74a338cb0915a715be6320211cfa5b511904fa9d8491bfb6fc2",
+  "render.py": "d93383e7b6b20e65ea5cfe46cd702e2fb8d85033bd3218e4417398b6044f271a",
+  "reward.py": "3ba03b6dc68836cf8a4fb9a2e5da8b89d139ce55cfd3c5f6af2f99fbe655e618",
+  "search.py": "2ed8b75fd5d6357c261950c5d4bce73e23424d610badb7f0b10a29d7ea8d1fa6",
+  "validate.py": "857095883cd4b039a12c13d830daa4d73df39a9c5c3a931e27a80140f1d258b8",
+  "verify.py": "6d6c054193075348c89452cf8049ecac5b941916a4b83a2a7752576d4785ae0f"
+ }
+}

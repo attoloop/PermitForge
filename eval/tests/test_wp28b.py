@@ -62,6 +62,9 @@ def test_documented_selection_reproduces_active_bytes(tmp_path):
     text = (ROOT/'DESIGN.md').read_text().replace('\\\n', ' ')
     command = re.search(r'uv run[^\n]*python -m eval\.(?:subsets|select_tasks)[^\n]*', text)[0]
     argv = shlex.split(command)
+    cache = ROOT/argv[argv.index('--cache')+1] if '--cache' in argv else ROOT/'eval/selection-probes'
+    if not cache.exists():
+        pytest.skip(f'the selection probes are not in this checkout ({cache.relative_to(ROOT)}); they are in the dataset')
     output = tmp_path/'selection.json'
     argv[argv.index('--output')+1] = str(output)
     result = subprocess.run(argv, cwd=ROOT, capture_output=True, text=True, timeout=30)

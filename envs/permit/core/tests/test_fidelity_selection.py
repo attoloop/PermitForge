@@ -2,9 +2,11 @@ import importlib.util
 import json
 from pathlib import Path
 
+from conftest import requires_v1
 from permit_core.model import load_v1_instance
 
 
+@requires_v1
 def test_seeded_unique_designs_include_both_boundary_sides(monkeypatch):
     path = Path(__file__).resolve().parents[4] / 'convert/fidelity.py'
     spec = importlib.util.spec_from_file_location('fidelity_selection', path)

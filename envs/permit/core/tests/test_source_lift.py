@@ -2,8 +2,10 @@ import ast
 import copy
 from pathlib import Path
 
-from conftest import EXTRACT
+from conftest import EXTRACT, requires_v1
 from permit_core import cost, native, render, validate
+
+pytestmark = requires_v1
 
 
 def definitions(path):

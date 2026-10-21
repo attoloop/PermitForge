@@ -221,7 +221,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--tasks-root', type=Path, default=ROOT/'envs/permit/tasks')
     parser.add_argument('--drafts', type=Path, default=ROOT/'convert/cache/drafts-arm2')
-    parser.add_argument('--cache', type=Path, default=ROOT/'internal/reports/WP2.8-evidence/difficulty-probes')
+    parser.add_argument('--cache', type=Path, default=ROOT/'eval/selection-probes')
     parser.add_argument('--output', type=Path, default=ROOT/'results/subsets.json')
     parser.add_argument('--field-jobs', type=int, default=12)
     parser.add_argument('--jobs', type=int, default=1)
@@ -233,13 +233,24 @@ def main() -> None:
     inputs = {str(p.relative_to(ROOT)): hashlib.sha256(p.read_bytes()).hexdigest()
               for p in sorted(args.tasks_root.glob('permit-v2-*/tasks.jsonl'))}
     code_paths = [Path(__file__), *sorted((ROOT/'envs/permit/core/permit_core').glob('*.py'))]
-    fingerprint = hashlib.sha256(json.dumps({'inputs': inputs, 'structure': rows,
-        'code': {p.name: hashlib.sha256(p.read_bytes()).hexdigest() for p in code_paths}}, sort_keys=True).encode()).hexdigest()
+    current = {p.name: hashlib.sha256(p.read_bytes()).hexdigest() for p in code_paths}
+    code_record = args.cache/'CODE.json'
+    if args.report_only and code_record.exists():
+        # Frozen probes carry the fingerprint of the code that computed them; report what changed since.
+        code = json.loads(code_record.read_text())['code']
+        changed = sorted(name for name in current if current[name] != code.get(name))
+        if changed:
+            print('probes were computed with earlier code; changed since: ' + ', '.join(changed))
+    else:
+        code = current
+    fingerprint = hashlib.sha256(json.dumps({'inputs': inputs, 'structure': rows, 'code': code},
+                                            sort_keys=True).encode()).hexdigest()
     work = [(args.tasks_root, row, args.cache, args.field_jobs, fingerprint, args.report_only) for row in candidates]
     if args.report_only:
         results = list(map(probe_cached, work))
     else:
         results = run_probes(work, args.cache, args.jobs)
+        write_json(args.cache/'CODE.json', {'code': current})
     output = {'protocol': 'WP2.8', 'repeats': 4, 'random_seeds': SEEDS, 'search_seconds': 60,
               'rule': RULE, 'inputs': inputs, 'fingerprint': fingerprint, 'structure': rows, 'probes': results,
               'structure_note': 'Manifest has no binding/exceedance metadata; native ARM2 draft records supply '

@@ -5,6 +5,7 @@ import tomllib
 
 from train.cloud.config import CloudConfig
 from train.cloud.training import model_load_kwargs, training_options
+from train.cloud.tests.checkout import requires_smoke_base_eval  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[3]
 
@@ -51,6 +52,7 @@ def test_fixed_upstream_compiler_is_required_without_workaround_extras():
     assert 'name = "nvidia-cuda-runtime"\n' not in lock and '-cu13' not in lock
 
 
+@requires_smoke_base_eval
 def test_stock_trl_accepts_text_lora_and_existing_environment_factory(tmp_path):
     from functools import partial
     from unittest.mock import patch
@@ -59,12 +61,12 @@ def test_stock_trl_accepts_text_lora_and_existing_environment_factory(tmp_path):
     from transformers import Qwen3_5TextConfig, Qwen3_5ForCausalLM
     from trl import GRPOConfig, GRPOTrainer
     from trl.chat_template_utils import add_response_schema
-    from train.cloud.formatting import load_tokenizer
+    from train.cloud.tests.checkout import cached_tokenizer
     from train.cloud.training import LORA_TARGET, rollout_diagnostics
     from train.permit_env import PermitTrainingEnv
     from permit_openenv.tasks import load_pack
 
-    tokenizer = add_response_schema(load_tokenizer(local_files_only=True))
+    tokenizer = add_response_schema(cached_tokenizer())
     model = Qwen3_5ForCausalLM(Qwen3_5TextConfig(hidden_size=16, intermediate_size=32,
         num_hidden_layers=1, num_attention_heads=1, num_key_value_heads=1, head_dim=16,
         vocab_size=len(tokenizer), layer_types=['full_attention'], partial_rotary_factor=.5))

@@ -1,0 +1,107 @@
+{
+  "binary_sha256": {
+    "aermod": "47c3f61528a4a96d964a124f00cb156c6cac703f36d50d1505573be439c80790",
+    "bpipprm": "e61f94649948a2fe7ada697b443d3b027df4cb1bd921dfb889a1ade262ec3eab"
+  },
+  "cost": "1316496.5588",
+  "design_values": {
+    "NO2_1h": {
+      "background": "24.612638",
+      "limit": "188.16155419222906",
+      "margin": "158.34780619222906",
+      "receptor_index": 130,
+      "value": "5.20111",
+      "x": "500",
+      "y": "0"
+    },
+    "NO2_annual": {
+      "background": "20.477238",
+      "limit": "99.72562372188139",
+      "margin": "79.04938572188139",
+      "receptor_index": 132,
+      "value": "0.19900",
+      "x": "500",
+      "y": "500"
+    },
+    "PM25_24h": {
+      "background": "8.463692",
+      "limit": "35.0",
+      "margin": "26.534438",
+      "receptor_index": 53,
+      "value": "0.00187",
+      "x": "-500",
+      "y": "-500"
+    },
+    "PM25_annual_primary": {
+      "background": "2.463072",
+      "limit": "9.0",
+      "margin": "6.536608",
+      "receptor_index": 123,
+      "value": "0.00032",
+      "x": "250",
+      "y": "500"
+    },
+    "PM25_annual_secondary": {
+      "background": "2.463072",
+      "limit": "15.0",
+      "margin": "12.536608",
+      "receptor_index": 123,
+      "value": "0.00032",
+      "x": "250",
+      "y": "500"
+    },
+    "SO2_1h": {
+      "background": "25.224298",
+      "limit": "196.52147239263803",
+      "margin": "171.28339439263803",
+      "receptor_index": 130,
+      "value": "0.01378",
+      "x": "500",
+      "y": "0"
+    },
+    "SO2_3h": {
+      "background": "363.278615",
+      "limit": "1310.1431492842537",
+      "margin": "946.8540642842537",
+      "receptor_index": 62,
+      "value": "0.01047",
+      "x": "-250",
+      "y": "-500"
+    },
+    "SO2_annual": {
+      "background": "4.035948",
+      "limit": "26.202862985685076",
+      "margin": "22.166444985685076",
+      "receptor_index": 123,
+      "value": "0.00047",
+      "x": "250",
+      "y": "500"
+    }
+  },
+  "errors": [],
+  "failed_standards": [],
+  "feasible": true,
+  "gep": {
+    "S1": "89.55",
+    "S2": "93.85"
+  },
+  "id": "d4857da7c359-s47",
+  "input_sha256": "0c3c6969c870dd40cfb637a9be0ca8bd35587c8f47f8e5afa835850f712ee29f",
+  "margins": {
+    "NO2_1h": "158.34780619222906",
+    "NO2_annual": "79.04938572188139",
+    "PM25_24h": "26.534438",
+    "PM25_annual_primary": "6.536608",
+    "PM25_annual_secondary": "12.536608",
+    "SO2_1h": "171.28339439263803",
+    "SO2_3h": "946.8540642842537",
+    "SO2_annual": "22.166444985685076"
+  },
+  "native_seconds": {
+    "NO2": 18.946040630995412,
+    "PM25": 15.04247903599753,
+    "SO2": 19.05997638599365,
+    "bpipprm": 0.10232992499368265
+  },
+  "no2_tier": "ARM2"
+}

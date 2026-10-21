@@ -17,7 +17,13 @@ def replay_episodes(completion_limit: int = 100_000) -> list[dict]:
     from train.cloud.formatting import load_tokenizer
     from train.cloud.training import opening_ids
     from train.permit_env import TOOL_NAMES, opening_messages
-    tok = add_response_schema(load_tokenizer(local_files_only=True))
+    import pytest
+    if not BASE.exists():
+        pytest.skip('the smoke base-eval episodes are in the dataset (training/runs/smoke-grade), not the checkout')
+    try:
+        tok = add_response_schema(load_tokenizer(local_files_only=True))
+    except OSError:
+        pytest.skip('the pinned Qwen3.8-27B tokenizer is not in the local Hugging Face cache')
     cfg = CloudConfig()
     opening = opening_ids(cfg, tok, load_pack(ROOT/'envs/permit/tasks'))
     results = []

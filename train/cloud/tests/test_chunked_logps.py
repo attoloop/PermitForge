@@ -17,12 +17,12 @@ def tiny_trainer(tmp_path, cls):
     from transformers import Qwen3_5TextConfig, Qwen3_5ForCausalLM
     from trl import GRPOConfig
     from trl.chat_template_utils import add_response_schema
-    from train.cloud.formatting import load_tokenizer
+    from train.cloud.tests.checkout import cached_tokenizer
     from train.cloud.training import LORA_TARGET, rollout_diagnostics
     from train.permit_env import PermitTrainingEnv
     from permit_openenv.tasks import load_pack
     torch.manual_seed(0)
-    tokenizer = add_response_schema(load_tokenizer(local_files_only=True))
+    tokenizer = add_response_schema(cached_tokenizer())
     model = Qwen3_5ForCausalLM(Qwen3_5TextConfig(hidden_size=16, intermediate_size=32,
         num_hidden_layers=1, num_attention_heads=1, num_key_value_heads=1, head_dim=16,
         vocab_size=len(tokenizer), layer_types=['full_attention'], partial_rotary_factor=.5))
