@@ -17,8 +17,8 @@ Choose emissions controls and stack heights for a synthetic industrial plant,
 using real NOAA weather and EPA AERMOD/BPIP-PRIME. Cut annualized cost while
 meeting every task air-quality standard.
 
-Open **[/web/](/web/)** for the standard OpenEnv Gradio playground and task guide,
-and **[/healthz](/healthz)** for health. The MCP endpoint is **`/mcp`**; the
+Open `/web/` for the standard OpenEnv Gradio playground and task guide, and
+`/healthz` for health. The MCP endpoint is **`/mcp`**; the
 repository README provides a client example.
 The shared playground is a demo, not a scored endpoint. Scored runs use the eval
 harness, which forces `ENABLE_WEB_INTERFACE=false`.
@@ -31,7 +31,7 @@ and may also take minutes. Use a local server for heavy evaluation runs.
 
 All source tasks are admitted after native ARM2 draft verification. Reproduce
 counts with `python3 envs/permit/openenv/space_root/report_evidence.py` from the
-repository root. Model results remain **TODO**.
+repository root. Model results are in the [repository README](https://github.com/attoloop/PermitForge#results).
 Reward is feasible USD/year saved divided by draft cost. The draft and failed or
 absent submissions score zero. A score of 1.0 means zero annualized cost, which
 is unreachable because the uncontrolled design fails an air-quality standard.
@@ -48,6 +48,6 @@ podman build -f envs/permit/openenv/Dockerfile -t permitforge-space .
 podman run --rm --name permitforge-space -p 127.0.0.1:7860:7860 permitforge-space
 ```
 
-Publication and a rebuild of the current container recipe remain **TODO**.
+This is the image the Space runs.
 A Space export must put this card at its root, retain the repository-root build
 context, and supply a root Dockerfile copied from `envs/permit/openenv/Dockerfile`.

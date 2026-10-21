@@ -32,10 +32,10 @@ original relative paths with hashes are in
 
 ## NOAA observations and processed meteorology
 
-The source is NOAA NCEI ISD hourly observations for 2020–2024 and IGRA2 soundings,
+The source is NOAA NCEI ISD hourly observations for 2020-2024 and IGRA2 soundings,
 selected by station. G:20 defines station metadata, G:21 is the `ASSETS` digest table,
-G:58–61 constructs the download URLs, and G:65–84 verifies downloads against those
-pins. G:150–164 concatenates ISD years and filters IGRA2 records to the same years.
+G:58-61 constructs the download URLs, and G:65-84 verifies downloads against those
+pins. G:150-164 concatenates ISD years and filters IGRA2 records to the same years.
 IGRA2 ZIP hashes cover the whole downloaded archive, including records outside the
 selected years. These are recorded acquisition pins; the raw NOAA archives have not been re-downloaded or re-hashed for this release.
 
@@ -191,7 +191,7 @@ Every row is a NOAA U.S. Government input under the rights statement above.
 AERMET 26135 reads surface `ISHD` and upper-air `IGRA`; the upper-air path includes
 `MODIFY`. Both inputs and `METPREP` use `XDATES 2020/1/1 TO 2024/12/31`.
 The `.sfc` / `.pfl` files are model-ready derived weather, not raw observations.
-The generator validates the surface record count and endpoint years (G:189–195).
+The generator validates the surface record count and endpoint years (G:189-195).
 
 The settings are `METHOD WIND_DIR RANDOM`, `METHOD REFLEVEL SUBNWS`,
 `FREQ_SECT ANNUAL 1`, `SECTOR 1 0 360`, and one fixed `SITE_CHAR` triplet.
@@ -282,13 +282,13 @@ modify the bundled originals.
 ### Compiler and snapshot pins
 
 The original scenario generator used `gcc:13.4.0-bookworm`, Python
-`3.12.13-bookworm` and `PyYAML==6.0.2` (C:1–5). Its compilation flags were:
+`3.12.13-bookworm` and `PyYAML==6.0.2` (C:1-5). Its compilation flags were:
 AERMOD `-O2 -static -fbounds-check`; AERMET
 `-O2 -static -fcheck=all -std=f2008 -ffree-form`; BPIP
 `-O2 -static -std=legacy -fallow-argument-mismatch`, removing DOS SUB bytes from
-BPIP's compilation copy (G:95–126). Source order came from EPA's batch files.
+BPIP's compilation copy (G:95-126). Source order came from EPA's batch files.
 The source declaration
-`results/evidence/provenance/scenario-source.yaml`:36–54 also
+`results/evidence/provenance/scenario-source.yaml`:36-54 also
 records seed `0`, runtime product `aermod-regulatory-runtime@0.1.0`, declared product
 manifest digest `62cfc151ed05414fe0a0506d4c5d4ffc7a886adbca9c06bc47f82bb9f8be477f`,
 and generator image digest
@@ -378,7 +378,7 @@ PYTREE
 
 Facilities, costs, backgrounds and constant ozone are synthetic. No plant,
 emissions inventory, cost quote, ambient background or ozone observation is real
-permit data. G:378–388 seeds `random.Random` with the integer SHA-256 of
+permit data. G:378-388 seeds `random.Random` with the integer SHA-256 of
 UTF-8 seed concatenated with ASCII index, chooses a station and archetype, and
 tries candidates until the admission checks pass. Thus the retained distribution
 is conditioned on admission; it is not an unfiltered sample of the ranges below.
@@ -391,33 +391,33 @@ nl -ba results/evidence/provenance/scenario-generator.py.txt | sed -n '26,49p;19
 
 | Input | How drawn / fixed | Source |
 |---|---|---|
-| Buildings | 1–4 axis-aligned rectangles, centers selected in order from (−90,−90), (90,−90), (−90,90), (90,90) m; width/depth uniform 25–65 m, height uniform 12–40 m, rounded to 2 decimals | G:214–219 |
-| Sources | 2–6; buildings assigned cyclically; east-side offset uniform 3–12 m, north/south offset uniform −10–10 m; coordinates rounded to 2 decimals | G:221–230 |
-| Stack bounds | minimum uniform 8 to min(25, building height) m, rounded to 2 decimals; maximum = BPIP GEP with 65 m floor | G:233, 415–420, 455 |
-| In-stack NO2/NOx ratio | uniform 0.08–0.25, rounded to 4 decimals; retained as metadata in v2 | G:232 |
-| Control cost | maximum uniform 120,000–500,000 USD/year per source; moderate = 0.55 × maximum, none = zero, rounded to cents | G:398–410 |
-| Control efficiency | maximum NO2/SO2/PM25 = 0.95/0.98/0.995; moderate = 0.75 × each; none = zero | G:401–408 |
-| Stack extension cost | one facility-wide price uniform 1,500–6,500 USD/(m·year), rounded to cents | G:398–399 |
-| Background | each standard's limit × uniform 0.10–0.40, rounded to 6 decimals; PM25 annual secondary copied from primary | G:411–412 |
-| Ozone | constant uniform 30–55 ppb, rounded to 3 decimals; v1 fallback, no hourly observations; unused by ARM2 in v2 | G:413, 442–443; `convert/v1_to_v2.py` |
-| Terrain and surface | flat, rural; fixed assumed land-use triplet, no measured land cover | G:445, 453–454 |
-| Receptors | square fence at ±250 m with 50 m spacing; 250 m grid to 1 km, 1 km grid inside 5 km, unique sorted points, elevation zero | G:199–210, 395 |
-| Original admission | uncontrolled at minimum heights must fail a standard; all-maximum at GEP must pass every standard; redraw otherwise | G:424–433 |
+| Buildings | 1-4 axis-aligned rectangles, centers selected in order from (-90,-90), (90,-90), (-90,90), (90,90) m; width/depth uniform 25-65 m, height uniform 12-40 m, rounded to 2 decimals | G:214-219 |
+| Sources | 2-6; buildings assigned cyclically; east-side offset uniform 3-12 m, north/south offset uniform -10 to 10 m; coordinates rounded to 2 decimals | G:221-230 |
+| Stack bounds | minimum uniform 8 to min(25, building height) m, rounded to 2 decimals; maximum = BPIP GEP with 65 m floor | G:233, 415-420, 455 |
+| In-stack NO2/NOx ratio | uniform 0.08-0.25, rounded to 4 decimals; retained as metadata in v2 | G:232 |
+| Control cost | maximum uniform 120,000-500,000 USD/year per source; moderate = 0.55 × maximum, none = zero, rounded to cents | G:398-410 |
+| Control efficiency | maximum NO2/SO2/PM25 = 0.95/0.98/0.995; moderate = 0.75 × each; none = zero | G:401-408 |
+| Stack extension cost | one facility-wide price uniform 1,500-6,500 USD/(m·year), rounded to cents | G:398-399 |
+| Background | each standard's limit × uniform 0.10-0.40, rounded to 6 decimals; PM25 annual secondary copied from primary | G:411-412 |
+| Ozone | constant uniform 30-55 ppb, rounded to 3 decimals; v1 fallback, no hourly observations; unused by ARM2 in v2 | G:413, 442-443; `convert/v1_to_v2.py` |
+| Terrain and surface | flat, rural; fixed assumed land-use triplet, no measured land cover | G:445, 453-454 |
+| Receptors | square fence at ±250 m with 50 m spacing; 250 m grid to 1 km, 1 km grid inside 5 km, unique sorted points, elevation zero | G:199-210, 395 |
+| Original admission | uncontrolled at minimum heights must fail a standard; all-maximum at GEP must pass every standard; redraw otherwise | G:424-433 |
 
 The source archetype is chosen from sorted names. `small_refinery_mix` cycles
 source types through gas boilers, process heaters and refinery mix. Each parameter
-below is uniform within its interval and rounded to 6 decimals (G:27–34, 225–234).
+below is uniform within its interval and rounded to 6 decimals (G:27-34, 225-234).
 NOx is expressed as NO2 mass before chemical conversion, not measured NO2.
 
 | Source archetype | NOx as NO2 (g/s) | SO2 (g/s) | PM25 (g/s) | Temperature (K) | Exit velocity (m/s) | Diameter (m) |
 |---|---|---|---|---|---|---|
-| `gas_boilers` | 8–40 | 0.02–0.3 | 0.08–0.8 | 400–480 | 8–18 | 0.6–1.6 |
-| `simple_cycle_turbine` | 20–100 | 0.05–0.8 | 0.1–1.5 | 650–800 | 15–28 | 1.5–3.5 |
-| `process_heaters` | 10–60 | 0.2–4 | 0.3–2 | 430–600 | 8–20 | 0.7–2.0 |
-| `kiln` | 25–100 | 3–40 | 2–12 | 400–550 | 10–22 | 1.2–3.0 |
-| `small_refinery_mix` | 15–80 | 2–25 | 0.5–6 | 400–600 | 8–22 | 0.8–2.5 |
+| `gas_boilers` | 8-40 | 0.02-0.3 | 0.08-0.8 | 400-480 | 8-18 | 0.6-1.6 |
+| `simple_cycle_turbine` | 20-100 | 0.05-0.8 | 0.1-1.5 | 650-800 | 15-28 | 1.5-3.5 |
+| `process_heaters` | 10-60 | 0.2-4 | 0.3-2 | 430-600 | 8-20 | 0.7-2.0 |
+| `kiln` | 25-100 | 3-40 | 2-12 | 400-550 | 10-22 | 1.2-3.0 |
+| `small_refinery_mix` | 15-80 | 2-25 | 0.5-6 | 400-600 | 8-22 | 0.8-2.5 |
 
-The benchmark thresholds and statistical forms were fixed by G:35–49 (which cites
+The benchmark thresholds and statistical forms were fixed by G:35-49 (which cites
 the [EPA NAAQS table](https://www.epa.gov/criteria-air-pollutants/naaqs-table) in
 G:448), then preserved in each task. [CONTRACT.md](CONTRACT.md) describes the exact
 benchmark rules; this ledger makes no claim that future regulations stay unchanged.

@@ -1,10 +1,13 @@
 # PermitForge
 
 Choose emissions controls and stack heights for a synthetic industrial plant,
-using real NOAA weather and EPA dispersion models. An OpenEnv environment for
-cutting annualized cost while meeting every task air-quality standard.
+using real NOAA weather and EPA dispersion models. An OpenEnv environment:
+cut annualized cost while meeting every air-quality standard.
 
-`Space: recipe prepared` · `Eval: TODO` · `Dataset: TODO` · `Framework: OpenEnv`
+[Space](https://huggingface.co/spaces/Attoloop/PermitForge) ·
+[Dataset](https://huggingface.co/datasets/Attoloop/PermitForge) ·
+[Trained model](https://huggingface.co/Attoloop/PermitForge-Qwen3.8-27B-GRPO) ·
+[Eval card](results/eval-v2.json) · OpenEnv 0.7.0 · Apache-2.0
 
 ## The task
 
@@ -30,36 +33,56 @@ All **360 tasks are admitted: 230 train and 130 eval**, separated by weather
 station, with every draft verified feasible under ARM2. V2 uses ARM2 for all NO2
 cases and discrete heights, so its feasible set differs from published v1.
 Search and baselines are diagnostics, independent of admission and reward.
-
-Reproduce inventory and admission counts from the task records and
-[conversion evidence](results/evidence/conversion.json):
+Reproduce the counts from the task records:
 
 ```sh
 python3 envs/permit/openenv/space_root/report_evidence.py
-rg -n 'EVALUATE_BUDGET|evaluations_left' envs/permit/openenv/permit_openenv/environment.py
 ```
 
 ## Results
 
-**Pending — TODO.** The selected repeat cohorts are in
-[results/subsets.json](results/subsets.json): eval and train are reported separately.
-The board reports mean saved fraction, station-clustered confidence intervals,
-feasible rate, fraction of best observed, and USD/episode. Per-task repeat spread
-is exported as JSON and CSV. [Repeat evaluation](eval/REPEATS.md) gives commands,
-coverage and metric definitions; no model episodes were run to select the cohorts.
-Measured physics agreement is in [DESIGN.md](DESIGN.md#fidelity).
+Four models, 10 held-out eval tasks, 3 repeats each, 40 turns, 30 evaluations,
+medium effort. Reward is the saved fraction; the interval is a station-clustered
+bootstrap. Every episode was verified with the native models.
+
+| Model | Mean saved fraction | 95% CI | Feasible | USD per episode |
+|---|---:|---|---:|---:|
+| GPT-6.1 Sol | 0.6065 | 0.5423 to 0.6768 | 30/30 | n/a (subscription) |
+| GPT-5.6 Sol | 0.5858 | 0.5186 to 0.6634 | 30/30 | n/a (subscription) |
+| Claude Opus 5.5 | 0.5755 | 0.5005 to 0.6602 | 30/30 | 1.71 |
+| Claude Sonnet 5.5 | 0.5071 | 0.4239 to 0.6000 | 30/30 | 0.37 |
+
+Model-free policies on the same tasks, with fast-field probes: draft 0.00,
+cheapest-first greedy 0.33, v1 coordinate descent 0.40, random 30 evaluations
+0.31 (best of 8 seeds 0.46), 60-second search 0.48. The same four models on a
+10-task train cohort score 0.49 to 0.57 ([results/final-train.md](results/final-train.md)).
+
+Full tables, per-task repeats and the transcript audit:
+[results/final-eval.md](results/final-eval.md),
+[results/variance-final.md](results/variance-final.md),
+[results/reward-hacks.md](results/reward-hacks.md). Protocol: [eval/PROTOCOL.md](eval/PROTOCOL.md).
+Every rollout is in the dataset.
+
+**Training.** We trained Qwen3.8-27B with GRPO (LoRA, 30 steps, 6 rollouts per
+step, one H200, $164 for the whole project) and evaluated base and trained model
+on the same 10 held-out tasks with the same cloud harness. Base 0.439, trained
+0.439: no change. The per-task table, curves, failures and cost are in
+[train/cloud/RESULTS.md](train/cloud/RESULTS.md); the card is
+[results/eval-v2-qwen.json](results/eval-v2-qwen.json). That harness differs
+from the frontier one, so the two tables are not compared.
 
 ## Start here
 
 | You want to… | Open |
 |---|---|
-| Try the standard OpenEnv playground | Local [/web/](http://127.0.0.1:8012/web/) after starting the server |
+| Try the playground | [The Space](https://huggingface.co/spaces/Attoloop/PermitForge), or `/web/` on a local server |
 | Connect an agent | Client snippet below; MCP endpoint `/mcp` |
 | Read the rules and reward | [CONTRACT.md](CONTRACT.md) |
 | Understand physics, fidelity and search | [DESIGN.md](DESIGN.md) |
 | Read the data contract | [docs/SCHEMAS.md](docs/SCHEMAS.md) |
 | Trace inputs and licences | [SOURCES.md](SOURCES.md) |
-| Prepare local data | [convert/README.md](convert/README.md) |
+| Get tasks, weather, rollouts and the training run | [The dataset](https://huggingface.co/datasets/Attoloop/PermitForge) |
+| Train a model | [train/cloud/README.md](train/cloud/README.md) |
 | Build the Space image | [Space card](envs/permit/openenv/space_root/README.md) |
 
 ## Connect an agent
@@ -88,28 +111,26 @@ submission, which may take minutes.
 
 ## Run it locally
 
-A code-only checkout excludes task/met data, extracted v1 inputs and binaries.
-Prepare the data using [convert/README.md](convert/README.md). Core fidelity tests
-also need the preserved `convert/v1-src/` evidence. Native binaries live in
-`envs/permit/core/native_build/bin/`, or in `PERMIT_MODELS_DIR`.
-
-From the repository root:
+A checkout has the code and the task records but not the task data, weather
+files or native binaries. Get the data from the dataset and build the binaries:
 
 ```sh
-sh envs/permit/core/native_build/build.sh  # requires working podman
+uvx --from 'huggingface-hub==1.33.0' hf download Attoloop/PermitForge --repo-type dataset \
+  --include 'tasks/data/*' 'tasks/met/*' --local-dir envs/permit
+sh envs/permit/core/native_build/build.sh  # needs podman
 uv sync --directory envs/permit/openenv --python 3.12 --frozen
 uv run --directory envs/permit/openenv uvicorn permit_openenv.server:app \
   --host 127.0.0.1 --port 8012 --workers 1 --ws-ping-timeout 1800
 ```
 
-The standard OpenEnv Gradio playground is at **[/web/](http://127.0.0.1:8012/web/)**;
-**[/healthz](http://127.0.0.1:8012/healthz)** reports health and task counts.
-Float64 fields are cached on demand: an uncached task may take minutes to prepare.
-`PERMIT_FIELDS_JOBS` controls preparation parallelism and `PERMIT_FIELDS_CACHE_GB`
-caps idle storage. `PERMIT_EVALUATOR=verify` selects full native evaluation.
-Submission always uses native verification. Use a local server for heavy runs.
+Binaries live in `envs/permit/core/native_build/bin/`, or wherever `PERMIT_MODELS_DIR`
+points. The playground is at `/web/` and `/healthz` reports health and task counts.
+Fields are cached on demand: an uncached task takes minutes to prepare.
+`PERMIT_FIELDS_JOBS` sets preparation parallelism and `PERMIT_FIELDS_CACHE_GB`
+caps idle storage. Submission always uses native verification. Use a local
+server for heavy runs.
 
-Run the model-free smoke and all suites from the repository root:
+Smoke and test suites, from the repository root:
 
 ```sh
 uv run --directory envs/permit/openenv python rollout.py --smoke \
@@ -120,7 +141,11 @@ uv run --directory envs/permit/openenv pytest -q
 uv run python convert/v1_to_v2.py --out envs/permit/tasks --check
 ```
 
-Build the Space image with the converted task/met inputs present:
+Tests that need inputs a checkout does not have (the v1 source extraction, local
+run folders, cached model weights) skip and say why. No model credentials are
+needed for any command above.
+
+Build and check the Space image:
 
 ```sh
 podman build -f envs/permit/openenv/Dockerfile -t permitforge-space .
@@ -130,11 +155,9 @@ uv run --project envs/permit/openenv python envs/permit/openenv/space_root/smoke
   --url http://127.0.0.1:7860 --output results/evidence/space-smoke.json
 ```
 
-The recipe bakes eval showcases with `space_root/bake_showcases.py`; other tasks
-build fields on demand. [The historical container smoke](results/evidence/space-container-smoke.json)
-records native and fast tool results from the earlier image. A container rebuild
-of the current recipe remains TODO; source-copy and native-stage contracts are tested.
-No model credentials are needed for these commands.
+The image bakes two eval showcases; other tasks build fields on demand.
+[The container smoke receipt](results/evidence/space-container-smoke.json) records
+the endpoints and tool results of the published image.
 
 ## Layout
 
@@ -146,7 +169,9 @@ envs/permit/
   core/                                       verifier, evaluator, cache, cost, reward, search
   openenv/                                    OpenEnv server, tools, rollout harness, Space recipe
   tasks/                                      train/eval and legacy records; local task/met data
-results/evidence/                             reproducible measurement receipts
+eval/                                         frontier evaluation harness, protocol, cards
+train/cloud/                                  Qwen3.8-27B GRPO on HF Jobs, results and launch scripts
+results/                                      boards, cards, variance, audit, measurement receipts
 ```
 
 ## Data and licence

@@ -2,7 +2,7 @@
 
 The details behind the [README](README.md): task data, physics, rules, reward,
 search and tests. [CONTRACT.md](CONTRACT.md) defines the public
-interface; [SOURCES.md](SOURCES.md) records input provenance. Model results remain **TODO**.
+interface; [SOURCES.md](SOURCES.md) records input provenance. Model results are in the [README](README.md#results).
 All tasks are admitted after native ARM2 draft verification; baseline/search
 scores do not filter the release.
 
@@ -34,8 +34,8 @@ Reproduce these tables without modifying data:
 python3 envs/permit/openenv/space_root/report_evidence.py
 ```
 
-Each facility has **2–6 sources**, **1–4 buildings** and **184 receptors**, using
-**2020–2024** hourly weather at its station. Terrain is flat. Source locations,
+Each facility has **2-6 sources**, **1-4 buildings** and **184 receptors**, using
+**2020-2024** hourly weather at its station. Terrain is flat. Source locations,
 stack diameter/temperature/velocity, buildings, weather, uncontrolled emissions,
 backgrounds and control rows remain physically unchanged from v1. Train and eval
 stations are disjoint. “Held out” means station-disjoint; the original scenarios
@@ -125,7 +125,7 @@ NO2(x) = x * clip(p(x), 0.50, 0.90)
 ```
 
 The coefficients, source summation and ratio multiplication are in bundled
-`aermod/calc1.f:10813–10858`; default clipping is in `coset.f:657–663`.
+`aermod/calc1.f:10813-10858`; default clipping is in `coset.f:657-663`.
 The renderer removes PVMRM-only ozone/in-stack-ratio cards and retains
 `SRCGROUP ALL`. Source paths below are relative to
 `envs/permit/core/native_build/model-source/`. Reproduce the formula and its
@@ -236,14 +236,14 @@ Showcases can later be evicted; their next evaluation then rebuilds them.
 Other tasks also prepare fields on demand. Cold calls may take minutes on a CPU
 Space; submission always runs queued native verification. Local batch evaluation
 is preferred for sustained work. Historical container tool measurements are in
-[the smoke receipt](results/evidence/space-container-smoke.json). A rebuild of the
-current image remains TODO; the source-copy and native-stage contracts are tested.
+[the smoke receipt](results/evidence/space-container-smoke.json); the source-copy and
+native-stage contracts are tested.
 
 ## The reward
 
 A feasible graded submission earns the fraction of draft cost saved:
 `reward = (cost(draft) - cost(submission)) / cost(draft)`.
-Prescore retains exact USD/year savings; gate failure uses sentinel −1 and
+Prescore retains exact USD/year savings; gate failure uses sentinel -1 and
 reward zero. The draft, invalid/infeasible submissions and no submission earn
 zero. A score of 1.0 means zero annualized cost: the all-uncontrolled minimum-height
 design, which fails a standard in the admitted tasks. It is therefore unreachable.
@@ -341,7 +341,7 @@ Reproduce from `eligible` in the task indices with
 `python3 envs/permit/openenv/space_root/report_evidence.py`.
 `convert/reverify_drafts.py --finalize` applies cached native checks;
 `convert/admit.py` uses those same draft checks without model-dependent grading.
-The release's model and baseline results remain **TODO**.
+Model and baseline results are in the [README](README.md#results) and `results/`.
 
 ## How it is kept honest
 
@@ -371,7 +371,7 @@ Run all suites, including native tests, using the commands in the root README.
 | Heights | Continuous within native precision/bounds | Explicit menu |
 | Interface | Agent-authored native files and CLI launches | Four tools; environment renders native inputs |
 | Evaluation budget | 75 launches, equivalent to 25 complete pollutant evaluations | 30 valid evaluations, invalid checks free |
-| Reward | Raw USD saved, gate-failure floor −1 | Same savings prescore, reward = saved fraction; gate failure zero |
+| Reward | Raw USD saved, gate-failure floor -1 | Same savings prescore, reward = saved fraction; gate failure zero |
 | Evaluation | Native physics calls | Cached float64 fields; full native submission |
 
 Budget and historical score sources: `convert/v1-src/family/bind.py`,

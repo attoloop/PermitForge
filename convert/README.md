@@ -141,7 +141,7 @@ The sample covers published PVMRM and ARM2 cards; `01addc2a86f1-s47` has six
 sources. Per-task results, including binding design values, margins, native wall
 seconds, errors and binary hashes, live at `convert/cache/drafts-arm2/<id>.json`.
 Each process-pool worker calls the verifier sequentially in a private temporary
-directory: at most `--jobs` native processes run at once; accepted jobs are 1–4.
+directory: at most `--jobs` native processes run at once; accepted jobs are 1-4.
 Results are written atomically, and matching completed tasks are skipped.
 Changed inputs or corrupt/stale cache entries fail explicitly; remove only the
 affected result to request a rerun. A failed interrupted task has no result and

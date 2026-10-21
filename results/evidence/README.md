@@ -6,7 +6,7 @@ path strings were made repository-relative. Numerical measurements are preserved
 
 | Artifact | Contents | Reproduce or inspect |
 |---|---|---|
-| `conversion.json` | Original scenario inventory and split counts | `python3 envs/permit/openenv/space_root/report_evidence.py` |
+| `conversion.json` | Original scenario inventory and split counts before admission (its `eligibility` block predates the ARM2 checks; the task records carry the result) | `python3 envs/permit/openenv/space_root/report_evidence.py` |
 | `fidelity.json` | Saved menu designs, native/fast comparisons, timings and precision checks | `python3 envs/permit/openenv/space_root/report_evidence.py`; native rerun: `uv run --project envs/permit/core python convert/fidelity.py --jobs 4` |
 | `faithful-lift/`, `faithful-lift.md` | Published v1 submissions compared with the lifted verifier; binding values and binary hashes | `uv run --directory envs/permit/core pytest tests/test_lift_faithful.py --evidence-dir ../../../results/evidence/faithful-lift -q` |
 | `search/`, `pipeline-budget.json` | Before/after search timings and estimated CPU budgets | `python3 convert/report_search.py`; native commands are recorded in each receipt |

@@ -34,7 +34,7 @@ they cannot change the submission or regrade. Only submission produces a grade;
 other actions and an episode ending without submission earn zero reward.
 Disconnect or graceful harness termination finalizes `no_submit` with zero reward
 and a fixed terminal timestamp. Scored servers disable the shared Gradio playground
-with `ENABLE_WEB_INTERFACE=false`; the public Space's playground is a demo only.
+with `ENABLE_WEB_INTERFACE=false`; the Space's playground is a demo only.
 
 Reproduce the budget, terminal behavior and reset semantics:
 
@@ -223,7 +223,7 @@ rg -n '0.75|F13.5|NINT' envs/permit/core/native_build/model-source/aermod/{calc2
 
 For a feasible submission, `prescore_usd_saved = cost(draft) - cost(submitted)`
 in USD/year. An invalid, infeasible or absent submission has prescore sentinel
-−1 and reward zero; a feasible unchanged draft has prescore zero and reward zero.
+-1 and reward zero; a feasible unchanged draft has prescore zero and reward zero.
 `pct_saved` reports `100 * prescore / draft_cost` for feasible submissions and
 zero for a failed submission. Best-known search cost is contextual, never a
 claim of a proven optimum.
@@ -254,7 +254,7 @@ sed -n '180,200p' envs/permit/openenv/permit_openenv/environment.py
 | NO2 | Published mix of PVMRM and ARM2 | ARM2 throughout; feasible sets can differ and draft admission is rechecked |
 | Height choice | Continuous within physical/GEP bounds | Returned discrete menu |
 | Evaluation budget | 75 native launches, equivalent to 25 three-pollutant evaluations | 30 evaluations; checks free; submission separate |
-| Score | Raw USD/year saved; failure floor −1 | USD savings prescore plus saved-fraction reward; failed grade and draft reward zero |
+| Score | Raw USD/year saved; failure floor -1 | USD savings prescore plus saved-fraction reward; failed grade and draft reward zero |
 
 Facilities, costs, backgrounds, weather and receptors are reused. Limitations:
 one control ladder per source, one stack price per facility, flat terrain,

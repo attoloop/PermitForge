@@ -1,6 +1,8 @@
-# PermitForge evaluation protocol
+# PermitForge pilot evaluation protocol (historical)
 
-Protocol version: WP2.0b / 2026-10-17. Freeze this file and each run's `run.json` before model sampling.
+This is the pilot protocol, kept for the record. The final protocol is [PROTOCOL.md](PROTOCOL.md).
+
+Pilot protocol, 2026-10-17. Freeze this file and each run's `run.json` before model sampling.
 
 ## Cohort and attempts
 
@@ -14,7 +16,7 @@ and disclose each model's full coverage. Do not pool repeated model/task attempt
 The requested Anthropic models are `claude-opus-5-5`, `claude-sonnet-5-5`, and `claude-haiku-5-5`.
 The subscription driver accepts locally catalogued Codex models, including `gpt-6.1-sol` and `gpt-6-astra`.
 HF router execution is outside this work package. No API calls, paid pilots, or publication are authorized by this file.
-The operator must authorize spending before invoking a paid driver, including the plan's five-task cost pilot.
+Spending must be authorized by hand before a paid driver runs, including the five-task cost pilot.
 
 ## Locked interaction
 
@@ -32,7 +34,7 @@ SDK retries are disabled. Input, cached input, output and per-response cost are 
 cache reads and writes. `prices.toml` records standard prices, their source and verification date, including Haiku's
 prompt-length tier and cache TTL categories. Sources: [Anthropic pricing](https://platform.claude.com/docs/en/about-claude/pricing)
 and the [Haiku pricing description](https://www.anthropic.com/claude/haiku), checked 2026-10-17.
-Unknown models are rejected before a request. Re-verify prices before a later panel.
+Unknown models are rejected before a request. Prices were re-verified for the final panel.
 
 ## Isolation and recording
 
@@ -133,11 +135,11 @@ Unknown billed usage must be investigated before resuming a paid run. Subscripti
 
 ## Calibration, reports and regrading
 
-`calibrate.py` uses only feasible submitted model episodes from the declared runs, for both splits. Per task:
+The calibration step described here was retired before the final panel; no `calibrate.py` exists. It used only feasible submitted model episodes from the declared runs, for both splits. Per task:
 `worst = 0`, `best = maximum positive feasible USD saved`, `saturation = 4 × best`, `source = panel`, `frozen_at = UTC`.
 No positive saving means `worst:0, best:null, saturation:null, source:none`: an all-draft panel cannot define a nonzero
 calibration span. Search and naive policies never supply anchors. Existing frozen anchors cannot change; identical
-replays are idempotent. The operator's model-only decision supersedes the older search fallback in the plan.
+replays are idempotent. The model-only decision superseded the older search fallback.
 Calibration writes only the explicitly selected task record files (or both converted v2 files by default).
 
 `rescore.py` re-verifies the first stored submission using the full ARM2 verifier and current panel anchors. It preserves
@@ -172,7 +174,7 @@ uv run --project envs/permit/openenv --no-sync ruff check eval
 uv run --project envs/permit/openenv --extra agents --locked python eval/run_eval.py --run wp2.1-smoke \
   --models codex:gpt-6.1-sol --split train --tasks 003bd328a392-s47 --concurrency 1 --max-turns 40
 
-# Only after the operator authorizes paid use; install the existing agents extra first.
+# Only after paid use is authorized; install the existing agents extra first.
 uv run --project envs/permit/openenv --extra agents --locked python eval/run_eval.py --run approved-pilot \
   --models anthropic:claude-sonnet-5-5 --split eval --tasks TASK_IDS --budget-usd 25
 

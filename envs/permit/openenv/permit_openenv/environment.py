@@ -59,7 +59,7 @@ class PermitForgeEnvironment(MCPEnvironment):
         self._episode: Episode | None = None
         self._state = PermitState()
         self._lock = threading.RLock()
-        mcp = FastMCP('permit_forge')
+        mcp = FastMCP('permitforge')
 
         @mcp.tool
         async def get_scenario() -> str:

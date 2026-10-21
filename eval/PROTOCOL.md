@@ -1,10 +1,10 @@
 # PermitForge final evaluation protocol
 
-Version WP2.8b, updated 2026-10-17. Freeze this file and `run.json` before sampling.
+Final version, 2026-10-17. Freeze this file and `run.json` before sampling.
 This supersedes the earlier cohort, effort, output limit and scheduling decisions.
 The byte-identical pilot protocol is preserved as [PROTOCOL-pilot.md](PROTOCOL-pilot.md).
 Existing pilot rollouts remain untouched and cannot be imported into this protocol:
-the protocol hash and sampling settings differ. The operator launches all model work.
+the protocol hash and sampling settings differ. Model runs are launched by hand, never by tests.
 
 ## Models and launch effort
 
@@ -60,7 +60,7 @@ Changing effort changes the protocol hash and prevents resume/import pooling.
 ## Model-free cohort
 
 `eval/select_tasks.py` writes `results/subsets.json`: 10 eval and 10 train tasks,
-with four independent repeats per model/task. It shortlists 30 tasks per split,
+with three independent repeats per model/task (the file still says four; the run manifest sets three). It shortlists 30 tasks per split,
 stratified by station, using source count, native-draft standards near their
 limit, and an uncontrolled-at-GEP exceedance bound. The preserved manifest has
 no binding/exceedance metadata. The bound scales the uniform control ladder;
@@ -87,20 +87,20 @@ probe artifacts are the reproducible selection inputs. No search is called an op
 Only `eval.select_tasks --report-only` reproduces the active selection from the
 frozen probes. The historical `eval.subsets` defaults to
 `results/subsets-wp2.7.json` and refuses the active destination. The launcher
-checks the WP2.8 cohort marker, quotas and frozen-probe selection before any
+checks the cohort marker, quotas and frozen-probe selection before any
 provider preflight, including during a dry run.
 
 ```sh
 uv run --no-sync python -m eval.select_tasks --jobs 4 --field-jobs 3 \
-  --cache internal/reports/WP2.8-evidence/difficulty-probes --output results/subsets.json
+  --cache eval/selection-probes --output results/subsets.json
 # Rebuild selection from frozen probes, without native work:
 uv run --no-sync python -m eval.select_tasks --report-only \
-  --cache internal/reports/WP2.8-evidence/difficulty-probes --output results/subsets.json
+  --cache eval/selection-probes --output results/subsets.json
 PERMIT_FIELDS_CACHE_GB=64 uv run --no-sync python -m eval.warm_fields \
   --subsets results/subsets.json --field-jobs 12
 ```
 
-To cancel a probe cleanly, create `internal/reports/WP2.8-evidence/difficulty-probes/.stop`
+To cancel a probe cleanly, create `eval/selection-probes/.stop`
 and wait for its workers to release their leases. Resume with the same command;
 it clears the marker only after acquiring the exclusive probe-run lock.
 
@@ -182,7 +182,7 @@ confidence intervals. Within-task spread and task-weighted CIs follow
 
 ## Operator launch
 
-The following command spends model credit and is for the operator only. Add
+The following command spends model credit. Add
 `--dry-run` to inspect it without any model episodes.
 
 ```sh
@@ -204,7 +204,7 @@ Offline suite: `uv run --project envs/permit/openenv --no-sync python -m pytest 
 
 ## Extended-budget experiment
 
-WP2.11, 2026-10-18: a separate headroom experiment asks whether the evaluation
+Extended-budget experiment, 2026-10-18: a separate headroom experiment asks whether the evaluation
 budget constrains performance. In `results/rollouts/final-medium3`, neither Claude
 model exhausted its budget (0/120 episodes); the GPT models exhausted it in
 27/120 episodes (16 GPT-6.1 Sol, 11 GPT-5.6 Sol). Recompute the counts and the
@@ -230,7 +230,7 @@ The chosen evaluation budget, prompt caching and experiment marker enter the
 protocol hash and `run.json`; resume rejects changes.
 
 The credit leg is `extended-budget`: `anthropic:claude-fable-5-1` first uses the
-remaining Anthropic console credit stated by the operator as `--budget-usd`;
+remaining Anthropic console credit, passed as `--budget-usd`;
 `codex:gpt-6-astra` uses the ChatGPT subscription. Fable's verified standard
 USD/MTok prices are input 10, output 50, cache write 5m 12.50, write 1h 20,
 read 0.25. Source checked 2026-10-18:
@@ -246,8 +246,7 @@ Committed charges plus concurrent episode reservations plus the next episode's
 estimate must fit. The initial conservative estimate is $60: reprice the
 maximum-cost Opus token record from final-medium3 at Fable rates ($7.59872),
 scale by 100/30 and double ($50.6581333), then round upward to the next $10.
-The command above saves the source path/hash and arithmetic to
-`internal/reports/WP2.11-evidence/main-budget-and-prior.json`.
+The command above prints the source path/hash and arithmetic.
 After the first completed API episode, use the maximum measured episode cost;
 unknown charges retain their full launch reservation, including after resume.
 This is an empirical cost estimate, **not a mathematical invoice ceiling**;
@@ -267,7 +266,8 @@ Fable subscription leg; Fable's explicit initial console-credit leg is the sole
 API exception in this experiment. Subscription USD is null.
 
 Claude Code 2.1.302 is launched with the flags verified in `claude --help` on this
-host: `-p --model --effort --system-prompt --tools "" --mcp-config
+host (the driver and its CLI test are tied to that version; with another version the
+test skips and the driver must be re-checked): `-p --model --effort --system-prompt --tools "" --mcp-config
 --strict-mcp-config --allowedTools --output-format stream-json --verbose
 --max-turns --no-session-persistence --disable-slash-commands --setting-sources
 --settings`. The working directory is empty. `CLAUDE_CONFIG_DIR` points to an
@@ -290,7 +290,7 @@ raw requests, SSE, stderr, argv and MCP config are retained. `--bare` cannot be
 used because it disables OAuth. `--safe-mode` cannot be used because it disables
 explicit MCP too. Two compiled-in plugins are still listed by this CLI; the
 individual controls and provider boundary remove their context and tool effects.
-They are not operator-installed plugins. These limitations are exposed in the
+They are not user-installed plugins. These limitations are exposed in the
 saved init event, not described as an entirely plugin-free binary.
 Sources checked 2026-10-18: [CLI flags](https://code.claude.com/docs/en/cli-reference),
 [configuration isolation](https://code.claude.com/docs/en/authentication),

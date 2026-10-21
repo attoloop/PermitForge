@@ -1,4 +1,4 @@
-# PermitForge v2 — OpenEnv
+# PermitForge v2 on OpenEnv
 
 Choose a control and a stack height for each plant source, minimize annualized cost,
 and meet every air-quality standard at every receptor. This package exposes the
@@ -49,7 +49,7 @@ menus returned for the task. Public costs are JSON numbers; core cost arithmetic
 and savings are Decimal. Rubric children are `feasible` and `cost_quality`.
 
 The reward calls `permit_core.reward` with exact savings and draft cost, returning
-the saved fraction. Invalid or infeasible submissions have prescore −1 and reward
+the saved fraction. Invalid or infeasible submissions have prescore -1 and reward
 zero; a feasible unchanged draft has prescore and reward zero. No anchors are
 returned or required. USD/year savings and `pct_saved` remain available.
 
@@ -102,12 +102,12 @@ Configuration:
   gate directories can exceed it; idle managed packs are evicted on release.
 - `PERMIT_MODELS_DIR`: core's native-binary override.
 - `ENABLE_WEB_INTERFACE=false`: disables Gradio; static `/web` remains available.
-- `MAX_CONCURRENT_ENVS`: session limit, capped at 4 here.
+- `MAX_CONCURRENT_ENVS`: session limit (default 4, at most 16).
 
 `openenv.yaml` and `space_root/` follow the PortSim structure. The Dockerfile
 uses the repository root as its build context and compiles the native binaries
 with the core's pinned build recipe. Converted task data and met files must be
-present. Publication and a rebuild of the current image remain TODO.
+present. The same image runs the public Space.
 
 The wind rose uses north-centered clockwise sectors, lower-bound speed bins
 `[0.5, 2, 4, 6, 8, 10]` m/s with an open final bin, and calm below 0.5 m/s. Missing
