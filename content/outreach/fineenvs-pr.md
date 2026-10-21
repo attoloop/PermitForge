@@ -15,7 +15,8 @@ Two differences from the other 07 entries: there is no solver reference or prove
 reward is the share of the draft's cost saved, and the plants are synthetic while the weather is real.
 
 This is a link-only entry: `project.yaml`, a README card and two eval cards. Code, data and Hub repos
-stay in our namespace.
+stay in our namespace. If you would rather have the full code in this repo, as the PortSimEnv entries do,
+we are happy to move it in.
 
 - Code: https://github.com/attoloop/PermitForge
 - Space: https://huggingface.co/spaces/Bhuminjay/PermitForge
