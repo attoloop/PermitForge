@@ -11,6 +11,9 @@ weather, at the lowest annualized cost. Every submission is graded by EPA's own 
 fast evaluator built from precomputed unit fields (checked against the native model on 1,920 values to
 five decimals) and gets 30 evaluations per episode.
 
+Two differences from the other 07 entries: there is no solver reference or proven optimum, since the
+reward is the share of the draft's cost saved, and the plants are synthetic while the weather is real.
+
 This is a link-only entry: `project.yaml`, a README card and two eval cards. Code, data and Hub repos
 stay in our namespace.
 
