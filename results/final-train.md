@@ -23,9 +23,6 @@ Reward is the saved fraction. Raw USD means include the -1 gate-failure sentinel
 | anthropic:claude-opus-5-5@medium | KPIT | 1 | 0.5293 | 1382135.32 | 100.00% |
 | anthropic:claude-opus-5-5@medium | KSHV | 1 | 0.4968 | 1574363.50 | 100.00% |
 | anthropic:claude-opus-5-5@medium | KTUS | 1 | 0.5281 | 2005899.05 | 100.00% |
-
-anthropic:claude-opus-5-5@medium: ended without submission 0; categories `{"submitted": 30}`; coverage 10 station clusters; GRPO signal 1.0000 over 10 repeated tasks; mean pairwise spread 0.0321; best-observed reference available for 10 tasks.
-
 | anthropic:claude-sonnet-5-5@medium | KALB | 1 | 0.3255 | 995150.88 | 100.00% |
 | anthropic:claude-sonnet-5-5@medium | KAMA | 1 | 0.4615 | 1493437.78 | 100.00% |
 | anthropic:claude-sonnet-5-5@medium | KCRP | 1 | 0.4908 | 2210128.90 | 100.00% |
@@ -36,9 +33,6 @@ anthropic:claude-opus-5-5@medium: ended without submission 0; categories `{"subm
 | anthropic:claude-sonnet-5-5@medium | KPIT | 1 | 0.5147 | 1344057.42 | 100.00% |
 | anthropic:claude-sonnet-5-5@medium | KSHV | 1 | 0.4427 | 1403094.11 | 100.00% |
 | anthropic:claude-sonnet-5-5@medium | KTUS | 1 | 0.4518 | 1716198.09 | 100.00% |
-
-anthropic:claude-sonnet-5-5@medium: ended without submission 0; categories `{"submitted": 30}`; coverage 10 station clusters; GRPO signal 1.0000 over 10 repeated tasks; mean pairwise spread 0.0335; best-observed reference available for 10 tasks.
-
 | codex:gpt-5.6-sol@medium | KALB | 1 | 0.4408 | 1347583.03 | 100.00% |
 | codex:gpt-5.6-sol@medium | KAMA | 1 | 0.4733 | 1531612.09 | 100.00% |
 | codex:gpt-5.6-sol@medium | KCRP | 1 | 0.5042 | 2270903.88 | 100.00% |
@@ -49,9 +43,6 @@ anthropic:claude-sonnet-5-5@medium: ended without submission 0; categories `{"su
 | codex:gpt-5.6-sol@medium | KPIT | 1 | 0.5283 | 1379382.75 | 100.00% |
 | codex:gpt-5.6-sol@medium | KSHV | 1 | 0.5565 | 1763586.86 | 100.00% |
 | codex:gpt-5.6-sol@medium | KTUS | 1 | 0.4951 | 1880575.07 | 100.00% |
-
-codex:gpt-5.6-sol@medium: ended without submission 0; categories `{"submitted": 30}`; coverage 10 station clusters; GRPO signal 1.0000 over 10 repeated tasks; mean pairwise spread 0.0254; best-observed reference available for 10 tasks.
-
 | codex:gpt-6.1-sol@medium | KALB | 1 | 0.4646 | 1420397.84 | 100.00% |
 | codex:gpt-6.1-sol@medium | KAMA | 1 | 0.4694 | 1518745.20 | 100.00% |
 | codex:gpt-6.1-sol@medium | KCRP | 1 | 0.5957 | 2682601.87 | 100.00% |
@@ -62,6 +53,15 @@ codex:gpt-5.6-sol@medium: ended without submission 0; categories `{"submitted": 
 | codex:gpt-6.1-sol@medium | KPIT | 1 | 0.5377 | 1403974.73 | 100.00% |
 | codex:gpt-6.1-sol@medium | KSHV | 1 | 0.5681 | 1800308.58 | 100.00% |
 | codex:gpt-6.1-sol@medium | KTUS | 1 | 0.5391 | 2047465.34 | 100.00% |
+
+anthropic:claude-opus-5-5@medium: ended without submission 0; categories `{"submitted": 30}`; coverage 10 station clusters; GRPO signal 1.0000 over 10 repeated tasks; mean pairwise spread 0.0321; best-observed reference available for 10 tasks.
+
+
+anthropic:claude-sonnet-5-5@medium: ended without submission 0; categories `{"submitted": 30}`; coverage 10 station clusters; GRPO signal 1.0000 over 10 repeated tasks; mean pairwise spread 0.0335; best-observed reference available for 10 tasks.
+
+
+codex:gpt-5.6-sol@medium: ended without submission 0; categories `{"submitted": 30}`; coverage 10 station clusters; GRPO signal 1.0000 over 10 repeated tasks; mean pairwise spread 0.0254; best-observed reference available for 10 tasks.
+
 
 codex:gpt-6.1-sol@medium: ended without submission 0; categories `{"submitted": 30}`; coverage 10 station clusters; GRPO signal 0.9000 over 10 repeated tasks; mean pairwise spread 0.0076; best-observed reference available for 10 tasks.
 
@@ -122,4 +122,4 @@ The complete final-medium3 run used the frozen model-free cohort from results/su
 
 Anthropic request-budget.json and costs.jsonl agree on $120.510718 for the complete run across both splits; subscription USD is unknown.
 
-Reproduce the generated tables with `PERMIT_FIELDS_CACHE_GB=64 uv run --project envs/permit/openenv --no-sync python -m eval.report final-medium3 --split train --output results/final-train.md`, then append these supplements with `python -m eval.card final-medium3 --write` under the same environment. The card command is offline and idempotent.
+The run folder is `rollouts/final-medium3` in the dataset: `uvx --from 'huggingface-hub==1.33.0' hf download Attoloop/PermitForge --repo-type dataset --include 'rollouts/final-medium3/*' --local-dir results` puts it under `results/rollouts/`. Reproduce the generated tables with `PERMIT_FIELDS_CACHE_GB=64 uv run --project envs/permit/openenv --no-sync python -m eval.report final-medium3 --split train --output results/final-train.md`, then append these supplements with `python -m eval.card final-medium3 --write` under the same environment. The card command is offline and idempotent.

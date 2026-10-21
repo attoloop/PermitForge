@@ -91,11 +91,12 @@ source eviction; the tooling and report alone do not contain the extracted data.
 
 ## V2 task conversion and ARM2 draft verification
 
-From the repository root, convert the preserved archive in one command (the
-output must be new or empty, so existing eligibility records are never reset):
+From the repository root, convert the preserved archive in one command. The
+output folder must be new or empty, so existing eligibility records are never
+reset; the tracked records in `envs/permit/tasks` were produced this way:
 
 ```sh
-uv run python convert/v1_to_v2.py --src convert/v1-src --out envs/permit/tasks
+uv run python convert/v1_to_v2.py --src convert/v1-src --out convert/cache/rebuilt-tasks
 ```
 
 `tasks/data/<instance_id>/` contains the original scenario, costs, backgrounds,

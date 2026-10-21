@@ -97,9 +97,14 @@ uv run --project train/cloud --frozen --no-sync python -m train.cloud.bundle --v
   --output train/cloud/data/cloud-bundle.tar.gz --sha256 "$BUNDLE_SHA"
 ```
 
-Plans (CPU only, write nothing): `python -m train.cloud.run --plan --recipe smoke` and
-`--recipe grpo --grpo-steps 30`. They print the stage budgets at $5 per hour; the job supervisor
-enforces them.
+Plans (CPU only, write nothing):
+
+```sh
+uv run --project train/cloud --frozen --no-sync python -m train.cloud.run --plan --recipe smoke
+uv run --project train/cloud --frozen --no-sync python -m train.cloud.run --plan --recipe grpo --grpo-steps 30
+```
+
+They print the stage budgets at $5 per hour; the job supervisor enforces them.
 
 Hub setup, once, with `HF_TOKEN` set. The inputs dataset and the run bucket are private:
 
@@ -113,18 +118,26 @@ uvx --from 'huggingface-hub==1.33.0' hf upload Attoloop/permitforge-qwen38-input
 Launch. Each script probes for a good host first and watches the job until it ends:
 
 ```sh
-bash train/cloud/ops/smoke-attempts.sh d                 # smoke; artifacts in <bucket>/smoke-evalrules-d1
+bash train/cloud/ops/smoke-attempts.sh d                 # smoke; artifacts in the run bucket under smoke-evalrules-d1
 STEPS=30 bash train/cloud/ops/chain-full.sh full-30      # GRPO in 5-step chunks, both evals, export
 ```
 
-Read back and report:
+Read back and report. The published run and job ledger are in the dataset, so this needs no
+bucket access:
+
+```sh
+uvx --from 'huggingface-hub==1.33.0' hf download Attoloop/PermitForge --repo-type dataset \
+  --include 'training/runs/full-30/*' 'training/logs/jobs.json' --local-dir train/cloud/data
+uv run --project envs/permit/openenv --no-sync python -m eval.learnability \
+  --run train/cloud/data/training/runs/full-30 --jobs train/cloud/data/training/logs/jobs.json --write
+```
+
+With access to the run bucket, the same inputs come from the source:
 
 ```sh
 uvx --from 'huggingface-hub==1.33.0' hf sync hf://buckets/Attoloop/permitforge-qwen38-runs/full-30 train/cloud/data/full-30
-python train/cloud/ops/jobs_ledger.py Attoloop train/cloud/data/jobs.json
-uv run --project envs/permit/openenv --no-sync python -m eval.learnability \
-  --run train/cloud/data/full-30 --jobs train/cloud/data/jobs.json --write
+uv run --project train/cloud --frozen --no-sync python train/cloud/ops/jobs_ledger.py Attoloop train/cloud/data/jobs.json
 ```
 
-Trackio is opt-in: add `--trackio-space <org>/<space> --trackio-bucket <org>/<bucket>` after `--`
-to log trainer metrics to a Space. The run above did not use it; the bucket holds the logs.
+Trackio is opt-in: add `--trackio-space Attoloop/permitforge-trackio --trackio-bucket Attoloop/permitforge-qwen38-runs`
+after `--` to log trainer metrics to a Space. The run above did not use it; the bucket holds the logs.

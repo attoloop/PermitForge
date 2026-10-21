@@ -76,13 +76,13 @@
   },
   {
     "section": "Reward",
-    "numbers": "sentinel -1; worst 0; b>0; s=b+3*(b-w); coefficients 0.4/1.2/2; points 0/0.4/0.8; asymptote 1.0",
+    "numbers": "prescore -1 for a failed gate; saved = draft cost - verified cost; reward = min(1, saved / draft cost) when feasible and saved > 0, else 0",
     "sources": [
       "envs/permit/core/permit_core/reward.py",
       "envs/permit/openenv/permit_openenv/tasks.py",
       "envs/permit/openenv/permit_openenv/environment.py"
     ],
-    "command": "cat envs/permit/core/permit_core/reward.py; the reference-point Python block in DESIGN.md, The reward."
+    "command": "cat envs/permit/core/permit_core/reward.py; DESIGN.md, The reward; CONTRACT.md, Prescore and reward."
   },
   {
     "section": "Baselines/search policies and limits",

@@ -182,7 +182,6 @@ uv run --project envs/permit/openenv --extra agents --locked python eval/run_eva
 uv run --project envs/permit/openenv --no-sync python -m eval.attempts RUN
 
 uv run --project envs/permit/openenv --no-sync python eval/report.py RUN --compute-baselines
-uv run --project envs/permit/openenv --no-sync python eval/calibrate.py --runs RUN
 uv run --project envs/permit/openenv --no-sync python eval/rescore.py RUN
 uv run --project envs/permit/openenv --no-sync python eval/report.py RUN
 

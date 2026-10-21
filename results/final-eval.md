@@ -18,30 +18,30 @@ Reward is the saved fraction. Raw USD means include the -1 gate-failure sentinel
 | anthropic:claude-opus-5-5@medium | KJAX | 2 | 0.7118 | 2206272.26 | 100.00% |
 | anthropic:claude-opus-5-5@medium | KOMA | 2 | 0.4826 | 1313881.60 | 100.00% |
 | anthropic:claude-opus-5-5@medium | KTOP | 2 | 0.6284 | 2039110.21 | 100.00% |
-
-anthropic:claude-opus-5-5@medium: ended without submission 0; categories `{"submitted": 30}`; coverage 5 station clusters; GRPO signal 0.9000 over 10 repeated tasks; mean pairwise spread 0.0291; best-observed reference available for 10 tasks.
-
 | anthropic:claude-sonnet-5-5@medium | KABQ | 2 | 0.3746 | 1254090.25 | 100.00% |
 | anthropic:claude-sonnet-5-5@medium | KDDC | 2 | 0.4979 | 1761365.05 | 100.00% |
 | anthropic:claude-sonnet-5-5@medium | KJAX | 2 | 0.6601 | 2040636.12 | 100.00% |
 | anthropic:claude-sonnet-5-5@medium | KOMA | 2 | 0.4181 | 1138217.47 | 100.00% |
 | anthropic:claude-sonnet-5-5@medium | KTOP | 2 | 0.5849 | 1891312.77 | 100.00% |
-
-anthropic:claude-sonnet-5-5@medium: ended without submission 0; categories `{"submitted": 30}`; coverage 5 station clusters; GRPO signal 1.0000 over 10 repeated tasks; mean pairwise spread 0.0362; best-observed reference available for 10 tasks.
-
 | codex:gpt-5.6-sol@medium | KABQ | 2 | 0.5005 | 1662825.09 | 100.00% |
 | codex:gpt-5.6-sol@medium | KDDC | 2 | 0.5941 | 2196403.11 | 100.00% |
 | codex:gpt-5.6-sol@medium | KJAX | 2 | 0.7096 | 2197878.25 | 100.00% |
 | codex:gpt-5.6-sol@medium | KOMA | 2 | 0.4976 | 1354818.10 | 100.00% |
 | codex:gpt-5.6-sol@medium | KTOP | 2 | 0.6269 | 2033735.66 | 100.00% |
-
-codex:gpt-5.6-sol@medium: ended without submission 0; categories `{"submitted": 30}`; coverage 5 station clusters; GRPO signal 1.0000 over 10 repeated tasks; mean pairwise spread 0.0220; best-observed reference available for 10 tasks.
-
 | codex:gpt-6.1-sol@medium | KABQ | 2 | 0.5245 | 1743387.59 | 100.00% |
 | codex:gpt-6.1-sol@medium | KDDC | 2 | 0.6272 | 2312492.68 | 100.00% |
 | codex:gpt-6.1-sol@medium | KJAX | 2 | 0.7170 | 2220132.20 | 100.00% |
 | codex:gpt-6.1-sol@medium | KOMA | 2 | 0.5159 | 1404783.42 | 100.00% |
 | codex:gpt-6.1-sol@medium | KTOP | 2 | 0.6478 | 2108247.11 | 100.00% |
+
+anthropic:claude-opus-5-5@medium: ended without submission 0; categories `{"submitted": 30}`; coverage 5 station clusters; GRPO signal 0.9000 over 10 repeated tasks; mean pairwise spread 0.0291; best-observed reference available for 10 tasks.
+
+
+anthropic:claude-sonnet-5-5@medium: ended without submission 0; categories `{"submitted": 30}`; coverage 5 station clusters; GRPO signal 1.0000 over 10 repeated tasks; mean pairwise spread 0.0362; best-observed reference available for 10 tasks.
+
+
+codex:gpt-5.6-sol@medium: ended without submission 0; categories `{"submitted": 30}`; coverage 5 station clusters; GRPO signal 1.0000 over 10 repeated tasks; mean pairwise spread 0.0220; best-observed reference available for 10 tasks.
+
 
 codex:gpt-6.1-sol@medium: ended without submission 0; categories `{"submitted": 30}`; coverage 5 station clusters; GRPO signal 0.5000 over 10 repeated tasks; mean pairwise spread 0.0036; best-observed reference available for 10 tasks.
 
@@ -95,4 +95,4 @@ The complete final-medium3 run used the frozen model-free cohort from results/su
 
 Anthropic request-budget.json and costs.jsonl agree on $120.510718 for the complete run across both splits; subscription USD is unknown.
 
-Reproduce the generated tables with `PERMIT_FIELDS_CACHE_GB=64 uv run --project envs/permit/openenv --no-sync python -m eval.report final-medium3 --split eval --output results/final-eval.md`, then append these supplements with `python -m eval.card final-medium3 --write` under the same environment. The card command is offline and idempotent.
+The run folder is `rollouts/final-medium3` in the dataset: `uvx --from 'huggingface-hub==1.33.0' hf download Attoloop/PermitForge --repo-type dataset --include 'rollouts/final-medium3/*' --local-dir results` puts it under `results/rollouts/`. Reproduce the generated tables with `PERMIT_FIELDS_CACHE_GB=64 uv run --project envs/permit/openenv --no-sync python -m eval.report final-medium3 --split eval --output results/final-eval.md`, then append these supplements with `python -m eval.card final-medium3 --write` under the same environment. The card command is offline and idempotent.

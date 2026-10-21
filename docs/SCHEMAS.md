@@ -35,7 +35,7 @@ source's `height_menu_m`.
 There is no `anchors` field. Task records also omit `anchors`, `anchor_source`,
 `anchors_frozen_at` and `anchor_runs`. Historical records may retain old fields;
 reporting recomputes saved fraction from the recorded savings and draft cost.
-Invalid designs: `{"valid": false, "errors": ["E_MENU: use every source exactly once with a compatible control and listed height"], "evaluations_left": <unchanged>}`.
+Invalid designs: `{"valid": false, "errors": ["E_MENU: use every source exactly once with a compatible control and listed height"], "evaluations_left": 30}`, with `evaluations_left` unchanged by the invalid design.
 The first fast evaluation of a task may also return a `note` explaining on-demand field preparation.
 Subsequent evaluations reuse the disk cache. Field preparation spends no additional evaluation tokens.
 

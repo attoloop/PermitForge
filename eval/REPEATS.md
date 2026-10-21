@@ -60,11 +60,13 @@ one row per model/task for plotting. JSON has numeric values; CSV leaves nulls
 blank. Both scripts are read-only with respect to input rollouts and task packs:
 
 ```sh
-uv run --project envs/permit/openenv --no-sync python -m eval.report repeated-eval \
-  --output results/repeated-eval-board.md
-uv run --project envs/permit/openenv --no-sync python -m eval.best_observed repeated-eval \
-  --output results/repeated-eval-best.json
+uv run --project envs/permit/openenv --no-sync python -m eval.report final-medium3 --split eval \
+  --output results/board.md
 ```
+
+`eval.best_observed RUN --output FILE` takes a run that holds one split. For
+`final-medium3`, which holds both, the best-observed table is in
+[results/final-eval.md](../results/final-eval.md), written by `eval.card`.
 
 Report train and eval separately. Duplicate `(model, task_id, repeat)` identities
 are rejected rather than pooled as selective reruns. A full native rescore remains

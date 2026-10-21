@@ -132,7 +132,7 @@ dev = [
 ]
 
 [[package]]
-name = "permit-forge-tools"
+name = "permitforge-tools"
 version = "0.1.0"
 source = { virtual = "." }
 dependencies = [

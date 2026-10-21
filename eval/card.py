@@ -311,7 +311,9 @@ def report_supplement(run: Path, split: str, tasks: list[dict]) -> str:
               '## How this was run', '', HOW_RUN, '',
               f"Anthropic request-budget.json and costs.jsonl agree on ${read(run/'request-budget.json')['committed_usd']:.6f} "
               'for the complete run across both splits; subscription USD is unknown.', '',
-              'Reproduce the generated tables with '
+              'The run folder is `rollouts/final-medium3` in the dataset: `uvx --from \'huggingface-hub==1.33.0\' hf download '
+              'Attoloop/PermitForge --repo-type dataset --include \'rollouts/final-medium3/*\' --local-dir results` puts it under '
+              '`results/rollouts/`. Reproduce the generated tables with '
               f'`PERMIT_FIELDS_CACHE_GB=64 uv run --project envs/permit/openenv --no-sync python -m eval.report '
               f'final-medium3 --split {split} --output results/final-{split}.md`, then append these '
               'supplements with `python -m eval.card final-medium3 --write` under the same environment. '

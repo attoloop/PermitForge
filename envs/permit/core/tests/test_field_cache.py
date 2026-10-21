@@ -189,3 +189,10 @@ def test_failed_partial_build_is_subject_to_cap(cache, monkeypatch):
 def test_invalid_parallelism(cache, jobs):
     with pytest.raises(ValueError, match='jobs'):
         fields.ensure_pack(cache[0], jobs=jobs)
+
+
+def test_cache_root_without_v1_extraction(monkeypatch):
+    def missing():
+        raise FileNotFoundError('Set PERMIT_V1_DIR to the extracted v1 source directory')
+    monkeypatch.setattr(fields, 'extraction_root', missing)
+    assert fields.cache_root() == Path(fields.__file__).resolve().parents[4]/'convert/cache/fields'

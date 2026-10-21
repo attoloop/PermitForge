@@ -1,6 +1,6 @@
 # Qwen3.8-27B GRPO on PermitForge: results
 
-Run `full-30`: 30 GRPO steps, 6 rollouts per step, LoRA rank 16 on one H200. Base and trained model evaluated on the same 10 held-out tasks, 3 repeats each, native verification. Everything here is computed from the run folder (`python -m eval.learnability --run <folder> --write`).
+Run `full-30`: 30 GRPO steps, 6 rollouts per step, LoRA rank 16 on one H200. Base and trained model evaluated on the same 10 held-out tasks, 3 repeats each, native verification. Everything here is computed from the run folder (`python -m eval.learnability --run training/runs/full-30 --jobs training/logs/jobs.json --write`, paths as in the dataset).
 
 ## Result
 
@@ -11,7 +11,7 @@ Run `full-30`: 30 GRPO steps, 6 rollouts per step, LoRA rank 16 on one H200. Bas
 
 Paired difference (trained minus base) over 10 tasks: mean -0.0004, sd 0.0379, se 0.0120, station-clustered 95% CI -0.0280 to +0.0264; 5 tasks up, 5 down, 0 unchanged.
 
-No measurable change in the mean. The largest per-task moves are about four points either way, inside what three repeats can resolve for most tasks, and nothing in the pattern says the model learned to find cheaper designs.
+No measurable change in the mean. The largest per-task moves are -6.9 and +4.6 points. Base and trained repeats overlap on 9 of 10 tasks, and nothing in the pattern says the model learned to find cheaper designs.
 
 ## Per task
 

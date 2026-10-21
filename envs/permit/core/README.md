@@ -90,7 +90,7 @@ summary tables, source paths, submission hashes, binary comparisons, and
 timings when `--evidence-dir` is supplied.
 
 ```sh
-uv run pytest -q --evidence-dir ../../../results/evidence/faithful-lift \
+uv run pytest -q tests --evidence-dir ../../../results/evidence/faithful-lift \
   --junitxml=../../../results/rollouts/core-tests.xml
 ```
 
@@ -105,7 +105,7 @@ from permit_core.evaluate import evaluate
 from permit_core.baselines import scenario_view
 from permit_core.model import load_v2_instance
 
-task = load_v2_instance("envs/permit/tasks", "074897d0f159-s47")
+task = load_v2_instance("../tasks", "074897d0f159-s47")  # from this folder
 with ensure_pack(task, jobs=4) as pack:
     result = evaluate(task, scenario_view(task)["draft_design"], pack, include_receptors=True)
 # Do not retain or use pack arrays after releasing the lease.

@@ -1,6 +1,6 @@
 <div align="center">
 
-<a href="https://github.com/attoloop/PermitForge"><img src="https://raw.githubusercontent.com/attoloop/PermitForge/55d4425/docs/banner.jpg" alt="PermitForge: a synthetic plant's stacks and buildings inside its fence, every receptor coloured by how much room the submitted design left under the hourly NO2 standard" width="100%"></a>
+<a href="https://github.com/attoloop/PermitForge"><img src="https://raw.githubusercontent.com/attoloop/PermitForge/55d4425/docs/banner.jpg" alt="PermitForge: a synthetic plant's stacks and buildings inside its fence, the receptors near the plant coloured by how much room the submitted design left under the hourly NO2 standard" width="100%"></a>
 
 <h1>PermitForge</h1>
 
@@ -25,15 +25,15 @@ Thirty air-quality evaluations, then one submission, graded by EPA's own dispers
 A plant already meets its limits with every stack on maximum control at its tallest allowed height. The
 agent makes it cheaper. For each source it picks one of three controls (none, moderate, maximum) and one
 height from a menu that ends at the Good Engineering Practice limit. A design must meet every standard
-(hourly and annual NO2, daily and annual PM2.5, hourly, three-hour and annual SO2) at every one of 184
+(hourly and annual NO2, daily and annual PM2.5 with two annual limits, hourly, three-hour and annual SO2) at every one of 184
 receptors, as five-year design values over real hourly weather, after adding the background already in the air.
 
 | Tool | What it does |
 |---|---|
 | `get_scenario()` | Sources, controls, height menus, standards, the draft and the evaluations left |
-| `check_design(design)` | Validity and exact annualized cost; free and unlimited |
-| `evaluate_design(design)` | Design values, margins and binding receptors from precomputed unit fields; 30 per episode |
-| `submit_design(design)` | Ends the episode; runs BPIP-PRIME and AERMOD and grades once |
+| `check_design(design)` | Validity and exact annualized cost, free and unlimited |
+| `evaluate_design(design)` | Design values, margins and binding receptors from precomputed unit fields, 30 per episode |
+| `submit_design(design)` | Ends the episode, runs BPIP-PRIME and AERMOD and grades once |
 
 The environment runs on [OpenEnv](https://github.com/huggingface/OpenEnv) over MCP. 360 tasks: 230 train
 at 10 weather stations, 130 eval at 5 other stations.
@@ -70,8 +70,8 @@ Model-free policies on the same tasks: the unchanged draft 0.00, cheapest-first 
 with 30 evaluations 0.31, best of eight random runs 0.46, a 60-second search 0.48. Card:
 [results/eval-v2.json](results/eval-v2.json).
 
-**Training.** Qwen3.8-27B was trained with GRPO (LoRA, 30 steps, 6 rollouts per step, one H200, $164 for the
-whole project) and evaluated before and after on the same 10 held-out tasks with the same harness. Base
+**Training.** Qwen3.8-27B was trained with GRPO (LoRA, 30 steps, 6 rollouts per step, one H200, $164 in
+cloud jobs) and evaluated before and after on the same 10 held-out tasks with the same harness. Base
 0.439, trained 0.439: no measurable change. The per-task table, curves, every failure met on the way and the cost
 ledger are in the repository's `train/cloud/RESULTS.md`. Card: [results/eval-v2-qwen.json](results/eval-v2-qwen.json).
 That harness differs from the frontier one, so the two cards are not compared.

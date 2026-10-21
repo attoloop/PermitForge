@@ -35,7 +35,13 @@ def height_key(height: object) -> str:
 
 
 def cache_root() -> Path:
-    return extraction_root().parent / 'cache/fields'
+    try:
+        return extraction_root().parent / 'cache/fields'
+    except FileNotFoundError:
+        for parent in Path(__file__).resolve().parents:
+            if (parent / 'convert').is_dir():
+                return parent / 'convert/cache/fields'
+        raise
 
 
 def pack_identity(task: Scenario) -> str:

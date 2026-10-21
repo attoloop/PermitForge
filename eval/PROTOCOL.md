@@ -2,7 +2,11 @@
 
 Final version, 2026-10-17. Freeze this file and `run.json` before sampling.
 This supersedes the earlier cohort, effort, output limit and scheduling decisions.
-The byte-identical pilot protocol is preserved as [PROTOCOL-pilot.md](PROTOCOL-pilot.md).
+The panel ran with the version of this file whose SHA-256 `run.json` records
+(`1edab505616c5ecc02d4e29a202441fc9e75d483e0934f22a486795a4c7684be`). The edits since
+are wording, the probe cache path, the repeat-count note below and the appended
+extended-budget section. No sampling rule changed.
+The pilot protocol is preserved as [PROTOCOL-pilot.md](PROTOCOL-pilot.md), with later wording edits.
 Existing pilot rollouts remain untouched and cannot be imported into this protocol:
 the protocol hash and sampling settings differ. Model runs are launched by hand, never by tests.
 
@@ -91,9 +95,10 @@ checks the cohort marker, quotas and frozen-probe selection before any
 provider preflight, including during a dry run.
 
 ```sh
+# Fresh probes go to a new cache; the tracked probes are frozen at the code they were made with:
 uv run --no-sync python -m eval.select_tasks --jobs 4 --field-jobs 3 \
-  --cache eval/selection-probes --output results/subsets.json
-# Rebuild selection from frozen probes, without native work:
+  --cache results/selection-probes-new --output results/subsets-new.json
+# Rebuild selection from the frozen probes, without native work:
 uv run --no-sync python -m eval.select_tasks --report-only \
   --cache eval/selection-probes --output results/subsets.json
 PERMIT_FIELDS_CACHE_GB=64 uv run --no-sync python -m eval.warm_fields \
@@ -178,9 +183,9 @@ prescore keeps the -1 failure sentinel. No calibration or reward anchors exist.
 Reports separate eval/train; task means average repeats before station-clustered
 confidence intervals. Within-task spread and task-weighted CIs follow
 [REPEATS.md](REPEATS.md). Efforts cannot be silently pooled. Full regrading uses
-`eval/rescore.py` and the native verifier, and is not part of this preparation WP.
+`eval/rescore.py` and the native verifier, and is not part of this preparation.
 
-## Operator launch
+## Launch
 
 The following command spends model credit. Add
 `--dry-run` to inspect it without any model episodes.
@@ -296,7 +301,7 @@ Sources checked 2026-10-18: [CLI flags](https://code.claude.com/docs/en/cli-refe
 [configuration isolation](https://code.claude.com/docs/en/authentication),
 [settings](https://code.claude.com/docs/en/settings).
 
-Operator-only launch commands (do not execute during implementation). Set
+These commands spend model credit. Set
 `PERMIT_CONSOLE_CREDIT_USD` to the remaining console credit before the credit leg;
 the existing maximum of $190 still applies. Episode/native concurrency is kept
 within four. The second command is only for the finished credit leg's remainder:

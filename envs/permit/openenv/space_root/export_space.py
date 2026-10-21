@@ -3,7 +3,7 @@
 The Space builds from a Dockerfile at its root with the Space repository as context. This copies exactly
 what the Dockerfile's COPY lines name (code, native model source, task and met data), the Dockerfile itself,
 the .dockerignore and the Space card as README.md. OUT_DIR must not exist. Upload it with
-`hf upload-large-folder <org>/<space> OUT_DIR --repo-type space`.
+`hf upload-large-folder Attoloop/PermitForge OUT_DIR --repo-type space`.
 """
 import shlex
 import shutil

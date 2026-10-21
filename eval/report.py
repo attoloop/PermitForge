@@ -193,6 +193,7 @@ def markdown(report: dict) -> str:
     for row in report['models']:
         for station, s in row['per_station'].items():
             lines.append(f"| {row.get('label', row['model'])} | {station} | {s['n']} | {fmt(s['reward'])} | {s['usd_saved']:.2f} | {s['feasible']:.2%} |")
+    for row in report['models']:
         lines += ['', f"{row.get('label', row['model'])}: ended without submission {row['ended_without_submit']}; "
                   f"categories `{json.dumps(row['failure_categories'], sort_keys=True)}`; "
                   f"coverage {row['station_clusters']} station clusters; GRPO signal {fmt(row['grpo_signal'])} "
@@ -252,6 +253,8 @@ def main() -> None:
     items = [r for _,r in report_records([run_path(r) for r in args.runs])]
     if args.split:
         items = [r for r in items if r['split'] == args.split]
+    if not items:
+        raise SystemExit(f'no episodes found for {args.runs}; download rollouts/<run> from the dataset into results/rollouts first')
     baseline_root = args.baseline_root or run_path(args.runs[0])/'baselines'
     if args.compute_baselines:
         from .baselines import compute_cached

@@ -18,8 +18,8 @@ using real NOAA weather and EPA AERMOD/BPIP-PRIME. Cut annualized cost while
 meeting every task air-quality standard.
 
 Open `/web/` for the standard OpenEnv Gradio playground and task guide, and
-`/healthz` for health. The MCP endpoint is **`/mcp`**; the
-repository README provides a client example.
+`/healthz` for health. The MCP endpoint is **`/mcp`**, and the
+repository README has a client example.
 The shared playground is a demo, not a scored endpoint. Scored runs use the eval
 harness, which forces `ENABLE_WEB_INTERFACE=false`.
 
@@ -37,8 +37,8 @@ absent submissions score zero. A score of 1.0 means zero annualized cost, which
 is unreachable because the uncontrolled design fails an air-quality standard.
 Raw USD/year and percentage savings are also returned. No calibration is needed.
 
-Facilities are synthetic; weather comes from the selected NOAA station.
-Concentrations are NAAQS design values across the task years. Code is Apache-2.0;
+Facilities are synthetic. Weather comes from the selected NOAA station.
+Concentrations are NAAQS design values across the task years. Code is Apache-2.0.
 NOAA/EPA provenance and government-work terms are in the repository `SOURCES.md`.
 
 Build from the repository root with converted task/met data present:

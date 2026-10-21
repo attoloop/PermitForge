@@ -9,7 +9,7 @@ cut annualized cost while meeting every air-quality standard.
 [Trained model](https://huggingface.co/Attoloop/PermitForge-Qwen3.8-27B-GRPO) ·
 [Eval card](results/eval-v2.json) · OpenEnv 0.7.0 · Apache-2.0
 
-![A plant inside its fence: buildings, stacks at their submitted heights, and every receptor coloured by how much room the submitted design left under the hourly NO2 limit](docs/banner.jpg)
+![A plant inside its fence: buildings, stacks at their submitted heights, and the receptors near the plant coloured by how much room the submitted design left under the hourly NO2 limit](docs/banner.jpg)
 
 ## The task
 
@@ -21,8 +21,8 @@ The draft uses maximum controls at GEP height.
 | Tool | What it does |
 |---|---|
 | `get_scenario()` | Sources, controls, menus, standards, draft and remaining evaluations |
-| `check_design(design)` | Validity and exact annualized cost; free and unlimited |
-| `evaluate_design(design)` | Air-quality values, margins and binding receptors; 30 valid evaluations per episode |
+| `check_design(design)` | Validity and exact annualized cost, free and unlimited |
+| `evaluate_design(design)` | Air-quality values, margins and binding receptors, 30 valid evaluations per episode |
 | `submit_design(design)` | Ends the episode and grades once with full BPIP/AERMOD verification |
 
 Reward is the feasible fraction of draft cost saved:
@@ -44,7 +44,7 @@ python3 envs/permit/openenv/space_root/report_evidence.py
 ## Results
 
 Four models, 10 held-out eval tasks, 3 repeats each, 40 turns, 30 evaluations,
-medium effort. Reward is the saved fraction; the interval is a station-clustered
+medium effort. Reward is the saved fraction. The interval is a station-clustered
 bootstrap. Every episode was verified with the native models.
 
 | Model | Mean saved fraction | 95% CI | Feasible | USD per episode |
@@ -66,10 +66,10 @@ Full tables, per-task repeats and the transcript audit:
 Every rollout is in the dataset.
 
 **Training.** We trained Qwen3.8-27B with GRPO (LoRA, 30 steps, 6 rollouts per
-step, one H200, $164 for the whole project) and evaluated base and trained model
+step, one H200, $164 in cloud jobs) and evaluated base and trained model
 on the same 10 held-out tasks with the same cloud harness. Base 0.439, trained
 0.439: no measurable change. The per-task table, curves, failures and cost are in
-[train/cloud/RESULTS.md](train/cloud/RESULTS.md); the card is
+[train/cloud/RESULTS.md](train/cloud/RESULTS.md), and the card is
 [results/eval-v2-qwen.json](results/eval-v2-qwen.json). That harness differs
 from the frontier one, so the two tables are not compared.
 
@@ -78,7 +78,7 @@ from the frontier one, so the two tables are not compared.
 | You want to… | Open |
 |---|---|
 | Try the playground | [The Space](https://huggingface.co/spaces/Attoloop/PermitForge), or `/web/` on a local server |
-| Connect an agent | Client snippet below; MCP endpoint `/mcp` |
+| Connect an agent | Client snippet below, MCP endpoint `/mcp` |
 | Read the rules and reward | [CONTRACT.md](CONTRACT.md) |
 | Understand physics, fidelity and search | [DESIGN.md](DESIGN.md) |
 | Read the data contract | [docs/SCHEMAS.md](docs/SCHEMAS.md) |
@@ -157,7 +157,7 @@ uv run --project envs/permit/openenv python envs/permit/openenv/space_root/smoke
   --url http://127.0.0.1:7860 --output results/evidence/space-smoke.json
 ```
 
-The image bakes two eval showcases; other tasks build fields on demand.
+The image bakes two eval showcases. Other tasks build fields on demand.
 [The container smoke receipt](results/evidence/space-container-smoke.json) records
 the endpoints and tool results of the published image.
 

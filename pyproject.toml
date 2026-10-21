@@ -1,5 +1,5 @@
 [project]
-name = "permit-forge-tools"
+name = "permitforge-tools"
 version = "0.1.0"
 description = "One-shot conversion and preservation tools for PermitForge"
 requires-python = ">=3.11"

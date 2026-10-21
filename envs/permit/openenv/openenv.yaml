@@ -4,8 +4,8 @@ type: space
 runtime: fastapi
 app: permit_openenv.server:app
 port: 7860
-description: PermitForge v2 chooses controls and stack heights for synthetic plants under real weather; terminal BPIP/AERMOD verification and open-ended savings reward.
-version: "0.1.0"
+description: Choose emissions controls and stack heights for a synthetic plant under real NOAA weather. Submissions are verified with EPA BPIP-PRIME and AERMOD, and the reward is the fraction of the draft cost saved.
+version: "2.0.0"
 variables:
   PERMIT_TASKS_DIR: ""
   PERMIT_EVALUATOR: ""

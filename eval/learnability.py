@@ -183,11 +183,13 @@ def results_markdown(run: Path, card: dict, jobs: list[dict] | None) -> str:
     def f(x, d=3):
         return 'n/a' if x is None else f'{x:.{d}f}'
     ci = 'n/a' if pairs['ci95'] is None else f"{pairs['ci95'][0]:+.4f} to {pairs['ci95'][1]:+.4f}"
+    diffs = [row['diff'] for row in pairs['tasks']]
+    separated = [row for row in pairs['tasks'] if max(row['trained']) < min(row['base']) or min(row['trained']) > max(row['base'])]
     lines = ['# Qwen3.8-27B GRPO on PermitForge: results', '',
              f"Run `{run.name}`: {config['grpo_steps']} GRPO steps, {config['num_generations']} rollouts per step, "
              f"LoRA rank {config['lora_rank']} on one H200. Base and trained model evaluated on the same 10 held-out "
              f"tasks, 3 repeats each, native verification. Everything here is computed from the run folder "
-             f"(`python -m eval.learnability --run <folder> --write`).", '',
+             f"(`python -m eval.learnability --run training/runs/full-30 --jobs training/logs/jobs.json --write`, paths as in the dataset).", '',
              '## Result', '',
              '| Model | Mean saved fraction | 95% CI | Feasible | USD per episode |', '|---|---:|---|---:|---:|',
              f"| {b['model']} | {b['mean']:.4f} | {b['ci95'][0]:.4f} to {b['ci95'][1]:.4f} | {b['feasible']}/{b['runs']} | {f(b['usd_per_episode'], 2)} |",
@@ -195,9 +197,9 @@ def results_markdown(run: Path, card: dict, jobs: list[dict] | None) -> str:
              f"Paired difference (trained minus base) over {pairs['n']} tasks: mean {pairs['mean_diff']:+.4f}, "
              f"sd {f(pairs['sd'], 4)}, se {f(pairs['se'], 4)}, station-clustered 95% CI {ci}; "
              f"{pairs['wins']} tasks up, {pairs['losses']} down, {pairs['ties']} unchanged.", '',
-             'No measurable change in the mean. The largest per-task moves are about four points either way, inside '
-             'what three repeats can resolve for most tasks, and nothing in the pattern says the model learned to find '
-             'cheaper designs.', '',
+             f"No measurable change in the mean. The largest per-task moves are {100*min(diffs):+.1f} and {100*max(diffs):+.1f} points. "
+             f"Base and trained repeats overlap on {len(diffs)-len(separated)} of {len(diffs)} tasks, and nothing in the pattern says "
+             f"the model learned to find cheaper designs.", '',
              '## Per task', '',
              '| Task | Station | Base r1 / r2 / r3 | Trained r1 / r2 / r3 | Base mean | Trained mean | Diff |',
              '|---|---|---|---|---:|---:|---:|']

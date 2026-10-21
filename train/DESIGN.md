@@ -128,7 +128,7 @@ Episode cells are **completion / total context** tokens.
 ### Context and configuration choices
 
 The pinned TRL `_tool_call_loop` counts both assistant tokens and tool reply
-tokens against `max_completion_length`. The existing cloud default of 3072
+tokens against `max_completion_length`. The local default of 3072 (`train/runtime.py`)
 cannot contain any of the scripted episodes above. Reducing it further would
 truncate the task. The local sweep therefore reduces memory through batching
 and kernels while sizing context from the measured conversations. It reserves

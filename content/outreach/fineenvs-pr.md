@@ -23,14 +23,16 @@ Results on 10 held-out eval tasks, 3 repeats each: GPT-6.1 Sol 0.607, GPT-5.6 So
 0.576, Claude Sonnet 5.5 0.507 of the draft cost saved, every episode feasible. The naive policies are the
 unchanged draft (0.00) and cheapest-first greedy (0.33).
 
-We also trained Qwen3.8-27B with GRPO (30 steps, one H200, $164 for the whole project) and evaluated it
+We also trained Qwen3.8-27B with GRPO (30 steps, one H200, $164 in cloud jobs) and evaluated it
 before and after on the same tasks with the same harness. It is a null result, no measurable change at 0.439 both ways, and it is
 reported as such in a second card (`eval-v2-qwen.json`) and in `train/cloud/RESULTS.md` in the repository,
 with every failure we met on the way (hosts without CUDA libraries, a 27 GB logits OOM and the chunked
 loss that fixed it, a watchdog death at step 15). The catalog has no training recipes for now, so the
-training card sits beside the panel card rather than in a `train/` folder; happy to move it if you prefer.
+training card sits beside the panel card rather than in a `train/` folder. Happy to move it if you prefer.
 
 Changes: the new folder, a tile and two rows in the 07 README, one bullet in the root README's 07 section,
 and the regenerated root table (`python3 tools/build_index.py --check` passes).
 
-Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>
+🤖 Generated with [Claude Code](https://claude.com/claude-code)
+
+https://claude.ai/code/session_01AQcY4paZ4u4Dqo3SKReWMZ

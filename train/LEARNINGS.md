@@ -32,4 +32,4 @@ uv run --project train --locked pytest -c train/pyproject.toml train/tests -q
 The smoke diagnostic selection is available, but the field directory for
 `01addc2a86f1-s47` was missing at handoff. The GPU commands and prerequisites are
 in [README.md](README.md). No field precompute, full training, native evaluation,
-spend, publishing, branch creation or commit was performed by this WP.
+spend, publishing, branch creation or commit was performed here.

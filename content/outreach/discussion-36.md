@@ -7,7 +7,7 @@ We built a simulation environment for a different kind of job and would like to 
 on maximum control at its tallest allowed height, and has to make it cheaper. The agent picks a control
 and a stack height per source, can evaluate a design's air quality 30 times, and then submits once. The
 grade comes from EPA's AERMOD and BPIP-PRIME over five years of real NOAA weather, so there is no judge
-and no reference solution to leak. The plants are synthetic; the weather and the models are real.
+and no reference solution to leak. The plants are synthetic. The weather and the models are real.
 
 - Play: https://huggingface.co/spaces/Attoloop/PermitForge
 - Code: https://github.com/attoloop/PermitForge
